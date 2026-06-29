@@ -1,0 +1,9 @@
+// There exists a file that has been opened and not closed yet.
+
+pred open(f: String)
+pred close(f: String)
+
+// prop file : Exists f . !close(f) S open(f)
+
+prop file : Exists f . P open(f)
+
