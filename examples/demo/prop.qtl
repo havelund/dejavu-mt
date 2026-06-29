@@ -1,0 +1,6 @@
+// A resource r may be used only when it has been granted and not revoked since.
+pred grant(r: String)
+pred revoke(r: String)
+pred use(r: String)
+
+prop access : Forall r . use(r) -> (!revoke(r)) S grant(r)

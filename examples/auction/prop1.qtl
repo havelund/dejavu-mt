@@ -1,0 +1,4 @@
+// Bids on an item must strictly increase.
+pred bid(i: String, a: Int)
+
+prop p : Forall i . Forall a1 . Forall a2 . @ P bid(i,a1) & bid(i,a2) -> a1 < a2

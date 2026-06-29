@@ -1,0 +1,12 @@
+# Reference materials (DejaVu, paper, smt-tools) — not part of this repo
+requirements/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Tooling
+.claude/
+.DS_Store
