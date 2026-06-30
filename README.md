@@ -35,6 +35,10 @@ Example:
 
     python -m dejavumt examples/file/prop.qtl examples/file/log.csv
 
+For convenience, `./run <example-dir>` runs the spec and log in
+`examples/<example-dir>` (with `debug trace strong` by default; pass flags to
+override), e.g. `./run file` or `./run demo trace`.
+
 ### Trace mode
 
 Adding `trace` prints one line per event with its per-property verdict:

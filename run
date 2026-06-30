@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Convenience runner for DejaVuMT examples.
+#
+#   ./run <example-dir> [flags...]
+#
+# Runs the spec and log in examples/<example-dir> through the monitor. With no
+# flags it defaults to "debug trace strong"; any flags given override that.
+# It uses the spec prop.qtl and log log.csv if present, otherwise the first
+# .qtl / .csv file in the directory.
+#
+#   ./run file               # examples/file, default flags
+#   ./run demo trace         # examples/demo, just trace
+#
+set -euo pipefail
+
+cd "$(cd "$(dirname "$0")" && pwd)"
+
+if [ $# -lt 1 ]; then
+  echo "usage: ./run <example-dir> [flags...]   (e.g. ./run file)"
+  exit 2
+fi
+
+dir="examples/$1"
+shift
+flags=("$@")
+[ ${#flags[@]} -gt 0 ] || flags=(debug trace strong)
+
+if [ ! -d "$dir" ]; then
+  echo "*** no such example directory: $dir"
+  exit 1
+fi
+
+spec="$dir/prop.qtl"
+[ -f "$spec" ] || spec=$(ls "$dir"/*.qtl 2>/dev/null | head -1 || true)
+log="$dir/log.csv"
+[ -f "$log" ] || log=$(ls "$dir"/*.csv 2>/dev/null | head -1 || true)
+
+if [ -z "${spec:-}" ] || [ ! -f "$spec" ]; then
+  echo "*** no .qtl spec found in $dir"
+  exit 1
+fi
+if [ -z "${log:-}" ] || [ ! -f "$log" ]; then
+  echo "*** no .csv log found in $dir"
+  exit 1
+fi
+
+exec .venv/bin/python -m dejavumt "$spec" "$log" "${flags[@]}"

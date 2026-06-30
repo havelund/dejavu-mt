@@ -75,8 +75,9 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         else:
             print("  (none declared; predicate arguments default to String)")
         for fm in monitor.formulas:
-            print(f"\n===== property {fm.name} =====\n")
-            print(fm.render_tree())
+            print(f"\n===== initial state =====\n")
+            # pre/now are all false before any event.
+            print(fm.render_tree(values=fm.pre, color=sys.stdout.isatty()))
 
     violations = 0
     line_nr = 0

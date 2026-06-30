@@ -1,6 +1,5 @@
+close,d
 open,a
 close,a
-close,b
+open,b
 open,c
-open,c
-close,c
