@@ -263,6 +263,7 @@ class FormulaMonitor:
         self.solver = z3.Solver()
         self._qe = z3.Tactic("qe2")  # quantifier elimination for Exists/Forall nodes
         self.strong = False          # if True, use solver-backed ctx-solver-simplify
+        self.weak = False            # if True, do no simplification/elimination at all
         self._ctx = z3.Tactic("ctx-solver-simplify")
 
     # --- compilation: flatten AST into post-order node list ---
@@ -406,7 +407,10 @@ class FormulaMonitor:
         """Normalize a node's formula.  `simplify` is fast but syntactic;
         `strong` additionally runs solver-backed ctx-solver-simplify, which
         collapses contradictions/subsumed terms that `simplify` leaves behind
-        (at the cost of a solver call per node)."""
+        (at the cost of a solver call per node).  `weak` does nothing, leaving
+        the raw formula produced by the recurrence (debugging only)."""
+        if self.weak:
+            return v
         s = z3.simplify(v)
         if self.strong:
             try:
@@ -419,6 +423,8 @@ class FormulaMonitor:
         """Eliminate the quantifier in `q`, returning an equivalent quantifier-
         free formula when the theory permits.  Falls back to `q` if QE cannot
         complete (e.g. unsupported string constraints)."""
+        if self.weak:
+            return q
         try:
             return self._qe(q).as_expr()
         except z3.Z3Exception:
@@ -460,6 +466,14 @@ class FormulaMonitor:
 
     def _verdict(self, root_formula) -> bool:
         f = z3.simplify(root_formula)
+        if self.weak:
+            # In weak mode the stored/displayed formula is left raw, so the root
+            # may still contain quantifiers; eliminate them here (for the verdict
+            # decision only) to keep the solver check decidable.
+            try:
+                f = z3.simplify(self._qe(f).as_expr())
+            except z3.Z3Exception:
+                pass
         if z3.is_true(f):
             return True
         if z3.is_false(f):

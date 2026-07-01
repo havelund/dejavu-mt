@@ -51,10 +51,13 @@ def _verdict_tag(holds: bool) -> str:
 
 
 def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
-        strong: bool = False) -> int:
+        strong: bool = False, weak: bool = False) -> int:
     spec = parse_file(specfile)
     monitor = Monitor(spec)
-    if strong:
+    if weak:
+        for fm in monitor.formulas:
+            fm.weak = True
+    elif strong:
         for fm in monitor.formulas:
             fm.strong = True
     banner = _boxed(BANNER)
@@ -115,14 +118,16 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
 
 
 def main() -> None:
-    flags = {"debug", "--debug", "trace", "--trace", "strong", "--strong"}
+    flags = {"debug", "--debug", "trace", "--trace",
+             "strong", "--strong", "weak", "--weak"}
     args = [a for a in sys.argv[1:] if a not in flags]
     chosen = {a.lstrip("-") for a in sys.argv[1:] if a in flags}
     if len(args) != 2:
-        print("usage: python -m dejavumt <specfile> <logfile> [trace] [debug] [strong]")
+        print("usage: python -m dejavumt <specfile> <logfile> [trace] [debug] [strong|weak]")
         sys.exit(2)
     sys.exit(run(args[0], args[1], debug="debug" in chosen,
-                 trace="trace" in chosen, strong="strong" in chosen))
+                 trace="trace" in chosen, strong="strong" in chosen,
+                 weak="weak" in chosen))
 
 
 if __name__ == "__main__":

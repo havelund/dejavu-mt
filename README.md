@@ -29,7 +29,7 @@ not found: `ModuleNotFoundError: No module named 'lark'`):
 
 then run:
 
-    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong]
+    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak]
 
 Example:
 
@@ -73,6 +73,18 @@ It is opt-in because it is much slower (a solver call per node per event, ~20x
 on the access benchmark), so it is intended for clean output on small traces,
 not for performance runs. It does not help genuine accumulation (e.g. many
 distinct values), which needs garbage collection instead.
+
+### Weak (no simplification)
+
+The opposite extreme, `weak`, does *no* simplification or quantifier elimination
+as formulas move up the tree, showing the raw output of the recurrences (e.g.
+`(a S b)` unfolding to `(false | (true & (false | ...)))`). It is a debugging aid
+for seeing the Boolean-formula semantics literally; the verdict stays correct
+(quantifiers are eliminated only on a throwaway copy of the root, so it does not
+hang). Because nothing is collapsed, the formulas grow quickly, so `weak` is only
+practical on very short traces. It overrides `strong`.
+
+    python -m dejavumt examples/file/prop.qtl examples/file/log.csv debug weak
 
 ### Combining
 
