@@ -29,7 +29,7 @@ not found: `ModuleNotFoundError: No module named 'lark'`):
 
 then run:
 
-    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak] [z3|cvc5]
+    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak] [z3|cvc5] [gc]
 
 Example:
 
@@ -85,6 +85,23 @@ hang). Because nothing is collapsed, the formulas grow quickly, so `weak` is onl
 practical on very short traces. It overrides `strong`.
 
     python -m dejavumt examples/file/prop.qtl examples/file/log.csv debug weak
+
+### Garbage collection
+
+Over a long trace a subformula's formula can accumulate "dead" value-terms —
+terms about a value that dropped out of the live set (e.g. a resource granted
+and later revoked) but that the fast per-step simplifier leaves standing. The
+`gc` flag periodically (every 50 events) runs a contextual simplifier over the
+stored formulas to prune them, the analogue of DejaVu's garbage collection of
+dead values:
+
+    python -m dejavumt examples/churn/prop.qtl examples/churn/log.csv gc
+
+It is verdict-preserving. On churn workloads it keeps the representation bounded
+(see `experiments/gc_bench.py`: the accumulating formula grows to thousands of
+nodes without `gc` and stays at a constant handful with it). It does not help
+when the growth is genuinely-live data (many distinct values live at once), which
+has no dead terms to reclaim. Currently Z3-only (it uses Z3's `ctx-simplify`).
 
 ### Solver backend
 
@@ -217,11 +234,13 @@ syntactically before monitoring.
 
 Implemented: the untimed first-order fragment — propositional connectives,
 `@ S P H` and intervals, quantifiers, macros, and typed relations with
-arithmetic (`+ - *`). The engine also accepts events containing multiple facts
-(including multiple instances of the same predicate), though the CSV reader
-emits one fact per line.
+arithmetic (`+ - *`); pluggable Z3/CVC5 backends; and periodic garbage
+collection of dead value-terms (`gc`). The engine also accepts events containing
+multiple facts (including multiple instances of the same predicate), though the
+CSV reader emits one fact per line.
 
 Not yet implemented: timed operators (`S[<=n]`, `P[>n]`, ...), the `Z`
 operator, recursive rules (`where ... :=`), and the seen-only lowercase
-`exists`/`forall`. Growth of the `now` formulas is currently controlled only by
-Z3 `simplify`; this is the thing to measure next.
+`exists`/`forall`. Growth from genuinely-live data (many distinct values live at
+once) is not yet bounded — `gc` reclaims dead terms but not a large live set,
+which would need a more compact set encoding.

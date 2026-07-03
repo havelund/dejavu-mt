@@ -213,6 +213,8 @@ class FormulaMonitor:
         self.now = [backend.false()] * n
         self.strong = False          # if True, use solver-backed strong simplify
         self.weak = False            # if True, do no simplification/elimination at all
+        self.gc_period = 0           # if > 0, prune dead terms every gc_period events
+        self._steps = 0
 
     # --- compilation: flatten AST into post-order node list ---
 
@@ -356,7 +358,20 @@ class FormulaMonitor:
         holds = self._verdict(now[self.root])
         self.pre = now
         self.now = [b.false()] * len(self.nodes)
+        self._steps += 1
+        if self.gc_period and self._steps % self.gc_period == 0:
+            self._collect_garbage()
         return holds
+
+    def _collect_garbage(self):
+        """Periodic dead-term reclamation.  Runs the backend's contextual
+        simplifier over each stored formula, pruning the value-terms that have
+        become dead in the recurrence but that the per-step syntactic simplifier
+        leaves behind (the analogue of DejaVu's garbage collection of dead
+        values).  Equivalence-preserving, so verdicts are unchanged.  Amortised:
+        paid once every gc_period events rather than every step."""
+        b = self.backend
+        self.pre = [b.gc_simplify(p) for p in self.pre]
 
     def _normalize(self, v):
         """Normalize a node's formula.  `simplify` is fast but syntactic;

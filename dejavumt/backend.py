@@ -59,6 +59,7 @@ class Backend:
     # normalisation / solving
     def simplify(self, t): ...
     def strong_simplify(self, t): return self.simplify(t)
+    def gc_simplify(self, t): return self.simplify(t)   # dead-term reclamation
     def qelim(self, q): ...
     def is_true(self, t) -> bool: ...
     def is_false(self, t) -> bool: ...
@@ -82,6 +83,7 @@ class Z3Backend(Backend):
         self._solver = z3.Solver()
         self._qe = z3.Tactic("qe2")
         self._ctx = z3.Tactic("ctx-solver-simplify")
+        self._gc = z3.Tactic("ctx-simplify")  # cheap contextual dead-term pruning
 
     def _sort(self, sort_name: str):
         z3 = self.z3
@@ -131,6 +133,12 @@ class Z3Backend(Backend):
     def strong_simplify(self, t):
         try:
             return self._ctx(t).as_expr()
+        except self.z3.Z3Exception:
+            return t
+
+    def gc_simplify(self, t):
+        try:
+            return self._gc(t).as_expr()
         except self.z3.Z3Exception:
             return t
 
