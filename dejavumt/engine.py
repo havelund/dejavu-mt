@@ -83,6 +83,8 @@ def z3_to_str(e, scope=None) -> str:
                      (z3.is_ge, ">="), (z3.is_gt, ">")):
         if pred(e):
             return f"{rec(e.arg(0))} {op} {rec(e.arg(1))}"
+    if z3.is_app_of(e, z3.Z3_OP_UMINUS):
+        return "-" + rec(e.arg(0))
     for pred, op in ((z3.is_add, "+"), (z3.is_sub, "-"), (z3.is_mul, "*")):
         if pred(e):
             return "(" + f" {op} ".join(rec(a) for a in e.children()) + ")"
@@ -111,9 +113,13 @@ def _z3_literal(value, sort_name: str):
 # Macro expansion
 # ---------------------------------------------------------------------------
 
-def _subst_term(t: ast.Term, m: Dict[str, ast.Term]) -> ast.Term:
+def _subst_term(t, m: Dict[str, ast.Term]):
     if isinstance(t, ast.Var) and t.name in m:
         return m[t.name]
+    if isinstance(t, ast.BinExpr):
+        return ast.BinExpr(_subst_term(t.left, m), t.op, _subst_term(t.right, m))
+    if isinstance(t, ast.Neg):
+        return ast.Neg(_subst_term(t.arg, m))
     return t
 
 
@@ -180,11 +186,29 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                 if isinstance(arg, ast.Var) and psorts is not None and j < len(psorts):
                     note(arg.name, psorts[j])
         elif isinstance(g, ast.Compare):
-            # var op const  -> infer var from const's kind
-            if isinstance(g.left, ast.Var) and isinstance(g.right, ast.Const):
-                note(g.left.name, g.right.kind)
-            if isinstance(g.right, ast.Var) and isinstance(g.left, ast.Const):
-                note(g.right.name, g.left.kind)
+            # Collect the bare variables and constant kinds on both sides
+            # (recursing through arithmetic).  If a single numeric kind
+            # (Int/Real) appears, the bare variables are inferred to that kind.
+            vs, ks = set(), set()
+
+            def coll(e):
+                if isinstance(e, ast.Var):
+                    vs.add(e.name)
+                elif isinstance(e, ast.Const):
+                    ks.add(e.kind)
+                elif isinstance(e, ast.BinExpr):
+                    coll(e.left)
+                    coll(e.right)
+                elif isinstance(e, ast.Neg):
+                    coll(e.arg)
+
+            coll(g.left)
+            coll(g.right)
+            numeric = {k for k in ks if k in ("Int", "Real")}
+            if len(numeric) == 1:
+                s = next(iter(numeric))
+                for v in vs:
+                    note(v, s)
         elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
@@ -205,6 +229,11 @@ def collect_vars(f: ast.LTL) -> set:
     def term(t):
         if isinstance(t, ast.Var):
             out.add(t.name)
+        elif isinstance(t, ast.BinExpr):
+            term(t.left)
+            term(t.right)
+        elif isinstance(t, ast.Neg):
+            term(t.arg)
 
     def walk(g):
         if isinstance(g, ast.Pred):
@@ -317,14 +346,28 @@ class FormulaMonitor:
 
     # --- term / relation helpers ---
 
-    def _term_expr(self, t: ast.Term):
+    def _term_expr(self, t):
         if isinstance(t, ast.Var):
             if t.name not in self.consts:
                 # Variable with no inferable sort: default to String.
                 self.consts[t.name] = z3.Const(t.name, z3.StringSort())
                 self.var_sorts[t.name] = "String"
             return self.consts[t.name]
-        return _z3_literal(t.value, t.kind)
+        if isinstance(t, ast.Const):
+            return _z3_literal(t.value, t.kind)
+        if isinstance(t, ast.Neg):
+            return -self._term_expr(t.arg)
+        if isinstance(t, ast.BinExpr):
+            l = self._term_expr(t.left)
+            r = self._term_expr(t.right)
+            if t.op == "+":
+                return l + r
+            if t.op == "-":
+                return l - r
+            if t.op == "*":
+                return l * r
+            raise ValueError(f"bad arithmetic operator {t.op}")
+        raise TypeError(f"cannot build expression for {type(t).__name__}")
 
     def _compare_expr(self, c: ast.Compare):
         l = self._term_expr(c.left)

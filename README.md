@@ -96,27 +96,115 @@ contiguous block at the end:
 
 ## Specification language
 
-DejaVu's QTL, with optional type annotations on declared parameters
-(default `String`):
+The specification language is DejaVu's QTL — a typed first-order *past-time*
+linear temporal logic — with optional type annotations on declared parameters.
+A specification is a sequence of declarations, macro definitions and properties:
 
-    pred open(f: String, m: String)
-    pred bid(i: String, a: Int)
+    pred open(f: String, m: String)     // event/predicate declarations
+    pred close(f: String)
 
-    pred isOpen(f) = [open(f,m),close(f))          // macro
+    pred isOpen(f) = [open(f,m),close(f))          // a macro (abbreviation)
 
     prop file : Forall f . close(f) -> Exists m . @ [open(f,m),close(f))
 
-Operators: `-> <-> | & !`, `@` (previous), `S` (since), `P` (once),
-`H` (historically), `[phi,psi)` (interval), `Exists`/`Forall`, and relations
-`= < <= > >=` over typed terms.
+### What is being monitored
+
+A **trace** is a finite sequence of **events**, read one at a time. Each event
+is a set of ground **facts** — predicate instances such as `open("a","read")`.
+An event may contain several facts, including several of the *same* predicate
+(e.g. both `p(1)` and `p(2)` at one step). A **property** is a closed formula;
+after each event the monitor reports whether the property *holds* or is
+*violated* at that point in the trace. In the CSV log format one line is one
+fact (`open,a,read`), so each line is a one-fact event.
+
+### Types
+
+Every predicate parameter has a type (sort), defaulting to `String` if the
+annotation is omitted; the supported sorts are `String`, `Int`, `Real`, `Bool`.
+A variable's type is inferred from how it is used (the predicate positions it
+appears in, or numeric constants it is related to). Types are what enable
+*theory* reasoning: `<` on `Int`/`Real` is numeric order, on `String` it is
+lexicographic, and arithmetic is available on the numeric sorts. This is the
+main gain over DejaVu's untyped, equality-only BDD encoding.
+
+### Grammar
+
+    spec        ::= definition*
+    definition  ::= declaration | macro | property
+
+    declaration ::= ("pred" | "event" | "preds" | "events") predsig ("," predsig)*
+    predsig     ::= name [ "(" [ typedparam ("," typedparam)* ] ")" ]
+    typedparam  ::= name [ ":" sort ]
+    sort        ::= "String" | "Int" | "Real" | "Bool"
+
+    macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
+    property    ::= "prop" name ":" formula
+
+    formula     ::= "Exists" name "." formula          // quantifiers bind loosest
+                  | "Forall" name "." formula
+                  | formula "->" formula | formula "<->" formula
+                  | formula "|"  formula
+                  | formula "&"  formula
+                  | leaf "S" leaf                       // since
+                  | leaf
+    leaf        ::= "true" | "false"
+                  | expr relop expr                     // relation
+                  | name [ "(" [ term ("," term)* ] ")" ]   // predicate / macro call
+                  | "!" leaf                            // negation
+                  | "@" leaf                            // previous
+                  | "P" leaf                            // once   (sometime in the past)
+                  | "H" leaf                            // historically (always in the past)
+                  | "[" formula "," formula ")"         // interval
+                  | "(" formula ")"
+    relop       ::= "=" | "<" | "<=" | ">" | ">="
+
+    expr        ::= expr "+" product | expr "-" product | product   // arithmetic
+    product     ::= product "*" atom | atom
+    atom        ::= name | int | float | string | "-" atom | "(" expr ")"
+    term        ::= name | int | float | string        // predicate arguments
+
+    // Comments are // to end of line, or /* ... */. Strings use "double quotes".
+
+Precedence, from loosest to tightest binding: quantifiers, then `-> <->`, `|`,
+`&`, `S`, then the unary leaf operators. Quantifiers scope over everything to
+their right, so `Forall f . close(f) -> phi` means `Forall f . (close(f) -> phi)`.
+
+### The operators
+
+Propositional: `!` (not), `&` (and), `|` (or), `->` (implies), `<->` (iff).
+
+Past-time temporal (all refer only to the past and present):
+
+| operator | meaning |
+|---|---|
+| `@ phi` | `phi` held at the **previous** step (previous / yesterday) |
+| `phi S psi` | `psi` held at some past step and `phi` held at every step **since** |
+| `P phi` | `phi` held at some past-or-present step (**once**) |
+| `H phi` | `phi` held at **every** past-or-present step; equal to `!P!phi` |
+| `[phi, psi)` | `phi` held at some past-or-present step and `psi` has **not** held since (half-open interval) |
+
+Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
+(possibly infinite) domain of `x`'s type; they translate directly to Z3
+quantifiers.
+
+Relations `= < <= > >=` compare two expressions of compatible type. Relation
+operands may be arithmetic expressions built with `+ - *` and unary minus, e.g.
+`v2 = v1 + 1` or `a * 2 <= b`; the variables involved must be numeric
+(`Int`/`Real`), typically via their predicate declarations. Arithmetic is not
+allowed inside predicate arguments (those are plain variables or constants).
+
+Macros (`pred name(args) = formula`) are named abbreviations, expanded
+syntactically before monitoring.
 
 ## Status (slice 1)
 
 Implemented: the untimed first-order fragment — propositional connectives,
-`@ S P H` and intervals, quantifiers, macros, and typed relations.
+`@ S P H` and intervals, quantifiers, macros, and typed relations with
+arithmetic (`+ - *`). The engine also accepts events containing multiple facts
+(including multiple instances of the same predicate), though the CSV reader
+emits one fact per line.
 
 Not yet implemented: timed operators (`S[<=n]`, `P[>n]`, ...), the `Z`
-operator, recursive rules (`where ... :=`), the seen-only lowercase
-`exists`/`forall`, and multiple predicate instances per event. Growth of the
-`now` formulas is currently controlled only by Z3 `simplify`; this is the thing
-to measure next.
+operator, recursive rules (`where ... :=`), and the seen-only lowercase
+`exists`/`forall`. Growth of the `now` formulas is currently controlled only by
+Z3 `simplify`; this is the thing to measure next.

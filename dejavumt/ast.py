@@ -39,7 +39,30 @@ class Const:
         return repr(self.value) if self.kind == "String" else str(self.value)
 
 
+@dataclass(frozen=True)
+class BinExpr:
+    """An arithmetic expression: left op right, with op in {"+","-","*"}."""
+    left: "Expr"
+    op: str
+    right: "Expr"
+
+    def __str__(self) -> str:
+        return f"({self.left} {self.op} {self.right})"
+
+
+@dataclass(frozen=True)
+class Neg:
+    """Unary minus applied to a non-constant expression."""
+    arg: "Expr"
+
+    def __str__(self) -> str:
+        return f"-{self.arg}"
+
+
+# An expression is a variable, a constant, or an arithmetic combination of them.
+# Relation (Compare) operands are expressions; predicate arguments are Terms.
 Term = Union[Var, Const]
+Expr = Union[Var, Const, BinExpr, Neg]
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +106,10 @@ class Pred(LTL):
 
 @dataclass(frozen=True)
 class Compare(LTL):
-    """A relation between two terms, e.g.  a1 < a2  or  a >= r."""
-    left: Term
+    """A relation between two expressions, e.g.  a1 < a2  or  v2 = v1 + 1."""
+    left: Expr
     op: str
-    right: Term
+    right: Expr
 
     def __str__(self) -> str:
         return f"{self.left} {self.op} {self.right}"

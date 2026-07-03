@@ -97,6 +97,41 @@ def test_demo_grant_revoke_since():
     assert violations(spec, events, "access") == [6]
 
 
+def test_arith_multiply():
+    spec = """
+    pred a(x: Int)
+    pred b(y: Int)
+    prop p : Forall x . Forall y . a(x) & b(y) -> y = x * 2
+    """
+    events = [
+        {"a": [("1",)], "b": [("2",)]},   # 2 = 1*2 -> holds
+        {"a": [("3",)], "b": [("5",)]},   # 5 != 3*2 -> violation
+    ]
+    assert violations(spec, events, "p") == [2]
+
+
+def test_arith_minus_and_negative():
+    spec = """
+    pred v(x: Int)
+    prop p : Forall x . v(x) -> x - 1 >= -1
+    """
+    events = [
+        {"v": [("0",)]},     # 0-1 = -1 >= -1 -> holds
+        {"v": [("-5",)]},    # -5-1 = -6 >= -1 -> violation
+    ]
+    assert violations(spec, events, "p") == [2]
+
+
+def test_arith_no_space_parses_and_runs():
+    # x-1 without surrounding spaces must parse and evaluate.
+    spec = """
+    pred v(x: Int)
+    prop p : Forall x . v(x) -> x-1 < x
+    """
+    events = [{"v": [("7",)]}]
+    assert violations(spec, events, "p") == []
+
+
 def test_once_and_hist():
     spec = """
     pred p(x: Int)

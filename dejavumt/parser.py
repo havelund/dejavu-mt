@@ -61,7 +61,7 @@ _GRAMMAR = r"""
 
     ?leaf: "true"                          -> true_
          | "false"                         -> false_
-         | term OPER term                  -> compare
+         | sum OPER sum                     -> compare
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
          | "@" leaf                        -> prev
@@ -70,12 +70,28 @@ _GRAMMAR = r"""
          | "[" ltl "," ltl ")"            -> interval
          | "(" ltl ")"                     -> parens
 
+    // Arithmetic expressions in relation operands (* binds tighter than +/-).
+    ?sum: sum "+" product   -> add
+        | sum "-" product   -> sub
+        | product
+    ?product: product "*" atom -> mul
+            | atom
+    ?atom: NAME             -> var
+         | INT              -> int_const
+         | FLOAT            -> float_const
+         | ESCAPED_STRING   -> str_const
+         | "-" atom         -> neg
+         | "(" sum ")"
+
     paren_args: "(" [term ("," term)*] ")"
 
-    ?term: NAME            -> var
-         | ESCAPED_STRING  -> str_const
-         | SIGNED_INT      -> int_const
-         | SIGNED_FLOAT    -> float_const
+    // Predicate arguments are plain terms (no arithmetic).
+    ?term: NAME             -> var
+         | ESCAPED_STRING   -> str_const
+         | INT              -> int_const
+         | FLOAT            -> float_const
+         | "-" INT          -> neg_int_const
+         | "-" FLOAT        -> neg_float_const
 
     OPER: "<=" | ">=" | "<" | ">" | "="
     SORT: "String" | "Int" | "Real" | "Bool"
@@ -85,8 +101,8 @@ _GRAMMAR = r"""
     NAME: /(?!(Exists|Forall|true|false)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
     %import common.ESCAPED_STRING
-    %import common.SIGNED_INT
-    %import common.SIGNED_FLOAT
+    %import common.INT
+    %import common.FLOAT
     %import common.WS
     %ignore WS
     %ignore /\/\/[^\n]*/
@@ -109,6 +125,28 @@ class _ToAst(Transformer):
 
     def float_const(self, tok):
         return ast.Const(float(tok), "Real")
+
+    def neg_int_const(self, tok):
+        return ast.Const(-int(tok), "Int")
+
+    def neg_float_const(self, tok):
+        return ast.Const(-float(tok), "Real")
+
+    # --- arithmetic ---
+    def add(self, left, right):
+        return ast.BinExpr(left, "+", right)
+
+    def sub(self, left, right):
+        return ast.BinExpr(left, "-", right)
+
+    def mul(self, left, right):
+        return ast.BinExpr(left, "*", right)
+
+    def neg(self, x):
+        # Constant-fold  -literal  into a negative constant.
+        if isinstance(x, ast.Const) and x.kind in ("Int", "Real"):
+            return ast.Const(-x.value, x.kind)
+        return ast.Neg(x)
 
     # --- leaves ---
     def true_(self):
