@@ -29,7 +29,7 @@ not found: `ModuleNotFoundError: No module named 'lark'`):
 
 then run:
 
-    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak]
+    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak] [z3|cvc5]
 
 Example:
 
@@ -85,6 +85,23 @@ hang). Because nothing is collapsed, the formulas grow quickly, so `weak` is onl
 practical on very short traces. It overrides `strong`.
 
     python -m dejavumt examples/file/prop.qtl examples/file/log.csv debug weak
+
+### Solver backend
+
+The monitor runs on either Z3 (default) or CVC5, selected with the `z3` / `cvc5`
+flag:
+
+    python -m dejavumt examples/file/prop.qtl examples/file/log.csv cvc5 trace
+
+Both backends produce identical verdicts (the recurrence engine is
+solver-agnostic; only the leaf-level SMT operations differ — see
+`dejavumt/backend.py`). Z3 is a required dependency; CVC5 is optional and only
+imported when selected:
+
+    .venv/bin/pip install cvc5
+
+Note: `strong` simplification is Z3-only (it uses Z3's `ctx-solver-simplify`,
+which has no CVC5 equivalent); it is ignored on the CVC5 backend.
 
 ### Combining
 

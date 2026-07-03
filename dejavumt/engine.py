@@ -18,95 +18,18 @@ semantics of past-time LTL:
     B[Exists x phi]    = Exists x . B[phi]
     B[Forall x phi]    = ForAll x . B[phi]
 
-Quantifiers translate directly to Z3 quantifiers over the variable's (typed)
-sort.  Each `now` formula is run through Z3's `simplify` to curb growth.
+Quantifiers translate directly to solver quantifiers over the variable's (typed)
+sort.  Each `now` formula is run through the solver's `simplify` to curb growth.
+
+All solver-specific operations go through a pluggable `Backend` (see
+backend.py), so the same engine runs on either Z3 or CVC5.
 """
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-import z3
-
 from . import ast
-
-
-# ---------------------------------------------------------------------------
-# Sorts
-# ---------------------------------------------------------------------------
-
-def _z3_sort(name: str):
-    return {
-        "String": z3.StringSort(),
-        "Int": z3.IntSort(),
-        "Real": z3.RealSort(),
-        "Bool": z3.BoolSort(),
-    }[name]
-
-
-def _is_leaf(e) -> bool:
-    return z3.is_const(e) or z3.is_var(e)
-
-
-def z3_to_str(e, scope=None) -> str:
-    """Pretty-print a Z3 expression in DejaVuMT's surface syntax (infix
-    &, |, !, ->, =, <, ...; Exists/Forall), rather than Z3's Python-API form."""
-    scope = scope or []
-
-    def rec(x):
-        return z3_to_str(x, scope)
-
-    def wrap_not(x):
-        s = z3_to_str(x, scope)
-        return s if _is_leaf(x) or z3.is_true(x) or z3.is_false(x) else f"({s})"
-
-    if z3.is_quantifier(e):
-        names = [e.var_name(i) for i in range(e.num_vars())]
-        q = "∀" if e.is_forall() else "∃"
-        inner_scope = list(reversed(names)) + scope
-        body = z3_to_str(e.body(), inner_scope)
-        return "".join(f"{q} {n} . " for n in names) + body
-    if z3.is_var(e):
-        return scope[z3.get_var_index(e)]
-    if z3.is_true(e):
-        return "true"
-    if z3.is_false(e):
-        return "false"
-    if z3.is_not(e):
-        return "¬" + wrap_not(e.arg(0))
-    if z3.is_and(e):
-        return "(" + " ∧ ".join(rec(a) for a in e.children()) + ")"
-    if z3.is_or(e):
-        return "(" + " ∨ ".join(rec(a) for a in e.children()) + ")"
-    if z3.is_implies(e):
-        return f"({rec(e.arg(0))} → {rec(e.arg(1))})"
-    for pred, op in ((z3.is_eq, "="), (z3.is_le, "<="), (z3.is_lt, "<"),
-                     (z3.is_ge, ">="), (z3.is_gt, ">")):
-        if pred(e):
-            return f"{rec(e.arg(0))} {op} {rec(e.arg(1))}"
-    if z3.is_app_of(e, z3.Z3_OP_UMINUS):
-        return "-" + rec(e.arg(0))
-    for pred, op in ((z3.is_add, "+"), (z3.is_sub, "-"), (z3.is_mul, "*")):
-        if pred(e):
-            return "(" + f" {op} ".join(rec(a) for a in e.children()) + ")"
-    if z3.is_string_value(e):
-        return '"' + e.as_string() + '"'
-    if z3.is_int_value(e):
-        return str(e.as_long())
-    if z3.is_const(e):
-        return e.decl().name()
-    return str(e).replace("\n", " ")
-
-
-def _z3_literal(value, sort_name: str):
-    if sort_name == "String":
-        return z3.StringVal(str(value))
-    if sort_name == "Int":
-        return z3.IntVal(int(value))
-    if sort_name == "Real":
-        return z3.RealVal(float(value))
-    if sort_name == "Bool":
-        return z3.BoolVal(str(value).lower() == "true")
-    raise ValueError(f"unknown sort {sort_name}")
+from .backend import Backend, make_backend
 
 
 # ---------------------------------------------------------------------------
@@ -273,27 +196,23 @@ class FormulaMonitor:
     """Monitors a single property against a stream of events."""
 
     def __init__(self, prop: ast.Property, body: ast.LTL,
-                 pred_sorts: Dict[str, List[str]]):
+                 pred_sorts: Dict[str, List[str]], backend: Backend):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
         self.pred_sorts = pred_sorts
+        self.backend = backend
         self.var_sorts = infer_var_sorts(body, pred_sorts)
-        # Every variable needs a Z3 constant; default any uninferred sort to String.
+        # Every variable needs a solver constant; default any uninferred sort to String.
         for v in collect_vars(body):
             self.var_sorts.setdefault(v, "String")
-        self.consts: Dict[str, z3.ExprRef] = {
-            v: z3.Const(v, _z3_sort(s)) for v, s in self.var_sorts.items()
-        }
+        self.consts = {v: backend.const(v, s) for v, s in self.var_sorts.items()}
         self.nodes: List[_Node] = []
         self.root = self._compile(body)
         n = len(self.nodes)
-        self.pre: List[z3.ExprRef] = [z3.BoolVal(False)] * n
-        self.now: List[z3.ExprRef] = [z3.BoolVal(False)] * n
-        self.solver = z3.Solver()
-        self._qe = z3.Tactic("qe2")  # quantifier elimination for Exists/Forall nodes
-        self.strong = False          # if True, use solver-backed ctx-solver-simplify
+        self.pre = [backend.false()] * n
+        self.now = [backend.false()] * n
+        self.strong = False          # if True, use solver-backed strong simplify
         self.weak = False            # if True, do no simplification/elimination at all
-        self._ctx = z3.Tactic("ctx-solver-simplify")
 
     # --- compilation: flatten AST into post-order node list ---
 
@@ -347,131 +266,117 @@ class FormulaMonitor:
     # --- term / relation helpers ---
 
     def _term_expr(self, t):
+        b = self.backend
         if isinstance(t, ast.Var):
             if t.name not in self.consts:
                 # Variable with no inferable sort: default to String.
-                self.consts[t.name] = z3.Const(t.name, z3.StringSort())
+                self.consts[t.name] = b.const(t.name, "String")
                 self.var_sorts[t.name] = "String"
             return self.consts[t.name]
         if isinstance(t, ast.Const):
-            return _z3_literal(t.value, t.kind)
+            return b.lit(t.value, t.kind)
         if isinstance(t, ast.Neg):
-            return -self._term_expr(t.arg)
+            return b.neg(self._term_expr(t.arg))
         if isinstance(t, ast.BinExpr):
             l = self._term_expr(t.left)
             r = self._term_expr(t.right)
             if t.op == "+":
-                return l + r
+                return b.add(l, r)
             if t.op == "-":
-                return l - r
+                return b.sub(l, r)
             if t.op == "*":
-                return l * r
+                return b.mul(l, r)
             raise ValueError(f"bad arithmetic operator {t.op}")
         raise TypeError(f"cannot build expression for {type(t).__name__}")
 
     def _compare_expr(self, c: ast.Compare):
+        b = self.backend
         l = self._term_expr(c.left)
         r = self._term_expr(c.right)
-        if c.op == "=":
-            return l == r
-        if c.op == "<":
-            return l < r
-        if c.op == "<=":
-            return l <= r
-        if c.op == ">":
-            return l > r
-        if c.op == ">=":
-            return l >= r
-        raise ValueError(f"bad operator {c.op}")
+        return {"=": b.eq, "<": b.lt, "<=": b.le, ">": b.gt, ">=": b.ge}[c.op](l, r)
 
     def _pred_expr(self, name, args, event):
         """B[p(args)] for the current event: OR over the event's p-tuples."""
+        b = self.backend
         tuples = event.get(name, [])
         psorts = self.pred_sorts.get(name, ["String"] * len(args))
         disjuncts = []
         for tup in tuples:
             conj = []
             for arg, val, s in zip(args, tup, psorts):
-                lit = _z3_literal(val, s)
-                conj.append(self._term_expr(arg) == lit)
-            disjuncts.append(z3.And(*conj) if conj else z3.BoolVal(True))
+                conj.append(b.eq(self._term_expr(arg), b.lit(val, s)))
+            disjuncts.append(b.and_(*conj) if conj else b.true())
         if not disjuncts:
-            return z3.BoolVal(False)
-        return z3.Or(*disjuncts)
+            return b.false()
+        return b.or_(*disjuncts)
 
     # --- per-event evaluation ---
 
     def step(self, event: Dict[str, List[Tuple]]) -> bool:
         """Process one event; return True if the property still holds."""
+        b = self.backend
         now = self.now
         pre = self.pre
         for i, node in enumerate(self.nodes):
             k = node.kind
             ch = node.children
             if k == "true":
-                v = z3.BoolVal(True)
+                v = b.true()
             elif k == "false":
-                v = z3.BoolVal(False)
+                v = b.false()
             elif k == "const_expr":
                 v = node.data
             elif k == "pred":
                 v = self._pred_expr(node.data[0], node.data[1], event)
             elif k == "not":
-                v = z3.Not(now[ch[0]])
+                v = b.not_(now[ch[0]])
             elif k == "and":
-                v = z3.And(now[ch[0]], now[ch[1]])
+                v = b.and_(now[ch[0]], now[ch[1]])
             elif k == "or":
-                v = z3.Or(now[ch[0]], now[ch[1]])
+                v = b.or_(now[ch[0]], now[ch[1]])
             elif k == "implies":
-                v = z3.Implies(now[ch[0]], now[ch[1]])
+                v = b.implies(now[ch[0]], now[ch[1]])
             elif k == "iff":
-                v = now[ch[0]] == now[ch[1]]
+                v = b.iff(now[ch[0]], now[ch[1]])
             elif k == "prev":
                 v = pre[ch[0]]
             elif k == "since":
-                v = z3.Or(now[ch[1]], z3.And(now[ch[0]], pre[i]))
+                v = b.or_(now[ch[1]], b.and_(now[ch[0]], pre[i]))
             elif k == "once":
-                v = z3.Or(now[ch[0]], pre[i])
+                v = b.or_(now[ch[0]], pre[i])
             elif k == "interval":
-                v = z3.Or(now[ch[0]], z3.And(z3.Not(now[ch[1]]), pre[i]))
+                v = b.or_(now[ch[0]], b.and_(b.not_(now[ch[1]]), pre[i]))
             elif k == "exists":
-                v = self._eliminate(z3.Exists([self.consts[node.data]], now[ch[0]]))
+                v = self._eliminate(b.exists(self.consts[node.data], now[ch[0]]))
             elif k == "forall":
-                v = self._eliminate(z3.ForAll([self.consts[node.data]], now[ch[0]]))
+                v = self._eliminate(b.forall(self.consts[node.data], now[ch[0]]))
             else:
                 raise RuntimeError(f"unknown node kind {k}")
             now[i] = self._normalize(v)
         holds = self._verdict(now[self.root])
         self.pre = now
-        self.now = [z3.BoolVal(False)] * len(self.nodes)
+        self.now = [b.false()] * len(self.nodes)
         return holds
 
     def _normalize(self, v):
         """Normalize a node's formula.  `simplify` is fast but syntactic;
-        `strong` additionally runs solver-backed ctx-solver-simplify, which
-        collapses contradictions/subsumed terms that `simplify` leaves behind
-        (at the cost of a solver call per node).  `weak` does nothing, leaving
-        the raw formula produced by the recurrence (debugging only)."""
+        `strong` additionally runs a solver-backed simplifier that collapses
+        contradictions/subsumed terms (where the backend supports it).  `weak`
+        does nothing, leaving the raw formula from the recurrence (debug only)."""
         if self.weak:
             return v
-        s = z3.simplify(v)
-        if self.strong:
-            try:
-                s = self._ctx(s).as_expr()
-            except z3.Z3Exception:
-                pass
+        s = self.backend.simplify(v)
+        if self.strong and self.backend.supports_strong:
+            s = self.backend.strong_simplify(s)
         return s
 
     def _eliminate(self, q):
         """Eliminate the quantifier in `q`, returning an equivalent quantifier-
-        free formula when the theory permits.  Falls back to `q` if QE cannot
-        complete (e.g. unsupported string constraints)."""
+        free formula when the theory permits (the backend falls back to `q` if
+        elimination cannot complete)."""
         if self.weak:
             return q
-        try:
-            return self._qe(q).as_expr()
-        except z3.Z3Exception:
-            return q
+        return self.backend.qelim(q)
 
     # --- debug rendering ---
 
@@ -486,9 +391,10 @@ class FormulaMonitor:
             if values is None:
                 return ""
             e = values[i]
-            s = z3_to_str(e)
+            s = self.backend.to_str(e)
             if color:
-                c = GREEN if z3.is_true(e) else RED if z3.is_false(e) else YELLOW
+                c = (GREEN if self.backend.is_true(e)
+                     else RED if self.backend.is_false(e) else YELLOW)
                 s = c + s + RESET
             return "  " + s
 
@@ -508,40 +414,36 @@ class FormulaMonitor:
         return "\n".join(lines)
 
     def _verdict(self, root_formula) -> bool:
-        f = z3.simplify(root_formula)
+        b = self.backend
+        f = b.simplify(root_formula)
         if self.weak:
             # In weak mode the stored/displayed formula is left raw, so the root
             # may still contain quantifiers; eliminate them here (for the verdict
             # decision only) to keep the solver check decidable.
-            try:
-                f = z3.simplify(self._qe(f).as_expr())
-            except z3.Z3Exception:
-                pass
-        if z3.is_true(f):
+            f = b.simplify(b.qelim(f))
+        if b.is_true(f):
             return True
-        if z3.is_false(f):
+        if b.is_false(f):
             return False
         # Closed formula: satisfiable iff valid.
-        self.solver.push()
-        self.solver.add(f)
-        res = self.solver.check()
-        self.solver.pop()
-        return res == z3.sat
+        return b.check_sat(f)
 
 
 class Monitor:
     """Top-level monitor for a whole specification (one or more properties)."""
 
-    def __init__(self, spec: ast.Spec):
+    def __init__(self, spec: ast.Spec, solver: str = "z3"):
         macros = {m.name: m for m in spec.macros}
         pred_sorts = {
             e.name: [p.sort for p in e.params] for e in spec.events
         }
         self.pred_sorts = pred_sorts
+        self.backend = make_backend(solver)
         self.formulas: List[FormulaMonitor] = []
         for prop in spec.properties:
             body = expand_macros(prop.body, macros)
-            self.formulas.append(FormulaMonitor(prop, body, pred_sorts))
+            self.formulas.append(
+                FormulaMonitor(prop, body, pred_sorts, self.backend))
 
     def step(self, event: Dict[str, List[Tuple]]) -> Dict[str, bool]:
         return {fm.name: fm.step(event) for fm in self.formulas}

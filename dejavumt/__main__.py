@@ -51,9 +51,9 @@ def _verdict_tag(holds: bool) -> str:
 
 
 def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
-        strong: bool = False, weak: bool = False) -> int:
+        strong: bool = False, weak: bool = False, solver: str = "z3") -> int:
     spec = parse_file(specfile)
-    monitor = Monitor(spec)
+    monitor = Monitor(spec, solver=solver)
     if weak:
         for fm in monitor.formulas:
             fm.weak = True
@@ -64,6 +64,9 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
     if sys.stdout.isatty():
         banner = "\033[36m" + banner + "\033[0m"  # cyan
     print("\n\n\n" + banner + "\n")
+    print(f"Solver: {monitor.backend.name}")
+    if strong and not monitor.backend.supports_strong:
+        print(f"(note: 'strong' is not supported by {monitor.backend.name}; ignored)")
     print(f"Monitoring {len(monitor.formulas)} property(ies):\n")
     for fm in monitor.formulas:
         print(f"  {fm.name} : {fm.text}")
@@ -119,15 +122,17 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
 
 def main() -> None:
     flags = {"debug", "--debug", "trace", "--trace",
-             "strong", "--strong", "weak", "--weak"}
+             "strong", "--strong", "weak", "--weak", "z3", "--z3", "cvc5", "--cvc5"}
     args = [a for a in sys.argv[1:] if a not in flags]
     chosen = {a.lstrip("-") for a in sys.argv[1:] if a in flags}
     if len(args) != 2:
-        print("usage: python -m dejavumt <specfile> <logfile> [trace] [debug] [strong|weak]")
+        print("usage: python -m dejavumt <specfile> <logfile> "
+              "[trace] [debug] [strong|weak] [z3|cvc5]")
         sys.exit(2)
+    solver = "cvc5" if "cvc5" in chosen else "z3"
     sys.exit(run(args[0], args[1], debug="debug" in chosen,
                  trace="trace" in chosen, strong="strong" in chosen,
-                 weak="weak" in chosen))
+                 weak="weak" in chosen, solver=solver))
 
 
 if __name__ == "__main__":
