@@ -1,0 +1,5 @@
+
+// Bids must strictly increase.
+pred bid(a: Int)
+
+prop p : Forall a1 . Forall a2 . @ P bid(a1) & bid(a2) -> a1 < a2
