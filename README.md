@@ -155,11 +155,13 @@ fact (`open,a,read`), so each line is a one-fact event.
 
 Every predicate parameter has a type (sort), defaulting to `String` if the
 annotation is omitted; the supported sorts are `String`, `Int`, `Real`, `Bool`.
-A variable's type is inferred from how it is used (the predicate positions it
-appears in, or numeric constants it is related to). Types are what enable
-*theory* reasoning: `<` on `Int`/`Real` is numeric order, on `String` it is
-lexicographic, and arithmetic is available on the numeric sorts. This is the
-main gain over DejaVu's untyped, equality-only BDD encoding.
+A variable's type is inferred from how it is used: the predicate positions it
+appears in, numeric constants it is related to, and — matching DejaVu, which
+compares order relations numerically — a variable used in `< <= > >=` with no
+other type information defaults to `Int` (declare it `String` explicitly if you
+want lexicographic comparison). Types are what enable *theory* reasoning:
+numeric order, lexicographic order, and arithmetic on the numeric sorts. This
+is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
 ### Grammar
 
@@ -229,6 +231,31 @@ allowed inside predicate arguments (those are plain variables or constants).
 
 Macros (`pred name(args) = formula`) are named abbreviations, expanded
 syntactically before monitoring.
+
+## Validation against the DejaVu suite
+
+`experiments/ab_validate.py` runs every (spec, log) pair shipped with the
+DejaVu distribution (333 pairs) through both the original BDD-based DejaVu and
+DejaVuMT, and diffs the verdicts (sets of violating event numbers) on identical
+prefix-capped inputs. Results (`experiments/ab_report.md`):
+
+- **82 pairs: identical verdicts** — every pair where both tools produce a
+  verdict, except:
+- **2 pairs differ, for a known, documented reason**: DejaVu's shipped parser
+  binds `Forall`/`Exists` to the next leaf only, whereas DejaVuMT scopes them to
+  the end of the formula (the intended reading; DejaVu's own source marks the
+  leaf binding as a TODO). In both pairs DejaVuMT flags real violations that the
+  leaf-bound parse cannot see.
+- 101 pairs: DejaVu itself rejects the spec — mostly its leaf-binding parse
+  reporting "variable occurs free" on its own distributed specs (e.g.
+  `examples/auction/prop1.qtl`), plus deliberate negative tests.
+- 148 pairs: outside DejaVuMT's current fragment (timed operators, rules,
+  lowercase seen-only quantifiers).
+
+The harness surfaced (and we fixed) two DejaVuMT bugs: predicate matching is
+now arity-sensitive like DejaVu's (a 0-ary `close` is not triggered by
+`close,data`), and undeclared predicates now coerce log values to each
+argument's inferred sort (so `Forall x . a(x) -> x < 5` works untyped).
 
 ## Status (slice 1)
 

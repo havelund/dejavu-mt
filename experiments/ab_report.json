@@ -1,0 +1,2748 @@
+[
+ {
+  "spec": "out/examples/access/prop1.qtl",
+  "log": "out/examples/access/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop1.qtl",
+  "log": "out/examples/access/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop1.qtl",
+  "log": "out/examples/access/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop1.qtl",
+  "log": "out/examples/access/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop2.qtl",
+  "log": "out/examples/access/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop2.qtl",
+  "log": "out/examples/access/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop2.qtl",
+  "log": "out/examples/access/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/access/prop2.qtl",
+  "log": "out/examples/access/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/auction/prop1.qtl",
+  "log": "out/examples/auction/log1.csv",
+  "events": 12,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/auction/prop2.qtl",
+  "log": "out/examples/auction/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/auction/prop3.qtl",
+  "log": "out/examples/auction/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/auction/prop4.qtl",
+  "log": "out/examples/auction/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/file/prop.qtl",
+  "log": "out/examples/file/log1.csv",
+  "events": 10,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/file/prop.qtl",
+  "log": "out/examples/file/log2.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/file/prop.qtl",
+  "log": "out/examples/file/log3.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/file/prop.qtl",
+  "log": "out/examples/file/log4.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/gc/prop1.qtl",
+  "log": "out/examples/gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/gc/prop2.qtl",
+  "log": "out/examples/gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/gc/prop3.qtl",
+  "log": "out/examples/gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/gc/prop4.qtl",
+  "log": "out/examples/gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/locks/basic/prop.qtl",
+  "log": "out/examples/locks/basic/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/locks/basic/prop.qtl",
+  "log": "out/examples/locks/basic/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/locks/basic/prop.qtl",
+  "log": "out/examples/locks/basic/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/locks/basic/prop.qtl",
+  "log": "out/examples/locks/basic/log4.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/locks/dataraces/prop.qtl",
+  "log": "out/examples/locks/dataraces/log1.csv",
+  "events": 11,
+  "dejavu_violations": [
+   11
+  ],
+  "mt_violations": [
+   11
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/locks/dataraces/prop.qtl",
+  "log": "out/examples/locks/dataraces/log2.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/locks/dataraces/prop.qtl",
+  "log": "out/examples/locks/dataraces/log3.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/locks/dataraces/prop.qtl",
+  "log": "out/examples/locks/dataraces/log4.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "out/examples/locks/deadlocks/prop.qtl",
+  "log": "out/examples/locks/deadlocks/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   6
+  ],
+  "mt_violations": [
+   6
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/locks/deadlocks/prop.qtl",
+  "log": "out/examples/locks/deadlocks/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/locks/deadlocks/prop.qtl",
+  "log": "out/examples/locks/deadlocks/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/locks/deadlocks/prop.qtl",
+  "log": "out/examples/locks/deadlocks/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "out/examples/password/prop.qtl",
+  "log": "out/examples/password/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "out/examples/taskspawning/prop.qtl",
+  "log": "out/examples/taskspawning/biglog10k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/taskspawning/prop.qtl",
+  "log": "out/examples/taskspawning/biglog20k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/taskspawning/prop.qtl",
+  "log": "out/examples/taskspawning/biglog40k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/taskspawning/prop.qtl",
+  "log": "out/examples/taskspawning/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/taskspawning/prop.qtl",
+  "log": "out/examples/taskspawning/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/biglog10000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/biglog1000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/biglog100k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/biglog5000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop1.qtl",
+  "log": "out/examples/telemetry/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/biglog10000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/biglog1000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/biglog100k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/biglog5000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/telemetry/prop2.qtl",
+  "log": "out/examples/telemetry/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "out/examples/unsafemapit/prop.qtl",
+  "log": "out/examples/unsafemapit/log1.csv",
+  "events": 14,
+  "dejavu_violations": [
+   13
+  ],
+  "mt_violations": [
+   13
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log2.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log3.csv",
+  "events": 8,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log5.csv",
+  "events": 13,
+  "dejavu_violations": [
+   13
+  ],
+  "mt_violations": [
+   13
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test10/spec.qtl",
+  "log": "src/test/scala/tests/test10/log6.csv",
+  "events": 17,
+  "dejavu_violations": [
+   9,
+   17
+  ],
+  "mt_violations": [
+   9,
+   17
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec1.qtl",
+  "log": "src/test/scala/tests/test11/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec1.qtl",
+  "log": "src/test/scala/tests/test11/log2.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec2.qtl",
+  "log": "src/test/scala/tests/test11/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec2.qtl",
+  "log": "src/test/scala/tests/test11/log2.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec3.qtl",
+  "log": "src/test/scala/tests/test11/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec3.qtl",
+  "log": "src/test/scala/tests/test11/log2.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec4.qtl",
+  "log": "src/test/scala/tests/test11/log1.csv",
+  "events": 7,
+  "dejavu_violations": [
+   5,
+   6
+  ],
+  "mt_violations": [
+   5,
+   6
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test11/spec4.qtl",
+  "log": "src/test/scala/tests/test11/log2.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test12/spec.qtl",
+  "log": "src/test/scala/tests/test12/log1.csv",
+  "events": 3,
+  "dejavu_violations": [
+   1,
+   2
+  ],
+  "mt_violations": [
+   1,
+   2
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test12/spec.qtl",
+  "log": "src/test/scala/tests/test12/log2.csv",
+  "events": 3,
+  "dejavu_violations": [
+   1,
+   2,
+   3
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test13/spec.qtl",
+  "log": "src/test/scala/tests/test13/log1.csv",
+  "events": 2,
+  "dejavu_violations": [
+   1,
+   2
+  ],
+  "mt_violations": [
+   1,
+   2
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test13/spec.qtl",
+  "log": "src/test/scala/tests/test13/log2.csv",
+  "events": 2,
+  "dejavu_violations": [
+   1,
+   2
+  ],
+  "mt_violations": [
+   1,
+   2
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test14/spec.qtl",
+  "log": "src/test/scala/tests/test14/log1.csv",
+  "events": 5,
+  "dejavu_violations": [
+   1,
+   2,
+   3
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test14/spec.qtl",
+  "log": "src/test/scala/tests/test14/log2.csv",
+  "events": 6,
+  "dejavu_violations": [
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test15/spec.qtl",
+  "log": "src/test/scala/tests/test15/log1.csv",
+  "events": 11,
+  "dejavu_violations": [
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "mt_violations": [
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test15/spec.qtl",
+  "log": "src/test/scala/tests/test15/log2.csv",
+  "events": 10,
+  "dejavu_violations": [
+   1,
+   2,
+   3,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test16/spec1.qtl",
+  "log": "src/test/scala/tests/test16/log1.csv",
+  "events": 7,
+  "dejavu_violations": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test16/spec1.qtl",
+  "log": "src/test/scala/tests/test16/log2.csv",
+  "events": 8,
+  "dejavu_violations": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test16/spec2.qtl",
+  "log": "src/test/scala/tests/test16/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test16/spec2.qtl",
+  "log": "src/test/scala/tests/test16/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test17/spec.qtl",
+  "log": "src/test/scala/tests/test17/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   6,
+   7
+  ],
+  "mt_violations": [
+   6,
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test17/spec.qtl",
+  "log": "src/test/scala/tests/test17/log2.csv",
+  "events": 8,
+  "dejavu_violations": [
+   1,
+   3,
+   5,
+   7
+  ],
+  "mt_violations": [
+   1,
+   3,
+   5,
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec1.qtl",
+  "log": "src/test/scala/tests/test18_gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec1.qtl",
+  "log": "src/test/scala/tests/test18_gc/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec1.qtl",
+  "log": "src/test/scala/tests/test18_gc/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec1.qtl",
+  "log": "src/test/scala/tests/test18_gc/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec1.qtl",
+  "log": "src/test/scala/tests/test18_gc/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec2.qtl",
+  "log": "src/test/scala/tests/test18_gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec2.qtl",
+  "log": "src/test/scala/tests/test18_gc/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec2.qtl",
+  "log": "src/test/scala/tests/test18_gc/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec2.qtl",
+  "log": "src/test/scala/tests/test18_gc/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec2.qtl",
+  "log": "src/test/scala/tests/test18_gc/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec3.qtl",
+  "log": "src/test/scala/tests/test18_gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec3.qtl",
+  "log": "src/test/scala/tests/test18_gc/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec3.qtl",
+  "log": "src/test/scala/tests/test18_gc/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec3.qtl",
+  "log": "src/test/scala/tests/test18_gc/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec3.qtl",
+  "log": "src/test/scala/tests/test18_gc/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec4.qtl",
+  "log": "src/test/scala/tests/test18_gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec4.qtl",
+  "log": "src/test/scala/tests/test18_gc/log2.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec4.qtl",
+  "log": "src/test/scala/tests/test18_gc/log3.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec4.qtl",
+  "log": "src/test/scala/tests/test18_gc/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec4.qtl",
+  "log": "src/test/scala/tests/test18_gc/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec5.qtl",
+  "log": "src/test/scala/tests/test18_gc/log1.csv",
+  "events": 14,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec5.qtl",
+  "log": "src/test/scala/tests/test18_gc/log2.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec5.qtl",
+  "log": "src/test/scala/tests/test18_gc/log3.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec5.qtl",
+  "log": "src/test/scala/tests/test18_gc/log4.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test18_gc/spec5.qtl",
+  "log": "src/test/scala/tests/test18_gc/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test19_relations/spec1.qtl",
+  "log": "src/test/scala/tests/test19_relations/log1.csv",
+  "events": 12,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test19_relations/spec2.qtl",
+  "log": "src/test/scala/tests/test19_relations/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test19_relations/spec3.qtl",
+  "log": "src/test/scala/tests/test19_relations/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test19_relations/spec4.qtl",
+  "log": "src/test/scala/tests/test19_relations/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test1_fmcad_access/spec.qtl",
+  "log": "src/test/scala/tests/test1_fmcad_access/log1.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test1_fmcad_access/spec.qtl",
+  "log": "src/test/scala/tests/test1_fmcad_access/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test1_fmcad_access/spec.qtl",
+  "log": "src/test/scala/tests/test1_fmcad_access/log3.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec1.qtl",
+  "log": "src/test/scala/tests/test20/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec1.qtl",
+  "log": "src/test/scala/tests/test20/log2.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec1.qtl",
+  "log": "src/test/scala/tests/test20/log3.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec1.qtl",
+  "log": "src/test/scala/tests/test20/log4.csv",
+  "events": 4,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec2.qtl",
+  "log": "src/test/scala/tests/test20/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec2.qtl",
+  "log": "src/test/scala/tests/test20/log2.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec2.qtl",
+  "log": "src/test/scala/tests/test20/log3.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec2.qtl",
+  "log": "src/test/scala/tests/test20/log4.csv",
+  "events": 4,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec3.qtl",
+  "log": "src/test/scala/tests/test20/log1.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec3.qtl",
+  "log": "src/test/scala/tests/test20/log2.csv",
+  "events": 11,
+  "dejavu_violations": [
+   10
+  ],
+  "mt_violations": [
+   10
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec3.qtl",
+  "log": "src/test/scala/tests/test20/log3.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec3.qtl",
+  "log": "src/test/scala/tests/test20/log4.csv",
+  "events": 4,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec4.qtl",
+  "log": "src/test/scala/tests/test20/log1.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec4.qtl",
+  "log": "src/test/scala/tests/test20/log2.csv",
+  "events": 11,
+  "dejavu_violations": [
+   10
+  ],
+  "mt_violations": [
+   10
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec4.qtl",
+  "log": "src/test/scala/tests/test20/log3.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec4.qtl",
+  "log": "src/test/scala/tests/test20/log4.csv",
+  "events": 4,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec5.qtl",
+  "log": "src/test/scala/tests/test20/log1.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec5.qtl",
+  "log": "src/test/scala/tests/test20/log2.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec5.qtl",
+  "log": "src/test/scala/tests/test20/log3.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test20/spec5.qtl",
+  "log": "src/test/scala/tests/test20/log4.csv",
+  "events": 4,
+  "dejavu_violations": [
+   3
+  ],
+  "mt_violations": [
+   3
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log1.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log2.csv",
+  "events": 50,
+  "dejavu_violations": [
+   2,
+   3,
+   6,
+   7,
+   10,
+   28,
+   29,
+   32,
+   33,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49
+  ],
+  "mt_violations": [
+   2,
+   3,
+   6,
+   7,
+   10,
+   28,
+   29,
+   32,
+   33,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log3.csv",
+  "events": 50,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log4.csv",
+  "events": 6,
+  "dejavu_violations": [
+   2
+  ],
+  "mt_violations": [
+   2
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log5.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl_timed.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log4.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log5.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl_timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log1.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log2.csv",
+  "events": 50,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log3.csv",
+  "events": 50,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log4.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log5.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
+  "log": "src/test/scala/tests/test21_msl/log_msl_timed.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec1.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log1.csv",
+  "events": 10,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec1.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log2.csv",
+  "events": 11,
+  "dejavu_violations": [
+   11
+  ],
+  "mt_violations": [
+   11
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec1.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log3.csv",
+  "events": 14,
+  "dejavu_violations": [
+   14
+  ],
+  "mt_violations": [
+   14
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec1.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log4.csv",
+  "events": 5,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec1.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec2.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log1.csv",
+  "events": 10,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec2.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log2.csv",
+  "events": 11,
+  "dejavu_violations": [
+   11
+  ],
+  "mt_violations": [
+   11
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec2.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log3.csv",
+  "events": 14,
+  "dejavu_violations": [
+   14
+  ],
+  "mt_violations": [
+   14
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec2.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log4.csv",
+  "events": 5,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test22_fmsd_unsafemapit/spec2.qtl",
+  "log": "src/test/scala/tests/test22_fmsd_unsafemapit/log5.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log10.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log11.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log12.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log4.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log5.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log6.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log7.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log8.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec1.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log9.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log10.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log11.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log12.csv",
+  "events": 37,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log2.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log3.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log4.csv",
+  "events": 13,
+  "dejavu_violations": [
+   10
+  ],
+  "mt_violations": [
+   10
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log5.csv",
+  "events": 18,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log6.csv",
+  "events": 18,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log7.csv",
+  "events": 10,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log8.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec2.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log9.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log10.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log11.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log12.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log4.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log5.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log6.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log7.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log8.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec3.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log9.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log10.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log11.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log12.csv",
+  "events": 37,
+  "dejavu_violations": [
+   37
+  ],
+  "mt_violations": [
+   37
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log2.csv",
+  "events": 11,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log3.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log4.csv",
+  "events": 13,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log5.csv",
+  "events": 18,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log6.csv",
+  "events": 18,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log7.csv",
+  "events": 10,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log8.csv",
+  "events": 6,
+  "dejavu_violations": [
+   5,
+   6
+  ],
+  "mt_violations": [
+   5,
+   6
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec4.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log9.csv",
+  "events": 7,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log10.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log11.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log12.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log4.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log5.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log6.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log7.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log8.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test23_fmsd_locks/spec5.qtl",
+  "log": "src/test/scala/tests/test23_fmsd_locks/log9.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test24_macros/spec1.qtl",
+  "log": "src/test/scala/tests/test24_macros/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test24_macros/spec1.qtl",
+  "log": "src/test/scala/tests/test24_macros/log2.csv",
+  "events": 7,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test24_macros/spec2.qtl",
+  "log": "src/test/scala/tests/test24_macros/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test24_macros/spec2.qtl",
+  "log": "src/test/scala/tests/test24_macros/log2.csv",
+  "events": 7,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec1.qtl",
+  "log": "src/test/scala/tests/test25_macros/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec1.qtl",
+  "log": "src/test/scala/tests/test25_macros/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec2.qtl",
+  "log": "src/test/scala/tests/test25_macros/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec2.qtl",
+  "log": "src/test/scala/tests/test25_macros/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec3.qtl",
+  "log": "src/test/scala/tests/test25_macros/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test25_macros/spec3.qtl",
+  "log": "src/test/scala/tests/test25_macros/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec1.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log1.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec1.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log2.csv",
+  "events": 9,
+  "dejavu_violations": [
+   6
+  ],
+  "mt_violations": [
+   6
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec1.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log3.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec1.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log4.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec2.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log1.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec2.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log2.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec2.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log3.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test26_propositional/spec2.qtl",
+  "log": "src/test/scala/tests/test26_propositional/log4.csv",
+  "events": 7,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test27_quantrenaming/spec1.qtl",
+  "log": "src/test/scala/tests/test27_quantrenaming/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test27_quantrenaming/spec1.qtl",
+  "log": "src/test/scala/tests/test27_quantrenaming/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test27_quantrenaming/spec2.qtl",
+  "log": "src/test/scala/tests/test27_quantrenaming/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test27_quantrenaming/spec2.qtl",
+  "log": "src/test/scala/tests/test27_quantrenaming/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test29_renaming/spec1.qtl",
+  "log": "src/test/scala/tests/test29_renaming/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test29_renaming/spec1.qtl",
+  "log": "src/test/scala/tests/test29_renaming/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test29_renaming/spec2.qtl",
+  "log": "src/test/scala/tests/test29_renaming/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test29_renaming/spec2.qtl",
+  "log": "src/test/scala/tests/test29_renaming/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test2_fmcad_file/spec.qtl",
+  "log": "src/test/scala/tests/test2_fmcad_file/log1.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test2_fmcad_file/spec.qtl",
+  "log": "src/test/scala/tests/test2_fmcad_file/log2.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test2_fmcad_file/spec.qtl",
+  "log": "src/test/scala/tests/test2_fmcad_file/log3.csv",
+  "events": 1000,
+  "status": "MT_TIMEOUT",
+  "reason": "timeout",
+  "dejavu_violations": []
+ },
+ {
+  "spec": "src/test/scala/tests/test30_badpredicates/spec1.qtl",
+  "log": "src/test/scala/tests/test30_badpredicates/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test30_badpredicates/spec2.qtl",
+  "log": "src/test/scala/tests/test30_badpredicates/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test31_spin18/spec1.qtl",
+  "log": "src/test/scala/tests/test31_spin18/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test31_spin18/spec1.qtl",
+  "log": "src/test/scala/tests/test31_spin18/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "lowercase-quantifier"
+ },
+ {
+  "spec": "src/test/scala/tests/test32_isola18/spec.qtl",
+  "log": "src/test/scala/tests/test32_isola18/log1.csv",
+  "events": 9,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test33_isola18_rv/spec.qtl",
+  "log": "src/test/scala/tests/test33_isola18_rv/log1.csv",
+  "events": 2,
+  "dejavu_violations": [
+   1
+  ],
+  "mt_violations": [
+   1
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test34_states/spec.qtl",
+  "log": "src/test/scala/tests/test34_states/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test34_states/spec.qtl",
+  "log": "src/test/scala/tests/test34_states/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test35_states/spec.qtl",
+  "log": "src/test/scala/tests/test35_states/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test35_states/spec.qtl",
+  "log": "src/test/scala/tests/test35_states/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test35_states/spec.qtl",
+  "log": "src/test/scala/tests/test35_states/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test36_states/spec.qtl",
+  "log": "src/test/scala/tests/test36_states/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test36_states/spec.qtl",
+  "log": "src/test/scala/tests/test36_states/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test37_states/spec.qtl",
+  "log": "src/test/scala/tests/test37_states/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test37_states/spec.qtl",
+  "log": "src/test/scala/tests/test37_states/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test38_states/spec.qtl",
+  "log": "src/test/scala/tests/test38_states/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test38_states/spec.qtl",
+  "log": "src/test/scala/tests/test38_states/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/biglog10000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/biglog1000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/biglog100k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/biglog5000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test39_formalise_wolper/spec.qtl",
+  "log": "src/test/scala/tests/test39_formalise_wolper/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test3_fmcad_fifo/spec.qtl",
+  "log": "src/test/scala/tests/test3_fmcad_fifo/log1.csv",
+  "events": 22,
+  "dejavu_violations": [
+   6,
+   14,
+   16,
+   17,
+   21
+  ],
+  "mt_violations": [
+   6,
+   14,
+   16,
+   17,
+   21
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test3_fmcad_fifo/spec.qtl",
+  "log": "src/test/scala/tests/test3_fmcad_fifo/log2.csv",
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test4/spec.qtl",
+  "log": "src/test/scala/tests/test4/log1.csv",
+  "events": 5,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test4/spec.qtl",
+  "log": "src/test/scala/tests/test4/log2.csv",
+  "events": 6,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test40_formalise_immigrant/spec.qtl",
+  "log": "src/test/scala/tests/test40_formalise_immigrant/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test40_formalise_immigrant/spec.qtl",
+  "log": "src/test/scala/tests/test40_formalise_immigrant/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/biglog10000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/biglog1000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/biglog100k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/biglog5000k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test41_formalise_statemachine/spec.qtl",
+  "log": "src/test/scala/tests/test41_formalise_statemachine/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test42_formalise_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test42_formalise_taskspawning/biglog10k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test42_formalise_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test42_formalise_taskspawning/biglog20k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test42_formalise_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test42_formalise_taskspawning/biglog40k.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test42_formalise_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test42_formalise_taskspawning/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test42_formalise_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test42_formalise_taskspawning/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test43_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test43_taskspawning/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test43_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test43_taskspawning/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test44_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test44_taskspawning/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test44_taskspawning/spec.qtl",
+  "log": "src/test/scala/tests/test44_taskspawning/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test45_taskspawning_macros/spec.qtl",
+  "log": "src/test/scala/tests/test45_taskspawning_macros/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test45_taskspawning_macros/spec.qtl",
+  "log": "src/test/scala/tests/test45_taskspawning_macros/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test47_time/spec.qtl",
+  "log": "src/test/scala/tests/test47_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test48_time/spec.qtl",
+  "log": "src/test/scala/tests/test48_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test49_time/spec1.qtl",
+  "log": "src/test/scala/tests/test49_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test49_time/spec2.qtl",
+  "log": "src/test/scala/tests/test49_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test5/spec.qtl",
+  "log": "src/test/scala/tests/test5/log1.csv",
+  "events": 5,
+  "dejavu_violations": [
+   4
+  ],
+  "mt_violations": [
+   4
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test5/spec.qtl",
+  "log": "src/test/scala/tests/test5/log2.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test50_sttt_rules/spec.qtl",
+  "log": "src/test/scala/tests/test50_sttt_rules/log1.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test50_sttt_rules/spec.qtl",
+  "log": "src/test/scala/tests/test50_sttt_rules/log2.csv",
+  "events": 6,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test51_sttt_rules/spec.qtl",
+  "log": "src/test/scala/tests/test51_sttt_rules/log1.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test51_sttt_rules/spec.qtl",
+  "log": "src/test/scala/tests/test51_sttt_rules/log2.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test51_sttt_rules/spec.qtl",
+  "log": "src/test/scala/tests/test51_sttt_rules/log3.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "rules"
+ },
+ {
+  "spec": "src/test/scala/tests/test52_time/spec.qtl",
+  "log": "src/test/scala/tests/test52_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test52_time/spec.qtl",
+  "log": "src/test/scala/tests/test52_time/log2.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test52_time/spec.qtl",
+  "log": "src/test/scala/tests/test52_time/log3.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test53_time/spec.qtl",
+  "log": "src/test/scala/tests/test53_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test54_time/spec1.qtl",
+  "log": "src/test/scala/tests/test54_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test54_time/spec2.qtl",
+  "log": "src/test/scala/tests/test54_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test54_time/spec3.qtl",
+  "log": "src/test/scala/tests/test54_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test54_time/spec4.qtl",
+  "log": "src/test/scala/tests/test54_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test55_time/spec1.qtl",
+  "log": "src/test/scala/tests/test55_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test56_time/spec1.qtl",
+  "log": "src/test/scala/tests/test56_time/log1.timed.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "timed-operators"
+ },
+ {
+  "spec": "src/test/scala/tests/test57_synthesis_time/spec.qtl",
+  "log": "src/test/scala/tests/test57_synthesis_time/spec.csv",
+  "status": "SKIP_UNSUPPORTED",
+  "reason": "parse-error"
+ },
+ {
+  "spec": "src/test/scala/tests/test6/spec.qtl",
+  "log": "src/test/scala/tests/test6/log1.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test6/spec.qtl",
+  "log": "src/test/scala/tests/test6/log2.csv",
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test6/spec.qtl",
+  "log": "src/test/scala/tests/test6/log3.csv",
+  "events": 8,
+  "dejavu_violations": [
+   5
+  ],
+  "mt_violations": [
+   5
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test7/spec.qtl",
+  "log": "src/test/scala/tests/test7/log1.csv",
+  "events": 9,
+  "dejavu_violations": [
+   7,
+   9
+  ],
+  "mt_violations": [
+   7,
+   9
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test7/spec.qtl",
+  "log": "src/test/scala/tests/test7/log2.csv",
+  "events": 7,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test8/spec.qtl",
+  "log": "src/test/scala/tests/test8/log1.csv",
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test8/spec.qtl",
+  "log": "src/test/scala/tests/test8/log2.csv",
+  "events": 7,
+  "dejavu_violations": [
+   7
+  ],
+  "mt_violations": [
+   7
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test8/spec.qtl",
+  "log": "src/test/scala/tests/test8/log3.csv",
+  "events": 8,
+  "dejavu_violations": [
+   7,
+   8
+  ],
+  "mt_violations": [
+   7,
+   8
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test9/spec.qtl",
+  "log": "src/test/scala/tests/test9/log2.csv",
+  "events": 1,
+  "dejavu_violations": [
+   1
+  ],
+  "mt_violations": [
+   1
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test9/spec.qtl",
+  "log": "src/test/scala/tests/test9/log3.csv",
+  "events": 2,
+  "dejavu_violations": [
+   1,
+   2
+  ],
+  "mt_violations": [
+   1,
+   2
+  ],
+  "status": "MATCH"
+ },
+ {
+  "spec": "src/test/scala/tests/test9/spec.qtl",
+  "log": "src/test/scala/tests/test9/log4.csv",
+  "events": 3,
+  "dejavu_violations": [
+   1,
+   2,
+   3
+  ],
+  "mt_violations": [
+   1,
+   2,
+   3
+  ],
+  "status": "MATCH"
+ }
+]

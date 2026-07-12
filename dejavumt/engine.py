@@ -94,6 +94,7 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
     """Infer each variable's sort from how it is used as a predicate argument
     (and, as a fallback, from constants it is compared against)."""
     sorts: Dict[str, str] = {}
+    ordered_vars: set = set()   # variables occurring in an order relation
 
     def note(var: str, sort: str):
         if var in sorts and sorts[var] != sort:
@@ -132,6 +133,11 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                 s = next(iter(numeric))
                 for v in vs:
                     note(v, s)
+            elif g.op in ("<", "<=", ">", ">="):
+                # Order relation with no constant to fix the sort: remember the
+                # variables so they default to Int (DejaVu compares order
+                # relations numerically), unless something else types them.
+                ordered_vars.update(vs)
         elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
@@ -141,6 +147,10 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
             walk(g.arg)
 
     walk(f)
+    # Variables used in order relations but never otherwise typed default to
+    # Int, matching DejaVu's numeric comparison semantics for < <= > >=.
+    for v in ordered_vars:
+        sorts.setdefault(v, "Int")
     return sorts
 
 
@@ -297,15 +307,34 @@ class FormulaMonitor:
         r = self._term_expr(c.right)
         return {"=": b.eq, "<": b.lt, "<=": b.le, ">": b.gt, ">=": b.ge}[c.op](l, r)
 
+    def _arg_sort(self, arg, psorts, j):
+        """Sort of predicate argument position j: from the declaration if
+        given, else from the argument itself (a variable's inferred sort, or
+        a constant's kind).  Undeclared positions must not blanket-default to
+        String, or an Int-inferred variable would be compared to a String
+        literal (sort mismatch)."""
+        if psorts is not None and j < len(psorts):
+            return psorts[j]
+        if isinstance(arg, ast.Var):
+            return self.var_sorts.get(arg.name, "String")
+        if isinstance(arg, ast.Const):
+            return arg.kind
+        return "String"
+
     def _pred_expr(self, name, args, event):
-        """B[p(args)] for the current event: OR over the event's p-tuples."""
+        """B[p(args)] for the current event: OR over the event's p-tuples.
+        Matching is arity-sensitive, as in DejaVu: a fact p(v1,..,vk) only
+        matches an occurrence p(t1,..,tn) when k = n."""
         b = self.backend
         tuples = event.get(name, [])
-        psorts = self.pred_sorts.get(name, ["String"] * len(args))
+        psorts = self.pred_sorts.get(name)
         disjuncts = []
         for tup in tuples:
+            if len(tup) != len(args):
+                continue
             conj = []
-            for arg, val, s in zip(args, tup, psorts):
+            for j, (arg, val) in enumerate(zip(args, tup)):
+                s = self._arg_sort(arg, psorts, j)
                 conj.append(b.eq(self._term_expr(arg), b.lit(val, s)))
             disjuncts.append(b.and_(*conj) if conj else b.true())
         if not disjuncts:

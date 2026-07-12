@@ -132,6 +132,46 @@ def test_arith_no_space_parses_and_runs():
     assert violations(spec, events, "p") == []
 
 
+def test_arity_sensitive_matching():
+    # A 0-ary atom must not be triggered by a fact with arguments (DejaVu
+    # matches by name AND arity).  From DejaVu test26_propositional/spec2.
+    spec = """
+    prop p : access -> [login,logout)
+    """
+    events = [
+        {"login": [("klaus",)]},    # 1-ary: must NOT match 0-ary 'login'
+        {"access": [()]},           # 0-ary access: matches; login never seen
+    ]
+    assert violations(spec, events, "p") == [2]
+
+
+def test_undeclared_predicate_numeric_inference():
+    # x is inferred Int from the relation; the undeclared predicate's log
+    # values must then be coerced to Int, not String.  From DejaVu test17.
+    spec = """
+    prop p : Forall x . (a(x) -> x < 5)
+    """
+    events = [{"a": [("1",)]}, {"a": [("7",)]}, {"a": [("3",)]}]
+    assert violations(spec, events, "p") == [2]
+
+
+def test_untyped_order_relation_is_numeric():
+    # DejaVu compares order relations numerically; untyped variables in an
+    # order relation must default to Int, not String (lexicographic would
+    # wrongly flag 50 < 110).  From DejaVu examples/auction/prop1 + log1.
+    spec = """
+    prop p : Forall i . Forall a1 . Forall a2 . @ P bid(i,a1) & bid(i,a2) -> a1 < a2
+    """
+    events = [
+        {"bid": [("hat", "50")]},
+        {"bid": [("hat", "110")]},        # 50 < 110 numerically: ok
+        {"bid": [("painting", "1000")]},
+        {"bid": [("painting", "900")]},   # 1000 < 900 false: violation
+        {"bid": [("painting", "1850")]},  # 900,1000 < 1850: ok (lex would flag)
+    ]
+    assert violations(spec, events, "p") == [4]
+
+
 def test_once_and_hist():
     spec = """
     pred p(x: Int)

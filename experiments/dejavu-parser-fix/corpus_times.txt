@@ -1,0 +1,115 @@
+access/prop1.qtl | leaf:  | wide: 176.3 ms  parsed=true
+access/prop2.qtl | leaf:  | wide: 84.9 ms  parsed=true
+auction/prop1.qtl | leaf:  | wide: 182.0 ms  parsed=true
+auction/prop2.qtl | leaf:  | wide: 288.5 ms  parsed=true
+auction/prop3.qtl | leaf:  | wide: 152.8 ms  parsed=true
+auction/prop4.qtl | leaf:  | wide: 138.3 ms  parsed=true
+file/prop.qtl | leaf:  | wide: 133.5 ms  parsed=true
+gc/prop1.qtl | leaf:  | wide: 53.1 ms  parsed=true
+gc/prop2.qtl | leaf:  | wide: 72.4 ms  parsed=true
+gc/prop3.qtl | leaf:  | wide: 279.3 ms  parsed=true
+gc/prop4.qtl | leaf:  | wide: 72.8 ms  parsed=true
+basic/prop.qtl | leaf:  | wide: 5976.3 ms  parsed=true
+dataraces/prop.qtl | leaf:  | wide: TIMEOUT
+deadlocks/prop.qtl | leaf:  | wide: TIMEOUT
+password/prop.qtl | leaf:  | wide: 76.8 ms  parsed=true
+taskspawning/prop.qtl | leaf:  | wide: 161.5 ms  parsed=true
+telemetry/prop1.qtl | leaf:  | wide: 56.4 ms  parsed=true
+telemetry/prop2.qtl | leaf:  | wide: 89.8 ms  parsed=true
+unsafemapit/prop.qtl | leaf:  | wide: 5235.3 ms  parsed=true
+test10/spec.qtl | leaf:  | wide: 257.8 ms  parsed=true
+test11/spec1.qtl | leaf:  | wide: 253.5 ms  parsed=true
+test11/spec2.qtl | leaf:  | wide: 265.7 ms  parsed=true
+test11/spec3.qtl | leaf:  | wide: 918.4 ms  parsed=true
+test11/spec4.qtl | leaf:  | wide: 1078.8 ms  parsed=true
+test12/spec.qtl | leaf:  | wide: 178.9 ms  parsed=true
+test13/spec.qtl | leaf: 41.0 ms  parsed=true | wide: 47.8 ms  parsed=true
+test14/spec.qtl | leaf:  | wide: 161.0 ms  parsed=true
+test15/spec.qtl | leaf:  | wide: 299.0 ms  parsed=true
+test16/spec1.qtl | leaf:  | wide: 127.7 ms  parsed=true
+test16/spec2.qtl | leaf:  | wide: 131.0 ms  parsed=true
+test17/spec.qtl | leaf:  | wide: 70.8 ms  parsed=true
+test18_gc/spec1.qtl | leaf:  | wide: 51.2 ms  parsed=true
+test18_gc/spec2.qtl | leaf:  | wide: 69.6 ms  parsed=true
+test18_gc/spec3.qtl | leaf:  | wide: 275.4 ms  parsed=true
+test18_gc/spec4.qtl | leaf:  | wide: 74.3 ms  parsed=true
+test18_gc/spec5.qtl | leaf:  | wide: 178.1 ms  parsed=true
+test19_relations/spec1.qtl | leaf:  | wide: 183.9 ms  parsed=true
+test19_relations/spec2.qtl | leaf:  | wide: 139.9 ms  parsed=true
+test19_relations/spec3.qtl | leaf:  | wide: 147.5 ms  parsed=true
+test19_relations/spec4.qtl | leaf:  | wide: 146.8 ms  parsed=true
+test1_fmcad_access/spec.qtl | leaf:  | wide: 1578.1 ms  parsed=true
+test20/spec1.qtl | leaf:  | wide: 94.1 ms  parsed=true
+test20/spec2.qtl | leaf:  | wide: 98.6 ms  parsed=true
+test20/spec3.qtl | leaf:  | wide: 104.9 ms  parsed=true
+test20/spec4.qtl | leaf:  | wide: 553.3 ms  parsed=true
+test20/spec5.qtl | leaf:  | wide: 91.7 ms  parsed=true
+test21_msl/spec1.qtl | leaf:  | wide: 97.3 ms  parsed=true
+test21_msl/spec1_timed.qtl | leaf:  | wide: 1006.2 ms  parsed=true
+test21_msl/spec2.qtl | leaf:  | wide: 184.9 ms  parsed=true
+test22_fmsd_unsafemapit/spec1.qtl | leaf:  | wide: 1393.4 ms  parsed=true
+test22_fmsd_unsafemapit/spec2.qtl | leaf:  | wide: 5398.9 ms  parsed=true
+test23_fmsd_locks/spec1.qtl | leaf:  | wide: 5845.5 ms  parsed=true
+test23_fmsd_locks/spec2.qtl | leaf:  | wide: TIMEOUT
+test23_fmsd_locks/spec3.qtl | leaf:  | wide: 9630.0 ms  parsed=true
+test23_fmsd_locks/spec4.qtl | leaf:  | wide: TIMEOUT
+test23_fmsd_locks/spec5.qtl | leaf:  | wide: 6314.3 ms  parsed=true
+test24_macros/spec1.qtl | leaf:  | wide: 182.8 ms  parsed=true
+test24_macros/spec2.qtl | leaf:  | wide: 100.1 ms  parsed=true
+test25_macros/spec1.qtl | leaf:  | wide: 338.4 ms  parsed=true
+test25_macros/spec2.qtl | leaf:  | wide: 265.3 ms  parsed=true
+test25_macros/spec3.qtl | leaf:  | wide: 112.1 ms  parsed=true
+test26_propositional/spec1.qtl | leaf:  | wide: 210.3 ms  parsed=true
+test26_propositional/spec2.qtl | leaf:  | wide: 57.1 ms  parsed=true
+test27_quantrenaming/spec1.qtl | leaf:  | wide: TIMEOUT
+test27_quantrenaming/spec2.qtl | leaf:  | wide: 311.2 ms  parsed=true
+test28_wellformedness/spec.qtl | leaf:  | wide: 145.8 ms  parsed=true
+test29_renaming/spec1.qtl | leaf:  | wide: 58.9 ms  parsed=true
+test29_renaming/spec2.qtl | leaf: 13.6 ms  parsed=true | wide: 12.0 ms  parsed=true
+test2_fmcad_file/spec.qtl | leaf:  | wide: 323.5 ms  parsed=true
+test30_badpredicates/spec1.qtl | leaf:  | wide: 99.0 ms  parsed=true
+test30_badpredicates/spec2.qtl | leaf:  | wide: 83.9 ms  parsed=true
+test31_spin18/spec1.qtl | leaf: 52.0 ms  parsed=true | wide: 67.8 ms  parsed=true
+test32_isola18/spec.qtl | leaf:  | wide: 113.3 ms  parsed=true
+test33_isola18_rv/spec.qtl | leaf:  | wide: 33.9 ms  parsed=true
+test34_states/spec.qtl | leaf:  | wide: 54.0 ms  parsed=true
+test35_states/spec.qtl | leaf:  | wide: 63.6 ms  parsed=true
+test36_states/spec.qtl | leaf:  | wide: 83.5 ms  parsed=true
+test37_states/spec.qtl | leaf:  | wide: 423.0 ms  parsed=true
+test38_states/spec.qtl | leaf:  | wide: 485.7 ms  parsed=true
+test39_formalise_wolper/spec.qtl | leaf:  | wide: 56.8 ms  parsed=true
+test3_fmcad_fifo/spec.qtl | leaf:  | wide: 5643.4 ms  parsed=true
+test4/spec.qtl | leaf:  | wide: 241.3 ms  parsed=true
+test40_formalise_immigrant/spec.qtl | leaf:  | wide: 504.7 ms  parsed=true
+test41_formalise_statemachine/spec.qtl | leaf:  | wide: 80.6 ms  parsed=true
+test42_formalise_taskspawning/spec.qtl | leaf:  | wide: 163.3 ms  parsed=true
+test43_taskspawning/spec.qtl | leaf:  | wide: 169.3 ms  parsed=true
+test44_taskspawning/spec.qtl | leaf:  | wide: 98.7 ms  parsed=true
+test45_taskspawning_macros/spec.qtl | leaf:  | wide: 92.1 ms  parsed=true
+test46_wellformedness/spec1.qtl | leaf:  | wide: 85.3 ms  parsed=true
+test46_wellformedness/spec2.qtl | leaf:  | wide: 84.4 ms  parsed=true
+test46_wellformedness/spec3.qtl | leaf:  | wide: 83.8 ms  parsed=true
+test46_wellformedness/spec4.qtl | leaf:  | wide: 86.1 ms  parsed=true
+test46_wellformedness/spec5.qtl | leaf:  | wide: 175.2 ms  parsed=true
+test46_wellformedness/spec6.qtl | leaf:  | wide: 158.7 ms  parsed=true
+test46_wellformedness/spec7.qtl | leaf:  | wide: 165.0 ms  parsed=true
+test47_time/spec.qtl | leaf:  | wide: 186.5 ms  parsed=true
+test48_time/spec.qtl | leaf:  | wide: 46.8 ms  parsed=true
+test49_time/spec1.qtl | leaf:  | wide: 73.2 ms  parsed=true
+test49_time/spec2.qtl | leaf:  | wide: 58.9 ms  parsed=true
+test5/spec.qtl | leaf:  | wide: 236.7 ms  parsed=true
+test50_sttt_rules/spec.qtl | leaf:  | wide: 275.9 ms  parsed=true
+test51_sttt_rules/spec.qtl | leaf:  | wide: 55.6 ms  parsed=true
+test52_time/spec.qtl | leaf:  | wide: 66.3 ms  parsed=true
+test53_time/spec.qtl | leaf:  | wide: 47.0 ms  parsed=true
+test54_time/spec1.qtl | leaf:  | wide: 53.2 ms  parsed=true
+test54_time/spec2.qtl | leaf:  | wide: 50.7 ms  parsed=true
+test54_time/spec3.qtl | leaf:  | wide: 55.7 ms  parsed=true
+test54_time/spec4.qtl | leaf:  | wide: 52.4 ms  parsed=true
+test55_time/spec1.qtl | leaf:  | wide: 1282.6 ms  parsed=true
+test56_time/spec1.qtl | leaf:  | wide: 961.4 ms  parsed=true
+test57_synthesis_time/spec.qtl | leaf:  | wide: TIMEOUT
+test6/spec.qtl | leaf:  | wide: 255.8 ms  parsed=true
+test7/spec.qtl | leaf:  | wide: 483.1 ms  parsed=true
+test8/spec.qtl | leaf:  | wide: 275.2 ms  parsed=true
+test9/spec.qtl | leaf: 39.6 ms  parsed=true | wide: 48.5 ms  parsed=true
