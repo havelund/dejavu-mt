@@ -1,5 +1,5 @@
 
-- Timed operators (S[<=n], P[<=n], P[>n], H[<=n]…) — the biggest 
+-> Timed operators (S[<=n], P[<=n], P[>n], H[<=n]…) — the biggest 
 expressiveness showcase left. DejaVu needs bit-cube time encodings; 
 in our setting time is just an Int in the formula — arguably the most 
 elegant demonstration of the SMT approach, and paper-worthy.
