@@ -74,8 +74,9 @@ def skip_reason(spec: Path) -> str | None:
         return None
     except Exception:
         text = spec.read_text()
-        if re.search(r"\[<=|\[>|(?<![A-Za-z])Z(?![A-Za-z])", text):
-            return "timed-operators"
+        # Timed S/P/H parse now; only the Z operator remains unsupported.
+        if re.search(r"(?<![A-Za-z])Z(?![A-Za-z])", text):
+            return "zince-operator"
         if ":=" in text:
             return "rules"
         if re.search(r"\b(exists|forall)\b", text):
@@ -139,8 +140,13 @@ def mt_run(spec: Path, log: Path, solver: str, timeout_s: int
     try:
         m = Monitor(parse_file(str(spec)), solver=solver)
         viol = set()
-        for i, ev in enumerate(read_events(str(log)), 1):
-            if not all(m.step(ev).values()):
+        # Mirror DejaVu's convention: a log named *.timed.* carries the
+        # timestamp in its last column (DejaVu sniffs the filename,
+        # Monitor.scala `file.contains(".timed.")`), regardless of the spec.
+        timed_log = ".timed." in log.name
+        for i, item in enumerate(read_events(str(log), timed=timed_log), 1):
+            ev, ts = item if timed_log else (item, None)
+            if not all(m.step(ev, ts).values()):
                 viol.add(i)
         return viol, ""
     except Timeout:
@@ -197,11 +203,22 @@ def main():
             rows.append(row)
             continue
 
-        # prefix-capped copy of the log (same input for both tools)
+        # A timed spec needs a timed log (*.timed.*, DejaVu's naming
+        # convention); pairing it with an untimed log from the same directory
+        # is a discovery artifact, not a test.
+        if re.search(r"[SPH]\[", spec.read_text()) and ".timed." not in log.name:
+            row.update(status="SKIP_UNSUPPORTED", reason="timed-spec-untimed-log")
+            rows.append(row)
+            continue
+
+        # prefix-capped copy of the log (same input for both tools); keep the
+        # ".timed." name marker — DejaVu reads timestamps only from logs so
+        # named.
         with open(log) as f:
             lines = [ln for ln in f][: args.max_events]
         n_events = len(lines)
-        capped = scratch / "current_log.csv"
+        capped = scratch / ("current_log.timed.csv" if ".timed." in log.name
+                            else "current_log.csv")
         capped.write_text("".join(lines))
         row["events"] = n_events
 

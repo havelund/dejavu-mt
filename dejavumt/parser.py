@@ -11,11 +11,12 @@ Currently supported (slice 1 -- untimed fragment):
     properties:    prop name : <ltl>
 
     operators:     -> <-> | & ! @ S P H [_,_)  Exists/Forall
+    timed:         S/P/H with a time bound: [a,b], [a,*], or the sugar
+                   [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
 
-Not yet supported (planned): timed operators (S[<=n], P[>n], ...), the Z
-operator, recursive rules (where ... :=), and the seen-only lowercase
-exists/forall quantifiers.
+Not yet supported (planned): the Z operator, recursive rules (where ... :=),
+and the seen-only lowercase exists/forall quantifiers.
 """
 from __future__ import annotations
 
@@ -43,21 +44,46 @@ _GRAMMAR = r"""
     typed_param: NAME (":" SORT)?
 
     // --- formulas, loosest binding first ---
-    // Quantifiers bind loosest and scope over the whole formula to their right,
-    // so  Forall f . close(f) -> phi  means  Forall f . (close(f) -> phi).
-    ?ltl: "Exists" NAME "." ltl       -> exists
-        | "Forall" NAME "." ltl       -> forall
-        | ltl_impl
+    // A quantifier scopes over everything to its right (wide scope), as in
+    // DejaVu:  Forall f . close(f) -> phi  ==  Forall f . (close(f) -> phi).
+    // Quantifiers may also occur nested in operand position, e.g.
+    // ! Exists i . phi  or  a | Exists m . phi, again scoping to the end of
+    // the enclosing formula.  To keep the grammar unambiguous, each
+    // precedence level has a plain variant (no unparenthesized quantifier)
+    // used for non-final operands, and a "q" variant allowing a quantified
+    // tail as the final operand — so the wide parse is the only parse.
+    ?ltl: ltl_implq
 
-    ?ltl_impl: ltl_or "->" ltl        -> implies
-             | ltl_or "<->" ltl       -> iff
-             | ltl_or
-    ?ltl_or: ltl_or "|" ltl_and       -> or_
+    ?ltl_implq: ltl_or "->" ltl_implq   -> implies
+              | ltl_or "<->" ltl_implq  -> iff
+              | ltl_orq
+    ?ltl_orq: ltl_or "|" ltl_andq       -> or_
+            | ltl_andq
+    ?ltl_or: ltl_or "|" ltl_and         -> or_
            | ltl_and
-    ?ltl_and: ltl_and "&" ltl_since   -> and_
+    ?ltl_andq: ltl_and "&" ltl_sinceq   -> and_
+             | ltl_sinceq
+    ?ltl_and: ltl_and "&" ltl_since     -> and_
             | ltl_since
-    ?ltl_since: leaf "S" leaf         -> since
+    ?ltl_sinceq: leaf "S" timebound uleafq -> timed_since
+               | leaf "S" uleafq        -> since
+               | uleafq
+    ?ltl_since: leaf "S" timebound leaf -> timed_since
+              | leaf "S" leaf           -> since
               | leaf
+
+    // Unary chain that may end in a quantifier (the "q" tail).
+    ?uleafq: quant
+           | "!" uleafq                     -> not_
+           | "@" uleafq                     -> prev
+           | "P" timebound uleafq           -> timed_once
+           | "H" timebound uleafq           -> timed_hist
+           | "P" uleafq                     -> once
+           | "H" uleafq                     -> hist
+           | leaf
+
+    quant: "Exists" NAME "." ltl            -> exists
+         | "Forall" NAME "." ltl            -> forall
 
     ?leaf: "true"                          -> true_
          | "false"                         -> false_
@@ -65,10 +91,20 @@ _GRAMMAR = r"""
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
          | "@" leaf                        -> prev
+         | "P" timebound leaf              -> timed_once
+         | "H" timebound leaf              -> timed_hist
          | "P" leaf                        -> once
          | "H" leaf                        -> hist
          | "[" ltl "," ltl ")"            -> interval
          | "(" ltl ")"                     -> parens
+
+    // Time bounds on S/P/H: an interval [a,b] or [a,*], or comparison sugar.
+    ?timebound: "[" "<=" INT "]"       -> tb_le
+              | "[" "<" INT "]"        -> tb_lt
+              | "[" ">=" INT "]"       -> tb_ge
+              | "[" ">" INT "]"        -> tb_gt
+              | "[" INT "," INT "]"    -> tb_ab
+              | "[" INT "," "*" "]"    -> tb_astar
 
     // Arithmetic expressions in relation operands (* binds tighter than +/-).
     ?sum: sum "+" product   -> add
@@ -103,7 +139,10 @@ _GRAMMAR = r"""
     %import common.ESCAPED_STRING
     %import common.INT
     %import common.FLOAT
-    %import common.WS
+    // Full Unicode whitespace (lark's common.WS misses e.g. the vertical tab,
+    // which occurs in DejaVu's distributed specs and which DejaVu's own
+    // Java-regex-based parser skips).
+    WS: /\s+/
     %ignore WS
     %ignore /\/\/[^\n]*/
     %ignore /\/\*(.|\n)*?\*\//
@@ -203,6 +242,40 @@ class _ToAst(Transformer):
 
     def since(self, a, b):
         return ast.Since(a, b)
+
+    # --- time bounds (low, high, display); high=None means unbounded ---
+    @staticmethod
+    def _tb(low, high, disp):
+        if high is not None and high < low:
+            raise ValueError(f"empty time interval {disp}")
+        return (low, high, disp)
+
+    def tb_le(self, n):
+        return self._tb(0, int(n), f"[<={n}]")
+
+    def tb_lt(self, n):
+        return self._tb(0, int(n) - 1, f"[<{n}]")
+
+    def tb_ge(self, n):
+        return self._tb(int(n), None, f"[>={n}]")
+
+    def tb_gt(self, n):
+        return self._tb(int(n) + 1, None, f"[>{n}]")
+
+    def tb_ab(self, a, b):
+        return self._tb(int(a), int(b), f"[{a},{b}]")
+
+    def tb_astar(self, a):
+        return self._tb(int(a), None, f"[{a},*]")
+
+    def timed_since(self, l, tb, r):
+        return ast.TimedSince(l, tb[0], tb[1], r, tb[2])
+
+    def timed_once(self, tb, f):
+        return ast.TimedOnce(tb[0], tb[1], f, tb[2])
+
+    def timed_hist(self, tb, f):
+        return ast.TimedHist(tb[0], tb[1], f, tb[2])
 
     # --- declarations ---
     def typed_param(self, name, sort=None):

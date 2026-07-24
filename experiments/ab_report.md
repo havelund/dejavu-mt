@@ -1,12 +1,19 @@
 # A/B validation: DejaVu vs DejaVuMT
 
-solver: z3; max events/log: 1000; pairs: 333; wall time: 1853s
+solver: z3; max events/log: 1000; pairs: 333; wall time: 2090s
 
 ## Summary
 
-- MATCH: 172
+- MATCH: 190
 - MT_TIMEOUT: 13
-- SKIP_UNSUPPORTED: 148
+- SKIP_UNSUPPORTED: 130
+
+The 13 MT_TIMEOUT pairs (file/prop, locks/dataraces, test18_gc spec4+5,
+test2_fmcad_file — quantifier-heavy specs whose qe2 cost grows with the
+accumulated formula) were rerun at 300-event prefixes with a 300s timeout:
+**all 13 MATCH**.  Total: 203 comparable pairs, 203 identical verdicts,
+0 mismatches.  Skips: 66 lowercase-quantifier, 59 rules, 3 Z operator,
+2 empty spec (test29_renaming/spec2.qtl).
 
 ## Pairs
 
@@ -152,13 +159,13 @@ solver: z3; max events/log: 1000; pairs: 333; wall time: 1853s
 | src/test/scala/tests/test21_msl/spec1.qtl | src/test/scala/tests/test21_msl/log5.csv | 6 | 0 | 0 | MATCH |
 | src/test/scala/tests/test21_msl/spec1.qtl | src/test/scala/tests/test21_msl/log_msl.csv | 1000 | 0 | 0 | MATCH |
 | src/test/scala/tests/test21_msl/spec1.qtl | src/test/scala/tests/test21_msl/log_msl_timed.csv | 1000 | 0 | 0 | MATCH |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log1.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log2.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log3.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log4.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log5.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log_msl.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log_msl_timed.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log1.csv | 8 | 0 | 0 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log2.csv | 50 | 0 | 0 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log3.csv | 50 | 28 | 28 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log4.csv | 6 | 0 | 0 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log5.csv | 6 | 2 | 2 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log_msl.csv | 1000 | 0 | 0 | MATCH |
+| src/test/scala/tests/test21_msl/spec1_timed.qtl | src/test/scala/tests/test21_msl/log_msl_timed.csv | 1000 | 0 | 0 | MATCH |
 | src/test/scala/tests/test21_msl/spec2.qtl | src/test/scala/tests/test21_msl/log1.csv | 8 | 0 | 0 | MATCH |
 | src/test/scala/tests/test21_msl/spec2.qtl | src/test/scala/tests/test21_msl/log2.csv | 50 | 0 | 0 | MATCH |
 | src/test/scala/tests/test21_msl/spec2.qtl | src/test/scala/tests/test21_msl/log3.csv | 50 | 0 | 0 | MATCH |
@@ -312,10 +319,10 @@ solver: z3; max events/log: 1000; pairs: 333; wall time: 1853s
 | src/test/scala/tests/test44_taskspawning/spec.qtl | src/test/scala/tests/test44_taskspawning/log2.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
 | src/test/scala/tests/test45_taskspawning_macros/spec.qtl | src/test/scala/tests/test45_taskspawning_macros/log1.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
 | src/test/scala/tests/test45_taskspawning_macros/spec.qtl | src/test/scala/tests/test45_taskspawning_macros/log2.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
-| src/test/scala/tests/test47_time/spec.qtl | src/test/scala/tests/test47_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test48_time/spec.qtl | src/test/scala/tests/test48_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test49_time/spec1.qtl | src/test/scala/tests/test49_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
-| src/test/scala/tests/test49_time/spec2.qtl | src/test/scala/tests/test49_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
+| src/test/scala/tests/test47_time/spec.qtl | src/test/scala/tests/test47_time/log1.timed.csv | 8 | 2 | 2 | MATCH |
+| src/test/scala/tests/test48_time/spec.qtl | src/test/scala/tests/test48_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (lowercase-quantifier) |
+| src/test/scala/tests/test49_time/spec1.qtl | src/test/scala/tests/test49_time/log1.timed.csv | 5 | 0 | 0 | MATCH |
+| src/test/scala/tests/test49_time/spec2.qtl | src/test/scala/tests/test49_time/log1.timed.csv | 5 | 0 | 0 | MATCH |
 | src/test/scala/tests/test5/spec.qtl | src/test/scala/tests/test5/log1.csv | 5 | 1 | 1 | MATCH |
 | src/test/scala/tests/test5/spec.qtl | src/test/scala/tests/test5/log2.csv | 6 | 0 | 0 | MATCH |
 | src/test/scala/tests/test50_sttt_rules/spec.qtl | src/test/scala/tests/test50_sttt_rules/log1.csv | 6 | 0 | 0 | MATCH |
@@ -323,17 +330,17 @@ solver: z3; max events/log: 1000; pairs: 333; wall time: 1853s
 | src/test/scala/tests/test51_sttt_rules/spec.qtl | src/test/scala/tests/test51_sttt_rules/log1.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
 | src/test/scala/tests/test51_sttt_rules/spec.qtl | src/test/scala/tests/test51_sttt_rules/log2.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
 | src/test/scala/tests/test51_sttt_rules/spec.qtl | src/test/scala/tests/test51_sttt_rules/log3.csv |  |  |  | SKIP_UNSUPPORTED (rules) |
-| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log2.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log3.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test53_time/spec.qtl | src/test/scala/tests/test53_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test54_time/spec1.qtl | src/test/scala/tests/test54_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test54_time/spec2.qtl | src/test/scala/tests/test54_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test54_time/spec3.qtl | src/test/scala/tests/test54_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test54_time/spec4.qtl | src/test/scala/tests/test54_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test55_time/spec1.qtl | src/test/scala/tests/test55_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test56_time/spec1.qtl | src/test/scala/tests/test56_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (timed-operators) |
-| src/test/scala/tests/test57_synthesis_time/spec.qtl | src/test/scala/tests/test57_synthesis_time/spec.csv |  |  |  | SKIP_UNSUPPORTED (parse-error) |
+| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log1.timed.csv |  |  |  | SKIP_UNSUPPORTED (zince-operator) |
+| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log2.timed.csv |  |  |  | SKIP_UNSUPPORTED (zince-operator) |
+| src/test/scala/tests/test52_time/spec.qtl | src/test/scala/tests/test52_time/log3.timed.csv |  |  |  | SKIP_UNSUPPORTED (zince-operator) |
+| src/test/scala/tests/test53_time/spec.qtl | src/test/scala/tests/test53_time/log1.timed.csv | 9 | 3 | 3 | MATCH |
+| src/test/scala/tests/test54_time/spec1.qtl | src/test/scala/tests/test54_time/log1.timed.csv | 9 | 3 | 3 | MATCH |
+| src/test/scala/tests/test54_time/spec2.qtl | src/test/scala/tests/test54_time/log1.timed.csv | 9 | 2 | 2 | MATCH |
+| src/test/scala/tests/test54_time/spec3.qtl | src/test/scala/tests/test54_time/log1.timed.csv | 9 | 2 | 2 | MATCH |
+| src/test/scala/tests/test54_time/spec4.qtl | src/test/scala/tests/test54_time/log1.timed.csv | 9 | 3 | 3 | MATCH |
+| src/test/scala/tests/test55_time/spec1.qtl | src/test/scala/tests/test55_time/log1.timed.csv | 12 | 2 | 2 | MATCH |
+| src/test/scala/tests/test56_time/spec1.qtl | src/test/scala/tests/test56_time/log1.timed.csv | 1000 | 0 | 0 | MATCH |
+| src/test/scala/tests/test57_synthesis_time/spec.qtl | src/test/scala/tests/test57_synthesis_time/spec.csv | 4 | 0 | 0 | MATCH |
 | src/test/scala/tests/test6/spec.qtl | src/test/scala/tests/test6/log1.csv | 7 | 0 | 0 | MATCH |
 | src/test/scala/tests/test6/spec.qtl | src/test/scala/tests/test6/log2.csv | 8 | 0 | 0 | MATCH |
 | src/test/scala/tests/test6/spec.qtl | src/test/scala/tests/test6/log3.csv | 8 | 1 | 1 | MATCH |

@@ -181,18 +181,22 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | formula "->" formula | formula "<->" formula
                   | formula "|"  formula
                   | formula "&"  formula
-                  | leaf "S" leaf                       // since
+                  | leaf "S" [timebound] leaf           // since (optionally timed)
                   | leaf
     leaf        ::= "true" | "false"
                   | expr relop expr                     // relation
                   | name [ "(" [ term ("," term)* ] ")" ]   // predicate / macro call
                   | "!" leaf                            // negation
                   | "@" leaf                            // previous
-                  | "P" leaf                            // once   (sometime in the past)
-                  | "H" leaf                            // historically (always in the past)
+                  | "P" [timebound] leaf                // once   (sometime in the past)
+                  | "H" [timebound] leaf                // historically (always in the past)
                   | "[" formula "," formula ")"         // interval
                   | "(" formula ")"
     relop       ::= "=" | "<" | "<=" | ">" | ">="
+
+    timebound   ::= "[" int "," int "]"                 // between a and b time units ago
+                  | "[" int "," "*" "]"                 // at least a time units ago
+                  | "[" ("<=" | "<" | ">=" | ">") int "]"   // sugar (see below)
 
     expr        ::= expr "+" product | expr "-" product | product   // arithmetic
     product     ::= product "*" atom | atom
@@ -221,7 +225,46 @@ Past-time temporal (all refer only to the past and present):
 
 Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
 (possibly infinite) domain of `x`'s type; they translate directly to Z3
-quantifiers.
+quantifiers.  A quantifier scopes over everything to its right, and may also
+appear nested in operand position (`! Exists i . phi`, `a | Exists m . phi`),
+again scoping to the end of the enclosing formula; parenthesize to limit the
+scope.
+
+### Timed (metric) operators
+
+`S`, `P` and `H` accept a **time bound**, constraining how long ago the
+witnessing event happened.  The primitive form is an interval over the event
+*age* (current timestamp minus the witness's timestamp): `phi S[a,b] psi`
+means "`psi` held between `a` and `b` time units ago, and `phi` at every step
+since".  `[a,*]` means "at least `a` time units ago" (no upper bound), and the
+comparison forms are abbreviations:
+
+| written | means | reading |
+|---|---|---|
+| `S[<=n]` | `S[0,n]` | at most `n` time units ago |
+| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago |
+| `S[>=n]` | `S[n,*]` | at least `n` time units ago |
+| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
+
+and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
+`H[a,b] phi = !P[a,b]!phi`).  DejaVu provides exactly the `[<=n]` and `[>n]`
+forms; the general interval is a DejaVuMT extension (one extra linear
+inequality in the SMT encoding — see `doc/timed.md`).
+
+A specification using timed operators is monitored against a **timed log**:
+the last column of every CSV line is the event's absolute, non-decreasing
+integer timestamp (DejaVu's timed format), e.g. `open,a,17` is `open(a)` at
+time 17.  Example:
+
+    pred open(f: String)
+    pred close(f: String)
+    prop timely : Forall f . close(f) -> P[<=5] open(f)
+
+(see `examples/timed/`).  How it works, in one sentence: a timed node stores
+its usual formula extended with one integer time variable `t` stamped with
+the witnessing timestamps (`t = 17`), and its exported value is the
+quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
+`doc/timed.md` for the full story.
 
 Relations `= < <= > >=` compare two expressions of compatible type. Relation
 operands may be arithmetic expressions built with `+ - *` and unary minus, e.g.
@@ -235,39 +278,47 @@ syntactically before monitoring.
 ## Validation against the DejaVu suite
 
 `experiments/ab_validate.py` runs every (spec, log) pair shipped with the
-DejaVu distribution (333 pairs) through both the original BDD-based DejaVu and
-DejaVuMT, and diffs the verdicts (sets of violating event numbers) on identical
-prefix-capped inputs. Results (`experiments/ab_report.md`):
+DejaVu distribution (333 pairs) through both the original BDD-based DejaVu
+(the repaired build — see `DEJAVU.md`) and DejaVuMT, and diffs the verdicts
+(sets of violating event numbers) on identical prefix-capped inputs. Results
+(`experiments/ab_report.md`), after fixing the quantifier-scope bug in DejaVu
+and the bugs listed below in DejaVuMT:
 
-- **82 pairs: identical verdicts** — every pair where both tools produce a
-  verdict, except:
-- **2 pairs differ, for a known, documented reason**: DejaVu's shipped parser
-  binds `Forall`/`Exists` to the next leaf only, whereas DejaVuMT scopes them to
-  the end of the formula (the intended reading; DejaVu's own source marks the
-  leaf binding as a TODO). In both pairs DejaVuMT flags real violations that the
-  leaf-bound parse cannot see.
-- 101 pairs: DejaVu itself rejects the spec — mostly its leaf-binding parse
-  reporting "variable occurs free" on its own distributed specs (e.g.
-  `examples/auction/prop1.qtl`), plus deliberate negative tests.
-- 148 pairs: outside DejaVuMT's current fragment (timed operators, rules,
-  lowercase seen-only quantifiers).
+- **203 comparable pairs, 203 identical verdicts, 0 mismatches** — 190 at
+  1000-event prefixes, plus the 13 slowest (quantifier-heavy) pairs at
+  300-event prefixes. This includes every comparable **timed** pair,
+  covering all metric operator forms (`S[<=n]`, `S[>n]`, `P`/`H` variants),
+  with DejaVu's recorded JUnit expectations as independent ground truth.
+- 130 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
+  quantifiers, 59 recursive rules, 3 timed `Z`, and one empty spec file.
 
-The harness surfaced (and we fixed) two DejaVuMT bugs: predicate matching is
-now arity-sensitive like DejaVu's (a 0-ary `close` is not triggered by
-`close,data`), and undeclared predicates now coerce log values to each
-argument's inferred sort (so `Forall x . a(x) -> x < 5` works untyped).
+Notes for reproducing timed comparisons: DejaVu decides that a log is timed
+from its **filename** (it must contain `.timed.`); the harness mirrors this
+convention, and pairs a timed spec only with timed logs.
 
-## Status (slice 1)
+Over its runs the harness surfaced (and we fixed) five DejaVuMT bugs:
+predicate matching is now arity-sensitive like DejaVu's (a 0-ary `close` is
+not triggered by `close,data`); undeclared predicates coerce log values to
+each argument's inferred sort (so `Forall x . a(x) -> x < 5` works untyped);
+untyped variables in order relations default to `Int` (DejaVu compares
+numerically); the lexer accepts vertical-tab whitespace (present in DejaVu's
+distributed specs); and quantifiers may occur nested in operand position
+(`! Exists i . phi`, `a | Exists m . phi`) with wide scope, as in DejaVu's
+parser.
 
-Implemented: the untimed first-order fragment — propositional connectives,
-`@ S P H` and intervals, quantifiers, macros, and typed relations with
-arithmetic (`+ - *`); pluggable Z3/CVC5 backends; and periodic garbage
-collection of dead value-terms (`gc`). The engine also accepts events containing
-multiple facts (including multiple instances of the same predicate), though the
-CSV reader emits one fact per line.
+## Status
 
-Not yet implemented: timed operators (`S[<=n]`, `P[>n]`, ...), the `Z`
-operator, recursive rules (`where ... :=`), and the seen-only lowercase
-`exists`/`forall`. Growth from genuinely-live data (many distinct values live at
-once) is not yet bounded — `gc` reclaims dead terms but not a large live set,
-which would need a more compact set encoding.
+Implemented: the first-order fragment — propositional connectives,
+`@ S P H` and intervals, quantifiers (top-level and nested), macros, typed
+relations with arithmetic (`+ - *`), and the timed operators
+`S[a,b]`/`S[a,*]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]` sugar;
+pluggable Z3/CVC5 backends; and periodic garbage collection of dead
+value-terms (`gc`). The engine also accepts events containing multiple facts
+(including multiple instances of the same predicate), though the CSV reader
+emits one fact per line.
+
+Not yet implemented: the `Z` operator (timed or not), recursive rules
+(`where ... :=`), and the seen-only lowercase `exists`/`forall`. Growth from
+genuinely-live data (many distinct values live at once) is not yet bounded —
+`gc` reclaims dead terms but not a large live set, which would need a more
+compact set encoding.

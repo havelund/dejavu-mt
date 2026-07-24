@@ -1316,44 +1316,122 @@
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log1.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 8,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log2.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 50,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log3.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 50,
+  "dejavu_violations": [
+   2,
+   3,
+   6,
+   7,
+   10,
+   13,
+   16,
+   19,
+   22,
+   25,
+   28,
+   29,
+   32,
+   33,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49
+  ],
+  "mt_violations": [
+   2,
+   3,
+   6,
+   7,
+   10,
+   13,
+   16,
+   19,
+   22,
+   25,
+   28,
+   29,
+   32,
+   33,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log4.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 6,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log5.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 6,
+  "dejavu_violations": [
+   2,
+   5
+  ],
+  "mt_violations": [
+   2,
+   5
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log_msl.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec1_timed.qtl",
   "log": "src/test/scala/tests/test21_msl/log_msl_timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test21_msl/spec2.qtl",
@@ -2474,26 +2552,38 @@
  {
   "spec": "src/test/scala/tests/test47_time/spec.qtl",
   "log": "src/test/scala/tests/test47_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 8,
+  "dejavu_violations": [
+   7,
+   8
+  ],
+  "mt_violations": [
+   7,
+   8
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test48_time/spec.qtl",
   "log": "src/test/scala/tests/test48_time/log1.timed.csv",
   "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "reason": "lowercase-quantifier"
  },
  {
   "spec": "src/test/scala/tests/test49_time/spec1.qtl",
   "log": "src/test/scala/tests/test49_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 5,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test49_time/spec2.qtl",
   "log": "src/test/scala/tests/test49_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 5,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test5/spec.qtl",
@@ -2557,67 +2647,125 @@
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log1.timed.csv",
   "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "reason": "zince-operator"
  },
  {
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log2.timed.csv",
   "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "reason": "zince-operator"
  },
  {
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log3.timed.csv",
   "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "reason": "zince-operator"
  },
  {
   "spec": "src/test/scala/tests/test53_time/spec.qtl",
   "log": "src/test/scala/tests/test53_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 9,
+  "dejavu_violations": [
+   4,
+   7,
+   9
+  ],
+  "mt_violations": [
+   4,
+   7,
+   9
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test54_time/spec1.qtl",
   "log": "src/test/scala/tests/test54_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 9,
+  "dejavu_violations": [
+   4,
+   7,
+   9
+  ],
+  "mt_violations": [
+   4,
+   7,
+   9
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test54_time/spec2.qtl",
   "log": "src/test/scala/tests/test54_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 9,
+  "dejavu_violations": [
+   5,
+   8
+  ],
+  "mt_violations": [
+   5,
+   8
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test54_time/spec3.qtl",
   "log": "src/test/scala/tests/test54_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 9,
+  "dejavu_violations": [
+   5,
+   8
+  ],
+  "mt_violations": [
+   5,
+   8
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test54_time/spec4.qtl",
   "log": "src/test/scala/tests/test54_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 9,
+  "dejavu_violations": [
+   4,
+   7,
+   9
+  ],
+  "mt_violations": [
+   4,
+   7,
+   9
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test55_time/spec1.qtl",
   "log": "src/test/scala/tests/test55_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 12,
+  "dejavu_violations": [
+   4,
+   12
+  ],
+  "mt_violations": [
+   4,
+   12
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test56_time/spec1.qtl",
   "log": "src/test/scala/tests/test56_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "timed-operators"
+  "events": 1000,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test57_synthesis_time/spec.qtl",
   "log": "src/test/scala/tests/test57_synthesis_time/spec.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "parse-error"
+  "events": 4,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test6/spec.qtl",

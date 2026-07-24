@@ -195,6 +195,60 @@ class Hist(LTL):
         return f"H {_b(self.arg)}"
 
 
+def bound_str(low: int, high: Optional[int]) -> str:
+    """Canonical display form of a time bound: [<=n], [a,b], or [a,*]."""
+    if high is None:
+        return f"[{low},*]"
+    if low == 0:
+        return f"[<={high}]"
+    return f"[{low},{high}]"
+
+
+@dataclass(frozen=True)
+class TimedSince(LTL):
+    """phi S[a,b] psi  -- psi held between `low` and `high` time units ago and
+    phi has held ever since.  high=None means no upper bound (written `*`).
+    The comparison forms are parser sugar: S[<=n] = S[0,n], S[<n] = S[0,n-1],
+    S[>=n] = S[n,*], S[>n] = S[n+1,*].  `disp` preserves the bound as written
+    in the source, for display only."""
+    left: LTL
+    low: int
+    high: Optional[int]
+    right: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"({_b(self.left)} S{b} {_b(self.right)})"
+
+
+@dataclass(frozen=True)
+class TimedOnce(LTL):
+    """P[a,b] phi  -- phi held between `low` and `high` time units ago."""
+    low: int
+    high: Optional[int]
+    arg: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"P{b} {_b(self.arg)}"
+
+
+@dataclass(frozen=True)
+class TimedHist(LTL):
+    """H[a,b] phi  -- phi held at every position between `low` and `high` time
+    units ago."""
+    low: int
+    high: Optional[int]
+    arg: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"H{b} {_b(self.arg)}"
+
+
 @dataclass(frozen=True)
 class Interval(LTL):
     """[phi, psi)  -- phi has occurred (incl. now) and psi has not occurred since."""

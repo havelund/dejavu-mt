@@ -56,6 +56,11 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
         return ast.Compare(_subst_term(f.left, m), f.op, _subst_term(f.right, m))
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
         return type(f)(_subst(f.arg, m))
+    if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
+        return type(f)(f.low, f.high, _subst(f.arg, m), f.disp)
+    if isinstance(f, ast.TimedSince):
+        return ast.TimedSince(_subst(f.left, m), f.low, f.high,
+                              _subst(f.right, m), f.disp)
     if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
         return type(f)(_subst(f.left, m), _subst(f.right, m))
     if isinstance(f, (ast.Exists, ast.Forall)):
@@ -79,6 +84,11 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
         return f
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
         return type(f)(expand_macros(f.arg, macros))
+    if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
+        return type(f)(f.low, f.high, expand_macros(f.arg, macros), f.disp)
+    if isinstance(f, ast.TimedSince):
+        return ast.TimedSince(expand_macros(f.left, macros), f.low, f.high,
+                              expand_macros(f.right, macros), f.disp)
     if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
         return type(f)(expand_macros(f.left, macros), expand_macros(f.right, macros))
     if isinstance(f, (ast.Exists, ast.Forall)):
@@ -138,9 +148,11 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                 # variables so they default to Int (DejaVu compares order
                 # relations numerically), unless something else types them.
                 ordered_vars.update(vs)
-        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist,
+                            ast.TimedOnce, ast.TimedHist)):
             walk(g.arg)
-        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
+        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                            ast.TimedSince, ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -175,9 +187,11 @@ def collect_vars(f: ast.LTL) -> set:
         elif isinstance(g, ast.Compare):
             term(g.left)
             term(g.right)
-        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist,
+                            ast.TimedOnce, ast.TimedHist)):
             walk(g.arg)
-        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
+        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                            ast.TimedSince, ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -219,8 +233,18 @@ class FormulaMonitor:
         self.nodes: List[_Node] = []
         self.root = self._compile(body)
         n = len(self.nodes)
+        # `pre`/`now` hold each node's stored formula (its state).  For every
+        # untimed node the state is also the node's value; a timed ("tsince")
+        # node stores its stamped relation S over the data variables plus its
+        # time constant t, and exports the time-free projection instead.  The
+        # exported values live in `preval`/`nowval`; enclosing nodes read those
+        # (state and exported value coincide, sharing one object, for untimed
+        # nodes).
         self.pre = [backend.false()] * n
         self.now = [backend.false()] * n
+        self.preval = [backend.false()] * n
+        self.timed = any(nd.kind == "tsince" for nd in self.nodes)
+        self._time = None            # current event's timestamp (timed specs)
         self.strong = False          # if True, use solver-backed strong simplify
         self.weak = False            # if True, do no simplification/elimination at all
         self.gc_period = 0           # if > 0, prune dead terms every gc_period events
@@ -267,6 +291,21 @@ class FormulaMonitor:
         if isinstance(f, ast.Hist):
             # H phi  ==  ! P ! phi
             return self._compile(ast.Not(ast.Once(ast.Not(f.arg))))
+        if isinstance(f, ast.TimedSince):
+            l = self._compile(f.left)
+            r = self._compile(f.right)
+            # The node's own time variable (one fresh Int constant per timed
+            # node, with the same status as the data variables).
+            tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
+            return self._add("tsince", [l, r], (f.low, f.high, tc))
+        if isinstance(f, ast.TimedOnce):
+            # P[a,b] phi  ==  true S[a,b] phi
+            return self._compile_inner(
+                ast.TimedSince(ast.TrueC(), f.low, f.high, f.arg, f.disp))
+        if isinstance(f, ast.TimedHist):
+            # H[a,b] phi  ==  ! P[a,b] ! phi
+            return self._compile_inner(
+                ast.Not(ast.TimedOnce(f.low, f.high, ast.Not(f.arg), f.disp)))
         if isinstance(f, ast.Interval):
             return self._add("interval", [self._compile(f.left), self._compile(f.right)])
         if isinstance(f, ast.Exists):
@@ -343,11 +382,22 @@ class FormulaMonitor:
 
     # --- per-event evaluation ---
 
-    def step(self, event: Dict[str, List[Tuple]]) -> bool:
-        """Process one event; return True if the property still holds."""
+    def step(self, event: Dict[str, List[Tuple]], time: int = None) -> bool:
+        """Process one event; return True if the property still holds.  For a
+        timed property `time` is the event's (absolute, non-decreasing integer)
+        timestamp."""
+        if self.timed and time is None:
+            raise ValueError(
+                f"property {self.name} uses timed operators; "
+                f"events need timestamps (timed log: last CSV column)")
+        self._time = time
         b = self.backend
         now = self.now
         pre = self.pre
+        preval = self.preval
+        # Enclosing nodes read a child through its exported value (nowval),
+        # never its stored state directly; the two differ only at timed nodes.
+        nowval = [None] * len(self.nodes)
         for i, node in enumerate(self.nodes):
             k = node.kind
             ch = node.children
@@ -360,37 +410,93 @@ class FormulaMonitor:
             elif k == "pred":
                 v = self._pred_expr(node.data[0], node.data[1], event)
             elif k == "not":
-                v = b.not_(now[ch[0]])
+                v = b.not_(nowval[ch[0]])
             elif k == "and":
-                v = b.and_(now[ch[0]], now[ch[1]])
+                v = b.and_(nowval[ch[0]], nowval[ch[1]])
             elif k == "or":
-                v = b.or_(now[ch[0]], now[ch[1]])
+                v = b.or_(nowval[ch[0]], nowval[ch[1]])
             elif k == "implies":
-                v = b.implies(now[ch[0]], now[ch[1]])
+                v = b.implies(nowval[ch[0]], nowval[ch[1]])
             elif k == "iff":
-                v = b.iff(now[ch[0]], now[ch[1]])
+                v = b.iff(nowval[ch[0]], nowval[ch[1]])
             elif k == "prev":
-                v = pre[ch[0]]
+                v = preval[ch[0]]
             elif k == "since":
-                v = b.or_(now[ch[1]], b.and_(now[ch[0]], pre[i]))
+                v = b.or_(nowval[ch[1]], b.and_(nowval[ch[0]], pre[i]))
             elif k == "once":
-                v = b.or_(now[ch[0]], pre[i])
+                v = b.or_(nowval[ch[0]], pre[i])
             elif k == "interval":
-                v = b.or_(now[ch[0]], b.and_(b.not_(now[ch[1]]), pre[i]))
+                v = b.or_(nowval[ch[0]], b.and_(b.not_(nowval[ch[1]]), pre[i]))
+            elif k == "tsince":
+                now[i] = self._tsince_state(node, nowval[ch[0]], nowval[ch[1]],
+                                            pre[i])
+                nowval[i] = self._tsince_value(node, now[i])
+                continue
             elif k == "exists":
-                v = self._eliminate(b.exists(self.consts[node.data], now[ch[0]]))
+                v = self._eliminate(b.exists(self.consts[node.data], nowval[ch[0]]))
             elif k == "forall":
-                v = self._eliminate(b.forall(self.consts[node.data], now[ch[0]]))
+                v = self._eliminate(b.forall(self.consts[node.data], nowval[ch[0]]))
             else:
                 raise RuntimeError(f"unknown node kind {k}")
             now[i] = self._normalize(v)
-        holds = self._verdict(now[self.root])
+            nowval[i] = now[i]
+        holds = self._verdict(nowval[self.root])
         self.pre = now
+        self.preval = nowval
         self.now = [b.false()] * len(self.nodes)
         self._steps += 1
         if self.gc_period and self._steps % self.gc_period == 0:
             self._collect_garbage()
         return holds
+
+    # --- timed since: stored state vs exported value ---
+
+    def _tsince_state(self, node, phi, psi, prev_state):
+        """New state S of a timed-since node:  S <- (B[psi] and t=T) or
+        (B[phi] and S_pre), with records kept bounded by the two window
+        bounds.  The upper bound is monotone (an expired record stays
+        expired), so it is conjoined onto S and the contextual simplifier
+        prunes expired records.  Without an upper bound nothing expires;
+        instead records that have *matured* past the lower bound satisfy the
+        window forever, so their timestamp is projected away, merging them
+        into one time-free formula (the analogue of DejaVu's age
+        saturation)."""
+        b = self.backend
+        lo, hi, tc = node.data
+        T = b.lit(self._time, "Int")
+        S = b.or_(b.and_(psi, b.eq(tc, T)), b.and_(phi, prev_state))
+        if self.weak:
+            return S
+        S = self._normalize(S)
+        if hi is not None:
+            # A record older than the upper bound is expired for good
+            # (timestamps are non-decreasing), so drop it from the state:
+            # its stamp t = T_j with T_j < T - hi is false under every
+            # window the value query will ever apply.
+            return self._normalize(b.prune_expired(S, tc, self._time - hi))
+        # No upper bound: nothing expires, but a record past the lower bound
+        # satisfies the window forever, so its timestamp is irrelevant ---
+        # project it away, merging all matured records into one time-free
+        # formula (the analogue of DejaVu's age saturation at n+1).
+        age = b.sub(T, tc)
+        mature = self._eliminate(
+            b.exists(tc, b.and_(S, b.ge(age, b.lit(lo, "Int")))))
+        young = b.and_(S, b.lt(age, b.lit(lo, "Int")))
+        return self._normalize(b.or_(mature, young))
+
+    def _tsince_value(self, node, state):
+        """Exported value of a timed-since node: conjoin the window onto the
+        state and project the time variable away."""
+        b = self.backend
+        lo, hi, tc = node.data
+        T = b.lit(self._time, "Int")
+        age = b.sub(T, tc)
+        q = state
+        if lo > 0:
+            q = b.and_(q, b.ge(age, b.lit(lo, "Int")))
+        if hi is not None:
+            q = b.and_(q, b.le(age, b.lit(hi, "Int")))
+        return self._normalize(self._eliminate(b.exists(tc, q)))
 
     def _collect_garbage(self):
         """Periodic dead-term reclamation.  Runs the backend's contextual
@@ -424,23 +530,30 @@ class FormulaMonitor:
 
     # --- debug rendering ---
 
-    def render_tree(self, values=None, color=False) -> str:
-        """Render the formula as an indented tree.  If `values` (a list of Z3
-        formulas, one per node) is given, annotate each node with its value.
-        With `color`, values are colored: green=true, red=false, orange=other."""
+    def render_tree(self, values=None, exported=None, color=False) -> str:
+        """Render the formula as an indented tree.  If `values` (a list of
+        formulas, one per node — the stored states) is given, annotate each
+        node with it.  If `exported` is also given, nodes whose exported value
+        differs from their state (timed nodes) show the value first and the
+        state after it.  With `color`, values are colored: green=true,
+        red=false, yellow=other."""
         GREEN, RED, YELLOW, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
         lines: List[str] = []
 
-        def fmt_val(i):
-            if values is None:
-                return ""
-            e = values[i]
+        def paint(e):
             s = self.backend.to_str(e)
             if color:
                 c = (GREEN if self.backend.is_true(e)
                      else RED if self.backend.is_false(e) else YELLOW)
                 s = c + s + RESET
-            return "  " + s
+            return s
+
+        def fmt_val(i):
+            if values is None:
+                return ""
+            if exported is not None and self.nodes[i].kind == "tsince":
+                return f"  {paint(exported[i])}   state: {paint(values[i])}"
+            return "  " + paint(values[i])
 
         def go(i, prefix, is_last, is_root):
             node = self.nodes[i]
@@ -488,6 +601,8 @@ class Monitor:
             body = expand_macros(prop.body, macros)
             self.formulas.append(
                 FormulaMonitor(prop, body, pred_sorts, self.backend))
+        # Timed specs read their logs with a timestamp as the last CSV column.
+        self.timed = any(fm.timed for fm in self.formulas)
 
-    def step(self, event: Dict[str, List[Tuple]]) -> Dict[str, bool]:
-        return {fm.name: fm.step(event) for fm in self.formulas}
+    def step(self, event: Dict[str, List[Tuple]], time: int = None) -> Dict[str, bool]:
+        return {fm.name: fm.step(event, time) for fm in self.formulas}

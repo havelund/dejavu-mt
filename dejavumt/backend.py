@@ -61,6 +61,14 @@ class Backend:
     def strong_simplify(self, t): return self.simplify(t)
     def gc_simplify(self, t): return self.simplify(t)   # dead-term reclamation
     def qelim(self, q): ...
+
+    def prune_expired(self, t, tc, deadline: int):
+        """Replace every atom  tc = c  (c a concrete integer < deadline)
+        occurring in a positive position (under and/or only) by false --- used
+        by timed operators to drop expired records from a stored state.  The
+        default keeps the formula unchanged, which is always sound (the value
+        query re-tests the window)."""
+        return t
     def is_true(self, t) -> bool: ...
     def is_false(self, t) -> bool: ...
     def check_sat(self, t) -> bool: ...
@@ -147,6 +155,28 @@ class Z3Backend(Backend):
             return self._qe(q).as_expr()
         except self.z3.Z3Exception:
             return q
+
+    def prune_expired(self, t, tc, deadline):
+        z3 = self.z3
+
+        def expired(a):  # is `a` the atom  tc = c  with concrete c < deadline?
+            if not z3.is_eq(a):
+                return False
+            l, r = a.arg(0), a.arg(1)
+            for u, v in ((l, r), (r, l)):
+                if z3.is_int_value(v) and u.eq(tc):
+                    return v.as_long() < deadline
+            return False
+
+        def walk(e):
+            if expired(e):
+                return self.false()
+            if z3.is_and(e) or z3.is_or(e):
+                kids = [walk(c) for c in e.children()]
+                return (z3.And if z3.is_and(e) else z3.Or)(*kids)
+            return e  # do not cross negations or other operators
+
+        return walk(t)
 
     def is_true(self, t):  return self.z3.is_true(t)
     def is_false(self, t): return self.z3.is_false(t)
@@ -303,6 +333,29 @@ class Cvc5Backend(Backend):
             return self._mk_solver().getQuantifierElimination(q)
         except Exception:
             return q
+
+    def prune_expired(self, t, tc, deadline):
+        K = self.Kind
+
+        def expired(a):
+            if a.getKind() != K.EQUAL:
+                return False
+            l, r = a[0], a[1]
+            for u, v in ((l, r), (r, l)):
+                if v.getKind() == K.CONST_INTEGER and u == tc:
+                    return int(v.getIntegerValue()) < deadline
+            return False
+
+        def walk(e):
+            if expired(e):
+                return self.false()
+            k = e.getKind()
+            if k in (K.AND, K.OR):
+                kids = [walk(e[i]) for i in range(e.getNumChildren())]
+                return self.tm.mkTerm(k, *kids)
+            return e  # do not cross negations or other operators
+
+        return walk(t)
 
     def is_true(self, t):
         return t.isBooleanValue() and t.getBooleanValue() is True

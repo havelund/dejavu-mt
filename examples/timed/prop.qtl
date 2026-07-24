@@ -1,0 +1,4 @@
+pred open(f: String)
+pred close(f: String)
+
+prop timely : Forall f . close(f) -> P[<=5] open(f)
