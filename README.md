@@ -139,7 +139,7 @@ debug mode, rendered with colors):
 
 The script restarts any running instance (log at `/tmp/dejavumt_web.log`);
 `python -m dejavumt.web [port]` runs the server in the foreground instead.
-The `?` button in the page header shows this in short form.
+The `help` button in the page header shows this in short form.
 
 **Loading.** Each editor pane has a file bar: `open…` browses the repository
 tree (any `.qtl`/`.csv` under it, including the DejaVu distribution in
