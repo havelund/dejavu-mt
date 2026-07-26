@@ -139,17 +139,25 @@ debug mode, rendered with colors):
 
 The script restarts any running instance (log at `/tmp/dejavumt_web.log`);
 `python -m dejavumt.web [port]` runs the server in the foreground instead.
-Each editor pane has its own file bar: `open…` browses the repository tree
-(any `.qtl`/`.csv` anywhere under it, including the DejaVu distribution in
-`requirements/` — spec and log are picked independently, so directories with
-several specs and logs work), the path field shows what is loaded, and
-`save` writes the pane back to that path — editing in the browser touches
-the filesystem only when you press it (change the path first to save a
-copy). Then choose solver and modes, and Run. Events with violations are
-marked and their formula trees shown (click an event row to toggle its
-trees; expand/collapse-all buttons in the summary), each node with its
-stored state and, where it differs (timed and `H` nodes), its exported
-value. The server binds to `127.0.0.1` only, serves only files under the
+The `?` button in the page header shows this in short form.
+
+**Loading.** Each editor pane has a file bar: `open…` browses the repository
+tree (any `.qtl`/`.csv` under it, including the DejaVu distribution in
+`requirements/`). Spec and log are picked independently, so directories with
+several specs and logs work — with shortcuts for the common cases: clicking
+a folder that holds exactly one spec and one log (and no subfolders) loads
+both at once; picking a spec auto-loads the only log in its folder (and vice
+versa); and the browser reopens in the directory you last used.
+
+**Running and saving.** Run verifies what is *in the editors* — files are
+untouched until you press `save`, which writes the pane to the (editable)
+path in its file bar; change the path first to save a copy. Choose solver
+and modes and Run: events with violations are marked and their formula trees
+shown (click an event row to toggle its trees; expand/collapse-all in the
+summary line), each node annotated with its stored formula and, where it
+differs (timed and `H` nodes), its exported value.
+
+The server binds to `127.0.0.1` only, serves only files under the
 repository root, and caps runs at 5000 events / 60 s.
 
 ## Specification language
