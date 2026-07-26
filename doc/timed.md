@@ -15,10 +15,21 @@ witnessing occurrence.
     phi S[a,b] psi   --  psi held between a and b time units ago,
                          and phi has held at every step since.
 
-`P[a,b] phi = true S[a,b] phi`, and `H[a,b] phi = !P[a,b]!phi`. The upper
-bound may be `*` (absent). With integer time the comparison forms are sugar:
-`[<=n]=[0,n]`, `[<n]=[0,n-1]`, `[>=n]=[n,*]`, `[>n]=[n+1,*]`. The
+Semantically `P[a,b] phi = true S[a,b] phi` and `H[a,b] phi = !P[a,b]!phi`.
+The upper bound may be `*` (absent). With integer time the comparison forms
+are sugar: `[<=n]=[0,n]`, `[<n]=[0,n-1]`, `[>=n]=[n,*]`, `[>n]=[n+1,*]`. The
 unconstrained interval `[0,*]` is exactly the untimed `S`.
+
+Although P and H are *defined* by these rewrites, the engine does not compile
+them that way: every surface operator (S, P, H — timed and untimed) gets its
+own node interpreting its own (provably equal) recurrence, so the debug tree
+mirrors the specification one-to-one, with no encoding artifacts (no
+constant-`true` child under P, no `¬P¬` chain for H). For P the recurrence is
+the stamped since-recurrence with the phi-conjunct dropped. For H the node
+stores the record-set of phi's *failures* — the state of `P[a,b]!phi`, which
+starts at `false` = "no failure yet" = vacuously true — and exports the
+*negation* of its projection; so an H node's displayed state describes
+`!phi`, while its displayed value describes `phi`.
 
 ## The state: records with a timestamp
 
@@ -105,8 +116,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  false
-       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t3)
-          ├─ true  true
+       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t1)
           └─ open(f)  f = "a"
 
     ----- event 2: close(a) @ 3 -----
@@ -114,8 +124,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  f = "a"
-       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t3)
-          ├─ true  true
+       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t1)
           └─ open(f)  false
 
     ----- event 3: open(b) @ 4 -----
@@ -123,8 +132,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  false
-       └─ P[<=5] open(f)  (f = "a" ∨ f = "b")   state: ((f = "b" ∧ 4 = _t3) ∨ (f = "a" ∧ 0 = _t3))
-          ├─ true  true
+       └─ P[<=5] open(f)  (f = "a" ∨ f = "b")   state: ((f = "b" ∧ 4 = _t1) ∨ (f = "a" ∧ 0 = _t1))
           └─ open(f)  f = "b"
 
     ----- event 4: close(b) @ 12 -----
@@ -133,7 +141,6 @@ first, then its stored state):
     └─ (close(f) → P[<=5] open(f))  ¬(f = "b")
        ├─ close(f)  f = "b"
        └─ P[<=5] open(f)  false   state: false
-          ├─ true  true
           └─ open(f)  false
 
 Read the timed node's line across the events: the record `f="a" ∧ t=0` is

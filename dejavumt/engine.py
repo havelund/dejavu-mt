@@ -243,7 +243,8 @@ class FormulaMonitor:
         self.pre = [backend.false()] * n
         self.now = [backend.false()] * n
         self.preval = [backend.false()] * n
-        self.timed = any(nd.kind == "tsince" for nd in self.nodes)
+        self.timed = any(nd.kind in ("tsince", "tonce", "thist")
+                         for nd in self.nodes)
         self._time = None            # current event's timestamp (timed specs)
         self.strong = False          # if True, use solver-backed strong simplify
         self.weak = False            # if True, do no simplification/elimination at all
@@ -289,8 +290,10 @@ class FormulaMonitor:
         if isinstance(f, ast.Once):
             return self._add("once", [self._compile(f.arg)])
         if isinstance(f, ast.Hist):
-            # H phi  ==  ! P ! phi
-            return self._compile(ast.Not(ast.Once(ast.Not(f.arg))))
+            # Dedicated node.  Semantically H phi = !P!phi; the node stores
+            # the state of P!phi (the record of phi's failures, starting
+            # false = vacuously true) and exports its negation.
+            return self._add("hist", [self._compile(f.arg)])
         if isinstance(f, ast.TimedSince):
             l = self._compile(f.left)
             r = self._compile(f.right)
@@ -299,13 +302,19 @@ class FormulaMonitor:
             tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
             return self._add("tsince", [l, r], (f.low, f.high, tc))
         if isinstance(f, ast.TimedOnce):
-            # P[a,b] phi  ==  true S[a,b] phi
-            return self._compile_inner(
-                ast.TimedSince(ast.TrueC(), f.low, f.high, f.arg, f.disp))
+            # Dedicated node.  Semantically P[a,b] phi = true S[a,b] phi;
+            # the recurrence is the stamped since-recurrence with the
+            # phi-conjunct dropped.
+            tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
+            return self._add("tonce", [self._compile(f.arg)],
+                             (f.low, f.high, tc))
         if isinstance(f, ast.TimedHist):
-            # H[a,b] phi  ==  ! P[a,b] ! phi
-            return self._compile_inner(
-                ast.Not(ast.TimedOnce(f.low, f.high, ast.Not(f.arg), f.disp)))
+            # Dedicated node.  Semantically H[a,b] phi = !P[a,b]!phi; the
+            # node stores stamped records of phi's failures and exports the
+            # negated projection.
+            tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
+            return self._add("thist", [self._compile(f.arg)],
+                             (f.low, f.high, tc))
         if isinstance(f, ast.Interval):
             return self._add("interval", [self._compile(f.left), self._compile(f.right)])
         if isinstance(f, ast.Exists):
@@ -427,10 +436,32 @@ class FormulaMonitor:
                 v = b.or_(nowval[ch[0]], pre[i])
             elif k == "interval":
                 v = b.or_(nowval[ch[0]], b.and_(b.not_(nowval[ch[1]]), pre[i]))
+            elif k == "hist":
+                # State = P!phi (the record of phi's failures); the exported
+                # value is its negation.  Starting from false the state says
+                # "no failure yet", i.e. H phi is vacuously true.
+                s = b.or_(b.not_(nowval[ch[0]]), pre[i])
+                now[i] = s if self.weak else self._normalize(s)
+                nowval[i] = self._normalize(b.not_(now[i]))
+                continue
             elif k == "tsince":
                 now[i] = self._tsince_state(node, nowval[ch[0]], nowval[ch[1]],
                                             pre[i])
                 nowval[i] = self._tsince_value(node, now[i])
+                continue
+            elif k == "tonce":
+                # P[a,b] phi: stamped since-recurrence with phi = true.
+                now[i] = self._tsince_state(node, b.true(), nowval[ch[0]],
+                                            pre[i])
+                nowval[i] = self._tsince_value(node, now[i])
+                continue
+            elif k == "thist":
+                # H[a,b] phi: records of phi's failures; value = negated
+                # projection.
+                now[i] = self._tsince_state(node, b.true(),
+                                            b.not_(nowval[ch[0]]), pre[i])
+                nowval[i] = self._normalize(
+                    b.not_(self._tsince_value(node, now[i])))
                 continue
             elif k == "exists":
                 v = self._eliminate(b.exists(self.consts[node.data], nowval[ch[0]]))
@@ -551,7 +582,8 @@ class FormulaMonitor:
         def fmt_val(i):
             if values is None:
                 return ""
-            if exported is not None and self.nodes[i].kind == "tsince":
+            if exported is not None and self.nodes[i].kind in (
+                    "tsince", "tonce", "thist", "hist"):
                 return f"  {paint(exported[i])}   state: {paint(values[i])}"
             return "  " + paint(values[i])
 

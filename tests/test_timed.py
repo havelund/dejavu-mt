@@ -193,13 +193,59 @@ def test_untimed_spec_not_timed():
 
 
 def test_state_is_pruned():
-    # The stored state of a S[<=n] node drops expired records (Z3 backend).
+    # The stored state of a timed node drops expired records (Z3 backend).
     m = Monitor(parse_spec("pred p(x: String)\nprop q : Exists x . P[<=5] p(x)"))
     fm = m.formulas[0]
-    tn = next(i for i, n in enumerate(fm.nodes) if n.kind == "tsince")
+    tn = next(i for i, n in enumerate(fm.nodes) if n.kind == "tonce")
     m.step({"p": [("a",)]}, 0)
     m.step({"r": [()]}, 100)   # far past the window
     assert fm.backend.is_false(fm.pre[tn])
+
+
+# --- one node per operator (scheme B) ----------------------------------------
+
+def test_untimed_hist_dedicated_node():
+    # H p: vacuously true, true while p holds, false forever after first !p.
+    spec = "prop q : H p"
+    m = Monitor(parse_spec(spec))
+    kinds = [n.kind for n in m.formulas[0].nodes]
+    assert "hist" in kinds and "once" not in kinds
+    vs = [m.formulas[0].step(ev) for ev in
+          [{"p": [()]}, {"p": [()]}, {"r": [()]}, {"p": [()]}]]
+    assert vs == [True, True, False, False]
+
+
+def test_tree_shapes_no_encoding_artifacts():
+    # P[<=n] phi: one node, one child (no constant-true leaf).
+    fm = Monitor(parse_spec("prop q : P[<=5] a")).formulas[0]
+    tn = next(n for n in fm.nodes if n.kind == "tonce")
+    assert len(tn.children) == 1
+    assert all(n.kind != "true" for n in fm.nodes)
+    # H[<=n] phi: one thist node, one child, no not/once chain.
+    fm = Monitor(parse_spec("prop q : H[<=5] a")).formulas[0]
+    kinds = [n.kind for n in fm.nodes]
+    assert kinds.count("thist") == 1
+    assert "not" not in kinds and "tonce" not in kinds
+    # Untimed H phi: one hist node, no not/once chain.
+    fm = Monitor(parse_spec("prop q : H a")).formulas[0]
+    kinds = [n.kind for n in fm.nodes]
+    assert kinds.count("hist") == 1
+    assert "not" not in kinds and "once" not in kinds
+
+
+def test_hist_le_matches_rewrite_semantics():
+    # H[<=n] phi must equal !P[<=n]!phi (written with explicit operators).
+    events = [
+        ({"p": [()]}, 0),
+        ({"p": [()]}, 2),
+        ({"q": [()]}, 3),
+        ({"p": [()]}, 6),
+        ({"p": [()]}, 9),
+        ({"p": [()]}, 20),
+    ]
+    direct = violations("pred p()\nprop q : H[<=4] p", events, "q")
+    rewrite = violations("pred p()\nprop q : ! P[<=4] ! p", events, "q")
+    assert direct == rewrite
 
 
 # --- cvc5 cross-check --------------------------------------------------------
