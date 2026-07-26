@@ -195,6 +195,18 @@ class Hist(LTL):
         return f"H {_b(self.arg)}"
 
 
+@dataclass(frozen=True)
+class Zince(LTL):
+    """phi Z psi  -- psi held at some point strictly in the past, and phi has
+    held at every step since (through now); equivalent to phi & @(phi S psi).
+    DejaVu has only the timed form Z[<=n]; the untimed form is our extension."""
+    left: LTL
+    right: LTL
+
+    def __str__(self) -> str:
+        return f"({_b(self.left)} Z {_b(self.right)})"
+
+
 def bound_str(low: int, high: Optional[int]) -> str:
     """Canonical display form of a time bound: [<=n], [a,b], or [a,*]."""
     if high is None:
@@ -220,6 +232,21 @@ class TimedSince(LTL):
     def __str__(self) -> str:
         b = self.disp or bound_str(self.low, self.high)
         return f"({_b(self.left)} S{b} {_b(self.right)})"
+
+
+@dataclass(frozen=True)
+class TimedZince(LTL):
+    """phi Z[a,b] psi  -- psi held strictly in the past, between `low` and
+    `high` time units ago, and phi has held at every step since."""
+    left: LTL
+    low: int
+    high: Optional[int]
+    right: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"({_b(self.left)} Z{b} {_b(self.right)})"
 
 
 @dataclass(frozen=True)

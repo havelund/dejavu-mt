@@ -248,6 +248,65 @@ def test_hist_le_matches_rewrite_semantics():
     assert direct == rewrite
 
 
+# --- Z (zince): psi strictly in the past, phi since through now --------------
+
+def untimed_violations(spec_text, events, prop):
+    m = Monitor(parse_spec(spec_text))
+    return [i + 1 for i, ev in enumerate(events) if not m.step(ev)[prop]]
+
+
+def test_untimed_zince_basic():
+    spec = "prop q : p Z r"
+    events = [
+        {"r": [()]},            # r now, but not strictly past -> violation
+        {"p": [()]},            # r at previous step, p now -> holds
+        {"p": [()]},            # continues
+        {"s": [()]},            # p fails now -> violation
+    ]
+    assert untimed_violations(spec, events, "q") == [1, 4]
+
+
+def test_untimed_zince_equals_definition():
+    # p Z r  ==  p & @(p S r), on a trace exercising reset and expiry.
+    seqs = ["r", "p", "r", "p", "p", "s", "r", "p"]
+    events = [{e: [()]} for e in seqs]
+    direct = untimed_violations("prop q : p Z r", events, "q")
+    defn = untimed_violations("prop q : p & @(p S r)", events, "q")
+    assert direct == defn
+
+
+def test_timed_zince_le_window():
+    # p Z[<=5] r: r strictly in the past at most 5 units ago, p since.
+    spec = "prop q : p Z[<=5] r"
+    events = [
+        ({"r": [()]}, 0),    # not strictly past -> violation
+        ({"p": [()]}, 3),    # r was 3 ago -> holds
+        ({"p": [()]}, 5),    # r was 5 ago -> holds
+        ({"p": [()]}, 6),    # r was 6 ago -> expired -> violation
+    ]
+    assert violations(spec, events, "q") == [1, 4]
+
+
+def test_timed_zince_interval_maturation():
+    # Z[2,*]: the witness must be at least 2 units old.
+    spec = "prop q : p Z[2,*] r"
+    events = [
+        ({"r": [()]}, 0),
+        ({"p": [()]}, 1),    # r is 1 ago: too young -> violation
+        ({"p": [()]}, 2),    # r is 2 ago -> holds
+        ({"p": [()]}, 50),   # matured record persists while p holds
+    ]
+    assert violations(spec, events, "q") == [1, 2]
+
+
+def test_zince_sugar_and_display():
+    assert prop_body("a Z[<=5] b") == ast.TimedZince(
+        ast.Pred("a", ()), 0, 5, ast.Pred("b", ()), "[<=5]")
+    assert str(prop_body("a Z b")) == "(a Z b)"
+    fm = Monitor(parse_spec("prop q : a Z[<=5] b")).formulas[0]
+    assert [n.kind for n in fm.nodes].count("tzince") == 1
+
+
 # --- cvc5 cross-check --------------------------------------------------------
 
 def test_timed_on_cvc5():

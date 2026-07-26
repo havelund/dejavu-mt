@@ -58,10 +58,11 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
         return type(f)(_subst(f.arg, m))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
         return type(f)(f.low, f.high, _subst(f.arg, m), f.disp)
-    if isinstance(f, ast.TimedSince):
-        return ast.TimedSince(_subst(f.left, m), f.low, f.high,
-                              _subst(f.right, m), f.disp)
-    if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
+    if isinstance(f, (ast.TimedSince, ast.TimedZince)):
+        return type(f)(_subst(f.left, m), f.low, f.high,
+                       _subst(f.right, m), f.disp)
+    if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                      ast.Zince, ast.Interval)):
         return type(f)(_subst(f.left, m), _subst(f.right, m))
     if isinstance(f, (ast.Exists, ast.Forall)):
         # Do not substitute the bound variable itself.
@@ -86,10 +87,11 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
         return type(f)(expand_macros(f.arg, macros))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
         return type(f)(f.low, f.high, expand_macros(f.arg, macros), f.disp)
-    if isinstance(f, ast.TimedSince):
-        return ast.TimedSince(expand_macros(f.left, macros), f.low, f.high,
-                              expand_macros(f.right, macros), f.disp)
-    if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since, ast.Interval)):
+    if isinstance(f, (ast.TimedSince, ast.TimedZince)):
+        return type(f)(expand_macros(f.left, macros), f.low, f.high,
+                       expand_macros(f.right, macros), f.disp)
+    if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                      ast.Zince, ast.Interval)):
         return type(f)(expand_macros(f.left, macros), expand_macros(f.right, macros))
     if isinstance(f, (ast.Exists, ast.Forall)):
         return type(f)(f.var, expand_macros(f.arg, macros))
@@ -152,7 +154,8 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                             ast.TimedOnce, ast.TimedHist)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
-                            ast.TimedSince, ast.Interval)):
+                            ast.TimedSince, ast.Zince, ast.TimedZince,
+                            ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -191,7 +194,8 @@ def collect_vars(f: ast.LTL) -> set:
                             ast.TimedOnce, ast.TimedHist)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
-                            ast.TimedSince, ast.Interval)):
+                            ast.TimedSince, ast.Zince, ast.TimedZince,
+                            ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -243,9 +247,10 @@ class FormulaMonitor:
         self.pre = [backend.false()] * n
         self.now = [backend.false()] * n
         self.preval = [backend.false()] * n
-        self.timed = any(nd.kind in ("tsince", "tonce", "thist")
+        self.timed = any(nd.kind in ("tsince", "tzince", "tonce", "thist")
                          for nd in self.nodes)
         self._time = None            # current event's timestamp (timed specs)
+        self._prev_time = None       # previous event's timestamp (tzince)
         self.strong = False          # if True, use solver-backed strong simplify
         self.weak = False            # if True, do no simplification/elimination at all
         self.gc_period = 0           # if > 0, prune dead terms every gc_period events
@@ -294,6 +299,12 @@ class FormulaMonitor:
             # the state of P!phi (the record of phi's failures, starting
             # false = vacuously true) and exports its negation.
             return self._add("hist", [self._compile(f.arg)])
+        if isinstance(f, ast.Zince):
+            # Dedicated node.  phi Z psi = phi & @(phi S psi): psi strictly in
+            # the past, phi ever since (through now).  Reads psi's previous
+            # value; evidence-style state, starts false.
+            return self._add("zince",
+                             [self._compile(f.left), self._compile(f.right)])
         if isinstance(f, ast.TimedSince):
             l = self._compile(f.left)
             r = self._compile(f.right)
@@ -301,6 +312,11 @@ class FormulaMonitor:
             # node, with the same status as the data variables).
             tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
             return self._add("tsince", [l, r], (f.low, f.high, tc))
+        if isinstance(f, ast.TimedZince):
+            l = self._compile(f.left)
+            r = self._compile(f.right)
+            tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
+            return self._add("tzince", [l, r], (f.low, f.high, tc))
         if isinstance(f, ast.TimedOnce):
             # Dedicated node.  Semantically P[a,b] phi = true S[a,b] phi;
             # the recurrence is the stamped since-recurrence with the
@@ -444,9 +460,18 @@ class FormulaMonitor:
                 now[i] = s if self.weak else self._normalize(s)
                 nowval[i] = self._normalize(b.not_(now[i]))
                 continue
+            elif k == "zince":
+                # phi Z psi: psi held strictly in the past (read at pre),
+                # phi ever since through now.
+                v = b.and_(nowval[ch[0]], b.or_(preval[ch[1]], pre[i]))
             elif k == "tsince":
                 now[i] = self._tsince_state(node, nowval[ch[0]], nowval[ch[1]],
                                             pre[i])
+                nowval[i] = self._tsince_value(node, now[i])
+                continue
+            elif k == "tzince":
+                now[i] = self._tzince_state(node, nowval[ch[0]],
+                                            preval[ch[1]], pre[i])
                 nowval[i] = self._tsince_value(node, now[i])
                 continue
             elif k == "tonce":
@@ -474,6 +499,7 @@ class FormulaMonitor:
         holds = self._verdict(nowval[self.root])
         self.pre = now
         self.preval = nowval
+        self._prev_time = time
         self.now = [b.false()] * len(self.nodes)
         self._steps += 1
         if self.gc_period and self._steps % self.gc_period == 0:
@@ -496,19 +522,38 @@ class FormulaMonitor:
         lo, hi, tc = node.data
         T = b.lit(self._time, "Int")
         S = b.or_(b.and_(psi, b.eq(tc, T)), b.and_(phi, prev_state))
+        return self._bound_state(node, S)
+
+    def _tzince_state(self, node, phi, psi_pre, prev_state):
+        """New state of a timed-zince node: like timed since, but the witness
+        is psi's value at the PREVIOUS step, stamped with the previous
+        timestamp, and phi is required at every step through now:
+        S <- B[phi] and ((B[psi]_pre and t=T_pre) or S_pre)."""
+        b = self.backend
+        lo, hi, tc = node.data
+        Tp = b.lit(self._prev_time if self._prev_time is not None else 0, "Int")
+        S = b.and_(phi, b.or_(b.and_(psi_pre, b.eq(tc, Tp)), prev_state))
+        return self._bound_state(node, S)
+
+    def _bound_state(self, node, S):
+        """Keep a timed node's freshly-updated state bounded.  The upper
+        bound is monotone (an expired record stays expired), so expired
+        records are deleted outright.  Without an upper bound nothing
+        expires; instead records that have *matured* past the lower bound
+        satisfy the window forever, so their timestamp is projected away,
+        merging them into one time-free formula (the analogue of DejaVu's
+        age saturation)."""
+        b = self.backend
+        lo, hi, tc = node.data
         if self.weak:
             return S
         S = self._normalize(S)
         if hi is not None:
-            # A record older than the upper bound is expired for good
-            # (timestamps are non-decreasing), so drop it from the state:
-            # its stamp t = T_j with T_j < T - hi is false under every
-            # window the value query will ever apply.
+            # A record's stamp t = T_j with T_j < T - hi is false under every
+            # window the value query will ever apply (timestamps are
+            # non-decreasing).
             return self._normalize(b.prune_expired(S, tc, self._time - hi))
-        # No upper bound: nothing expires, but a record past the lower bound
-        # satisfies the window forever, so its timestamp is irrelevant ---
-        # project it away, merging all matured records into one time-free
-        # formula (the analogue of DejaVu's age saturation at n+1).
+        T = b.lit(self._time, "Int")
         age = b.sub(T, tc)
         mature = self._eliminate(
             b.exists(tc, b.and_(S, b.ge(age, b.lit(lo, "Int")))))
@@ -586,7 +631,7 @@ class FormulaMonitor:
             if values is None:
                 return ""
             if exported is not None and self.nodes[i].kind in (
-                    "tsince", "tonce", "thist", "hist"):
+                    "tsince", "tzince", "tonce", "thist", "hist"):
                 return f"  {paint(values[i])}   value: {paint(exported[i])}"
             return "  " + paint(values[i])
 

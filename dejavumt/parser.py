@@ -10,13 +10,13 @@ Currently supported (slice 1 -- untimed fragment):
     macros:        pred name(a, ...) = <ltl>
     properties:    prop name : <ltl>
 
-    operators:     -> <-> | & ! @ S P H [_,_)  Exists/Forall
-    timed:         S/P/H with a time bound: [a,b], [a,*], or the sugar
+    operators:     -> <-> | & ! @ S Z P H [_,_)  Exists/Forall
+    timed:         S/Z/P/H with a time bound: [a,b], [a,*], or the sugar
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
 
-Not yet supported (planned): the Z operator, recursive rules (where ... :=),
-and the seen-only lowercase exists/forall quantifiers.
+Not yet supported (planned): recursive rules (where ... :=) and the seen-only
+lowercase exists/forall quantifiers.
 """
 from __future__ import annotations
 
@@ -67,9 +67,13 @@ _GRAMMAR = r"""
             | ltl_since
     ?ltl_sinceq: leaf "S" timebound uleafq -> timed_since
                | leaf "S" uleafq        -> since
+               | leaf "Z" timebound uleafq -> timed_zince
+               | leaf "Z" uleafq        -> zince
                | uleafq
     ?ltl_since: leaf "S" timebound leaf -> timed_since
               | leaf "S" leaf           -> since
+              | leaf "Z" timebound leaf -> timed_zince
+              | leaf "Z" leaf           -> zince
               | leaf
 
     // Unary chain that may end in a quantifier (the "q" tail).
@@ -98,7 +102,7 @@ _GRAMMAR = r"""
          | "[" ltl "," ltl ")"            -> interval
          | "(" ltl ")"                     -> parens
 
-    // Time bounds on S/P/H: an interval [a,b] or [a,*], or comparison sugar.
+    // Time bounds on S/Z/P/H: an interval [a,b] or [a,*], or comparison sugar.
     ?timebound: "[" "<=" INT "]"       -> tb_le
               | "[" "<" INT "]"        -> tb_lt
               | "[" ">=" INT "]"       -> tb_ge
@@ -270,6 +274,12 @@ class _ToAst(Transformer):
 
     def timed_since(self, l, tb, r):
         return ast.TimedSince(l, tb[0], tb[1], r, tb[2])
+
+    def zince(self, a, b):
+        return ast.Zince(a, b)
+
+    def timed_zince(self, l, tb, r):
+        return ast.TimedZince(l, tb[0], tb[1], r, tb[2])
 
     def timed_once(self, tb, f):
         return ast.TimedOnce(tb[0], tb[1], f, tb[2])

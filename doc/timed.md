@@ -1,7 +1,7 @@
 # Timed (metric) operators: design
 
-How DejaVuMT implements `S[a,b]`, `S[a,*]`, `P[..]`, `H[..]` and the sugar
-`[<=n] [<n] [>=n] [>n]`. Companion to the "Metric Operators" section of the
+How DejaVuMT implements `S[a,b]`, `S[a,*]`, `Z[..]`, `P[..]`, `H[..]` and
+the sugar `[<=n] [<n] [>=n] [>n]`. Companion to the "Metric Operators" section of the
 paper; this note is the implementation view.
 
 ## Timed traces
@@ -16,12 +16,22 @@ witnessing occurrence.
                          and phi has held at every step since.
 
 Semantically `P[a,b] phi = true S[a,b] phi` and `H[a,b] phi = !P[a,b]!phi`.
+`Z` (*zince*) is since with a strictly-past witness: `phi Z psi` = "psi held
+strictly in the past and phi has held since, through now" =
+`phi & @(phi S psi)`; its timed form stamps the witness with the *previous*
+event's timestamp.  DejaVu provides only `Z[<=n]`; the untimed `Z` and the
+general `Z[a,b]` are DejaVuMT extensions.  (DejaVu's Z recurrence keeps only
+the most recent witness — equivalent for `[<=n]`, where the newest witness is
+always the freshest, but not for a general interval, where an older witness
+can be in the window while the newest is still too young; DejaVuMT therefore
+keeps all witnesses, which coincides with DejaVu on `[<=n]`.)
 The upper bound may be `*` (absent). With integer time the comparison forms
 are sugar: `[<=n]=[0,n]`, `[<n]=[0,n-1]`, `[>=n]=[n,*]`, `[>n]=[n+1,*]`. The
 unconstrained interval `[0,*]` is exactly the untimed `S`.
 
-Although P and H are *defined* by these rewrites, the engine does not compile
-them that way: every surface operator (S, P, H — timed and untimed) gets its
+Although Z, P and H are *defined* by these rewrites, the engine does not
+compile them that way: every surface operator (S, Z, P, H — timed and untimed)
+gets its
 own node interpreting its own (provably equal) recurrence, so the debug tree
 mirrors the specification one-to-one, with no encoding artifacts (no
 constant-`true` child under P, no `¬P¬` chain for H). For P the recurrence is

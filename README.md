@@ -182,6 +182,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | formula "|"  formula
                   | formula "&"  formula
                   | leaf "S" [timebound] leaf           // since (optionally timed)
+                  | leaf "Z" [timebound] leaf           // zince (optionally timed)
                   | leaf
     leaf        ::= "true" | "false"
                   | expr relop expr                     // relation
@@ -219,6 +220,7 @@ Past-time temporal (all refer only to the past and present):
 |---|---|
 | `@ phi` | `phi` held at the **previous** step (previous / yesterday) |
 | `phi S psi` | `psi` held at some past step and `phi` held at every step **since** |
+| `phi Z psi` | `psi` held at some step **strictly** in the past and `phi` held at every step since, through now (**zince**); equal to `phi & @(phi S psi)` |
 | `P phi` | `phi` held at some past-or-present step (**once**) |
 | `H phi` | `phi` held at **every** past-or-present step; equal to `!P!phi` |
 | `[phi, psi)` | `phi` held at some past-or-present step and `psi` has **not** held since (half-open interval) |
@@ -247,8 +249,10 @@ comparison forms are abbreviations:
 | `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
 
 and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
-`H[a,b] phi = !P[a,b]!phi`).  DejaVu provides exactly the `[<=n]` and `[>n]`
-forms; the general interval is a DejaVuMT extension (one extra linear
+`H[a,b] phi = !P[a,b]!phi`; `Z[a,b]`'s witness is read at the previous
+step).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
+and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
+extensions (one extra linear
 inequality in the SMT encoding — see `doc/timed.md`).
 
 A specification using timed operators is monitored against a **timed log**:
@@ -284,13 +288,13 @@ DejaVu distribution (333 pairs) through both the original BDD-based DejaVu
 (`experiments/ab_report.md`), after fixing the quantifier-scope bug in DejaVu
 and the bugs listed below in DejaVuMT:
 
-- **203 comparable pairs, 203 identical verdicts, 0 mismatches** — 190 at
+- **206 comparable pairs, 206 identical verdicts, 0 mismatches** — 193 at
   1000-event prefixes, plus the 13 slowest (quantifier-heavy) pairs at
   300-event prefixes. This includes every comparable **timed** pair,
   covering all metric operator forms (`S[<=n]`, `S[>n]`, `P`/`H` variants),
   with DejaVu's recorded JUnit expectations as independent ground truth.
-- 130 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
-  quantifiers, 59 recursive rules, 3 timed `Z`, and one empty spec file.
+- 127 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
+  quantifiers, 59 recursive rules, and one empty spec file.
 
 Notes for reproducing timed comparisons: DejaVu decides that a log is timed
 from its **filename** (it must contain `.timed.`); the harness mirrors this
@@ -309,16 +313,17 @@ parser.
 ## Status
 
 Implemented: the first-order fragment — propositional connectives,
-`@ S P H` and intervals, quantifiers (top-level and nested), macros, typed
+`@ S Z P H` and intervals, quantifiers (top-level and nested), macros, typed
 relations with arithmetic (`+ - *`), and the timed operators
-`S[a,b]`/`S[a,*]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]` sugar;
+`S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
+sugar;
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader
 emits one fact per line.
 
-Not yet implemented: the `Z` operator (timed or not), recursive rules
-(`where ... :=`), and the seen-only lowercase `exists`/`forall`. Growth from
+Not yet implemented: recursive rules (`where ... :=`) and the seen-only
+lowercase `exists`/`forall`. Growth from
 genuinely-live data (many distinct values live at once) is not yet bounded —
 `gc` reclaims dead terms but not a large live set, which would need a more
 compact set encoding.
