@@ -89,9 +89,10 @@ the time-free projection
     value  =  QElim( Exists t . S  and  a <= T - t <= b )
 
 where `QElim` is quantifier elimination (exact for linear integer
-arithmetic). This is the one place in the engine where a node's stored
-formula and its exported value differ — for every untimed operator the two
-coincide. In the code the entire difference is one accessor: enclosing nodes
+arithmetic). Here a node's stored formula and its exported value differ (the
+H nodes are the other such place: failure records in, negation out); for all
+other operators the two coincide. In the code the entire difference is one
+accessor: enclosing nodes
 read a child through its exported value (`nowval`/`preval` in `engine.py`)
 instead of reading the stored slot (`now`/`pre`) directly; for untimed nodes
 the two share one object. Because the exported value is time-free, timed
@@ -108,15 +109,16 @@ Spec (`examples/timed/prop.qtl`):
     prop timely : Forall f . close(f) -> P[<=5] open(f)
 
 Log (`examples/timed/log.csv`): `open(a)@0, close(a)@3, open(b)@4,
-close(b)@12`. Actual `debug` output (the timed node shows its exported value
-first, then its stored state):
+close(b)@12`. Actual `debug` output (the unlabeled annotation on each node is its stored
+slot; where the exported value differs — timed and H nodes — it follows,
+labeled `value:`):
 
     ----- event 1: open(a) @ 0 -----
 
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  false
-       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t1)
+       └─ P[<=5] open(f)  (f = "a" ∧ 0 = _t1)   value: f = "a"
           └─ open(f)  f = "a"
 
     ----- event 2: close(a) @ 3 -----
@@ -124,7 +126,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  f = "a"
-       └─ P[<=5] open(f)  f = "a"   state: (f = "a" ∧ 0 = _t1)
+       └─ P[<=5] open(f)  (f = "a" ∧ 0 = _t1)   value: f = "a"
           └─ open(f)  false
 
     ----- event 3: open(b) @ 4 -----
@@ -132,7 +134,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  true
     └─ (close(f) → P[<=5] open(f))  true
        ├─ close(f)  false
-       └─ P[<=5] open(f)  (f = "a" ∨ f = "b")   state: ((f = "b" ∧ 4 = _t1) ∨ (f = "a" ∧ 0 = _t1))
+       └─ P[<=5] open(f)  ((f = "b" ∧ 4 = _t1) ∨ (f = "a" ∧ 0 = _t1))   value: (f = "a" ∨ f = "b")
           └─ open(f)  f = "b"
 
     ----- event 4: close(b) @ 12 -----
@@ -140,7 +142,7 @@ first, then its stored state):
     ∀ f . (close(f) → P[<=5] open(f))  false
     └─ (close(f) → P[<=5] open(f))  ¬(f = "b")
        ├─ close(f)  f = "b"
-       └─ P[<=5] open(f)  false   state: false
+       └─ P[<=5] open(f)  false   value: false
           └─ open(f)  false
 
 Read the timed node's line across the events: the record `f="a" ∧ t=0` is

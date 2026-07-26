@@ -580,11 +580,14 @@ class FormulaMonitor:
             return s
 
         def fmt_val(i):
+            # The unlabeled annotation is always the node's stored slot; where
+            # the exported value differs (timed and H nodes) it follows,
+            # labeled.
             if values is None:
                 return ""
             if exported is not None and self.nodes[i].kind in (
                     "tsince", "tonce", "thist", "hist"):
-                return f"  {paint(exported[i])}   state: {paint(values[i])}"
+                return f"  {paint(values[i])}   value: {paint(exported[i])}"
             return "  " + paint(values[i])
 
         def go(i, prefix, is_last, is_root):
