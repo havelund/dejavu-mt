@@ -44,6 +44,9 @@
   #summary { margin: 14px 0 6px; color: var(--dim); }
   #summary b.ok { color: var(--green); }
   #summary b.bad { color: var(--red); }
+  button.mini { font-size: 12px; padding: 2px 9px; margin-left: 8px; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: #2a2d32; }
   table.trace { border-collapse: collapse; margin-top: 6px; width: 100%; }
   table.trace th { text-align: left; color: var(--dim); font-weight: 500;
         font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
@@ -151,10 +154,14 @@ function esc(s) {
 function render(res) {
   if (res.error) { showError(res.error); return; }
   const nv = res.violations.length;
+  const hasTrees = res.events.some(ev => ev.trees);
   let h = `<div id="summary">${res.events.length} events, ` +
     (nv ? `<b class="bad">${nv} violation(s)</b>` : `<b class="ok">no violations</b>`) +
     ` &nbsp;·&nbsp; solver: ${res.solver}` + (res.timed ? ' · timed' : '') +
-    (res.truncated ? ` · <b class="bad">${res.truncated}</b>` : '') + `</div>`;
+    (res.truncated ? ` · <b class="bad">${res.truncated}</b>` : '') +
+    (hasTrees ? `<button class="mini" id="expandall">expand all</button>` +
+                `<button class="mini" id="collapseall">collapse all</button>` : '') +
+    `</div>`;
   h += '<div class="props">' + res.properties.map(p =>
         `${esc(p.name)} : ${esc(p.text)}`).join('<br>') + '</div>';
   const props = res.properties.map(p => p.name);
@@ -163,14 +170,18 @@ function render(res) {
        props.map(p => `<th>${esc(p)}</th>`).join('') + '</tr>';
   for (const ev of res.events) {
     const anyViol = props.some(p => !ev.verdicts[p]);
-    h += `<tr${anyViol ? ' class="violrow"' : ''}><td>${ev.nr}</td>` +
-         `<td>${esc(ev.fact)}</td>` +
+    const cls = [anyViol ? 'violrow' : '', ev.trees ? 'clickable evrow' : '']
+        .join(' ').trim();
+    h += `<tr${cls ? ` class="${cls}"` : ''} data-nr="${ev.nr}"` +
+         `${ev.trees ? ' title="click to toggle formula trees"' : ''}>` +
+         `<td>${ev.nr}</td><td>${esc(ev.fact)}</td>` +
          (res.timed ? `<td>${ev.ts}</td>` : '') +
          props.map(p => ev.verdicts[p]
              ? '<td class="holds">holds</td>'
              : '<td class="viol">VIOLATED</td>').join('') + '</tr>';
     if (ev.trees) {
-      h += `<tr><td></td><td colspan="${props.length + (res.timed ? 2 : 1)}">`;
+      h += `<tr class="treerow" data-nr="${ev.nr}"><td></td>` +
+           `<td colspan="${props.length + (res.timed ? 2 : 1)}">`;
       for (const t of ev.trees) {
         h += `<details class="tree"${anyViol ? ' open' : ''}>` +
              `<summary>${esc(t.name)}</summary>` +
@@ -181,6 +192,20 @@ function render(res) {
   }
   h += '</table>';
   $('results').innerHTML = h;
+  const setAll = open => document.querySelectorAll('details.tree')
+      .forEach(d => d.open = open);
+  if (hasTrees) {
+    $('expandall').onclick = () => setAll(true);
+    $('collapseall').onclick = () => setAll(false);
+    document.querySelectorAll('tr.evrow').forEach(row => {
+      row.onclick = () => {
+        const trees = document.querySelectorAll(
+            `tr.treerow[data-nr="${row.dataset.nr}"] details.tree`);
+        const open = [...trees].some(d => !d.open);
+        trees.forEach(d => d.open = open);
+      };
+    });
+  }
 }
 
 loadExamples();
