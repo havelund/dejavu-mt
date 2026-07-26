@@ -139,13 +139,16 @@ const $ = id => document.getElementById(id);
 // --- file browser / open / save -------------------------------------------
 
 let browseTarget = 'spec';   // which pane the browser fills
-let browseDir = '';
+let browseDir = '';          // remembered across panes: open the log where
+                             // you just found the spec
+let lastListing = null;      // the directory listing the user is picking from
 
 function openBrowser(target) {
   browseTarget = target;
-  // Start in the directory of the pane's current file, if any.
+  // Start in the directory of the pane's current file if it has one,
+  // otherwise wherever the browser was last.
   const p = $(target + 'path').value;
-  browseDir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+  if (p.includes('/')) browseDir = p.slice(0, p.lastIndexOf('/'));
   $('overlay').style.display = 'block';
   listDir(browseDir);
 }
@@ -158,6 +161,7 @@ async function listDir(path) {
   const d = await (await fetch('/fs?path=' + encodeURIComponent(path))).json();
   if (d.error) { if (path) return listDir(''); return; }
   browseDir = d.path;
+  lastListing = d;
   $('bpath').textContent = '/' + d.path;
   let h = '';
   if (d.parent !== null)
@@ -169,12 +173,30 @@ async function listDir(path) {
   $('bentries').innerHTML = h || '<div>(empty)</div>';
 }
 
-async function pickFile(path) {
+async function loadInto(target, path) {
   const d = await (await fetch('/file?path=' + encodeURIComponent(path))).json();
-  if (d.error) return;
-  $(browseTarget).value = d.content;
-  $(browseTarget + 'path').value = d.path;
+  if (d.error) return false;
+  $(target).value = d.content;
+  $(target + 'path').value = d.path;
+  return true;
+}
+
+async function pickFile(path) {
+  if (!await loadInto(browseTarget, path)) return;
   closeBrowser();
+  // If the directory has exactly one counterpart file (spec picked and one
+  // .csv there, or log picked and one .qtl), load it into the other pane.
+  const other = browseTarget === 'spec' ? 'log' : 'spec';
+  const ext = other === 'log' ? '.csv' : '.qtl';
+  const cands = (lastListing?.files || []).filter(f => f.endsWith(ext));
+  if (cands.length === 1) {
+    const dir = lastListing.path ? lastListing.path + '/' : '';
+    if (await loadInto(other, dir + cands[0])) {
+      const flash = $(other + 'flash');
+      flash.textContent = 'auto-loaded';
+      setTimeout(() => flash.textContent = '', 2500);
+    }
+  }
 }
 
 async function saveFile(target) {
