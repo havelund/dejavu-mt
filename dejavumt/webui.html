@@ -57,9 +57,9 @@
   td.holds { color: var(--green); }
   td.viol { color: var(--red); font-weight: 600; }
   tr.violrow td:first-child { border-left: 3px solid var(--red); }
-  details.tree { margin: 2px 0 6px; }
-  details.tree summary { cursor: pointer; color: var(--dim); font-size: 12px; }
-  pre.tree { margin: 6px 0 2px; padding: 10px 12px; background: var(--panel);
+  tr.treerow.hidden { display: none; }
+  .treename { color: var(--dim); font-size: 12px; margin: 4px 0 0 2px; }
+  pre.tree { margin: 6px 0 6px; padding: 10px 12px; background: var(--panel);
         border: 1px solid var(--edge); border-radius: 6px; overflow-x: auto;
         font: 12.5px/1.5 "SF Mono", Menlo, Consolas, monospace; }
   .tv { color: var(--green); }
@@ -180,30 +180,26 @@ function render(res) {
              ? '<td class="holds">holds</td>'
              : '<td class="viol">VIOLATED</td>').join('') + '</tr>';
     if (ev.trees) {
-      h += `<tr class="treerow" data-nr="${ev.nr}"><td></td>` +
-           `<td colspan="${props.length + (res.timed ? 2 : 1)}">`;
+      h += `<tr class="treerow${anyViol ? '' : ' hidden'}" data-nr="${ev.nr}">` +
+           `<td></td><td colspan="${props.length + (res.timed ? 2 : 1)}">`;
       for (const t of ev.trees) {
-        h += `<details class="tree"${anyViol ? ' open' : ''}>` +
-             `<summary>${esc(t.name)}</summary>` +
-             `<pre class="tree">${t.html}</pre></details>`;
+        if (props.length > 1) h += `<div class="treename">${esc(t.name)}</div>`;
+        h += `<pre class="tree">${t.html}</pre>`;
       }
       h += '</td></tr>';
     }
   }
   h += '</table>';
   $('results').innerHTML = h;
-  const setAll = open => document.querySelectorAll('details.tree')
-      .forEach(d => d.open = open);
   if (hasTrees) {
+    const setAll = show => document.querySelectorAll('tr.treerow')
+        .forEach(r => r.classList.toggle('hidden', !show));
     $('expandall').onclick = () => setAll(true);
     $('collapseall').onclick = () => setAll(false);
     document.querySelectorAll('tr.evrow').forEach(row => {
-      row.onclick = () => {
-        const trees = document.querySelectorAll(
-            `tr.treerow[data-nr="${row.dataset.nr}"] details.tree`);
-        const open = [...trees].some(d => !d.open);
-        trees.forEach(d => d.open = open);
-      };
+      row.onclick = () => document.querySelector(
+          `tr.treerow[data-nr="${row.dataset.nr}"]`)
+          .classList.toggle('hidden');
     });
   }
 }
