@@ -162,6 +162,21 @@ async function listDir(path) {
   if (d.error) { if (path) return listDir(''); return; }
   browseDir = d.path;
   lastListing = d;
+  // A leaf folder that is exactly one spec + one log: load the pair.
+  const qtls = d.files.filter(f => f.endsWith('.qtl'));
+  const csvs = d.files.filter(f => f.endsWith('.csv'));
+  if (path && !d.dirs.length && qtls.length === 1 && csvs.length === 1) {
+    const dir = d.path ? d.path + '/' : '';
+    if (await loadInto('spec', dir + qtls[0]) &&
+        await loadInto('log', dir + csvs[0])) {
+      closeBrowser();
+      for (const t of ['spec', 'log']) {
+        $(t + 'flash').textContent = 'loaded';
+        setTimeout(() => $(t + 'flash').textContent = '', 2500);
+      }
+      return;
+    }
+  }
   $('bpath').textContent = '/' + d.path;
   let h = '';
   if (d.parent !== null)
