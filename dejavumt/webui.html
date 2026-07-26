@@ -41,7 +41,9 @@
            background: #3a2426; border: 1px solid #7a3a3e; border-radius: 6px;
            color: #f0b6b6; font-family: Menlo, Consolas, monospace;
            white-space: pre-wrap; }
-  #summary { margin: 14px 0 6px; color: var(--dim); }
+  .shellcmd { margin: 14px 0 0; color: var(--dim);
+        font: 12.5px Menlo, Consolas, monospace; user-select: all; }
+  #summary { margin: 8px 0 6px; color: var(--dim); }
   #summary b.ok { color: var(--green); }
   #summary b.bad { color: var(--red); }
   button.mini { font-size: 12px; padding: 2px 9px; margin-left: 8px; }
@@ -174,6 +176,9 @@
     <b>gc</b>: periodic collection of dead value-terms (every 50 events).</p>
 
     <h3>Results</h3>
+    <p>The line above the results is the equivalent shell command (built
+    from the file-bar paths — accurate once the panes are saved); click it
+    to select, copy, and run the same thing in a terminal.</p>
     <p>Click an event row to show/hide its formula trees
     (<b>expand&nbsp;all</b> / <b>collapse&nbsp;all</b> in the summary line);
     events that violate a property are marked red and shown expanded.</p>
@@ -324,11 +329,24 @@ function esc(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 }
 
+function shellCmd() {
+  const spec = $('specpath').value.trim() || '<spec.qtl>';
+  const log = $('logpath').value.trim() || '<log.csv>';
+  let cmd = `python -m dejavumt ${spec} ${log} trace`;
+  if ($('debug').checked) cmd += ' debug';
+  if ($('weak').checked) cmd += ' weak';
+  else if ($('strong').checked) cmd += ' strong';
+  if ($('solver').value === 'cvc5') cmd += ' cvc5';
+  if ($('gc').checked) cmd += ' gc';
+  return cmd;
+}
+
 function render(res) {
   if (res.error) { showError(res.error); return; }
   const nv = res.violations.length;
   const hasTrees = res.events.some(ev => ev.trees);
-  let h = `<div id="summary">${res.events.length} events, ` +
+  let h = `<div class="shellcmd" title="the same run from the shell">$ ${esc(shellCmd())}</div>`;
+  h += `<div id="summary">${res.events.length} events, ` +
     (nv ? `<b class="bad">${nv} violation(s)</b>` : `<b class="ok">no violations</b>`) +
     ` &nbsp;·&nbsp; solver: ${res.solver}` + (res.timed ? ' · timed' : '') +
     (res.truncated ? ` · <b class="bad">${res.truncated}</b>` : '') +
