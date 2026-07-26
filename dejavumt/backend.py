@@ -246,6 +246,13 @@ def _z3_to_str(z3, e, scope=None) -> str:
 # CVC5
 # ---------------------------------------------------------------------------
 
+# cvc5's TermManager/Solver wrappers participate in reference cycles whose
+# collection has been observed to corrupt the heap (segfault in a later,
+# unrelated GC pass; cvc5 1.3.4, CPython 3.14).  Keeping them alive for the
+# process lifetime sidesteps the teardown entirely — they are few and small.
+_cvc5_keepalive = []
+
+
 class Cvc5Backend(Backend):
     name = "cvc5"
     supports_strong = False
@@ -256,12 +263,14 @@ class Cvc5Backend(Backend):
         self.cvc5 = cvc5
         self.Kind = Kind
         self.tm = cvc5.TermManager()
+        _cvc5_keepalive.append(self.tm)
         self._simp = self._mk_solver()
 
     def _mk_solver(self):
         s = self.cvc5.Solver(self.tm)
         s.setOption("produce-models", "true")
         s.setLogic("ALL")
+        _cvc5_keepalive.append(s)
         return s
 
     def _sort(self, sort_name):

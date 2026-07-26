@@ -128,6 +128,23 @@ contiguous block at the end:
 
     python -m dejavumt examples/file/prop.qtl examples/file/log.csv trace debug
 
+## Web interface
+
+A local browser UI (spec and log editors, an examples browser, the trace
+table, and — its main attraction — the per-event annotated formula trees of
+debug mode, rendered with colors):
+
+    .venv/bin/pip install flask      # one-time; or: pip install -e ".[web]"
+    ./start_web.sh                   # http://localhost:5001  (or: ./start_web.sh 8080)
+
+The script restarts any running instance (log at `/tmp/dejavumt_web.log`);
+`python -m dejavumt.web [port]` runs the server in the foreground instead.
+Pick an example from the dropdown (or paste a spec and log), choose solver
+and modes, and Run. Events with violations are marked and their formula
+trees auto-expanded, showing each node's stored state and, where it differs
+(timed and `H` nodes), its exported value. The server binds to `127.0.0.1`
+only and caps runs at 5000 events / 60 s.
+
 ## Specification language
 
 The specification language is DejaVu's QTL — a typed first-order *past-time*
