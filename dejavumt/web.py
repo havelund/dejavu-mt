@@ -85,26 +85,67 @@ def index() -> Response:
     return Response(_UI.read_text(), mimetype="text/html")
 
 
-@app.get("/examples")
-def examples():
-    exdir = _ROOT / "examples"
-    names = sorted(d.name for d in exdir.iterdir()
-                   if (d / "prop.qtl").exists() and (d / "log.csv").exists()
-                   ) if exdir.is_dir() else []
-    return jsonify(names)
+def _safe(relpath: str) -> Path:
+    """Resolve a client-supplied path strictly inside the served root."""
+    p = (_ROOT / relpath).resolve()
+    if p != _ROOT and not p.is_relative_to(_ROOT):
+        raise PermissionError(relpath)
+    return p
 
 
-@app.get("/examples/<name>")
-def example(name):
-    d = _ROOT / "examples" / name
-    # `name` is constrained by the route (no slashes); resolve() guards links.
-    if not d.resolve().is_relative_to(_ROOT / "examples"):
-        return jsonify({"error": "no such example"}), 404
+@app.get("/fs")
+def fs():
+    """List a directory (relative to the served root): subdirectories and
+    .qtl/.csv files.  Used by the in-page file browser."""
+    rel = request.args.get("path", "").strip("/")
     try:
-        return jsonify({"spec": (d / "prop.qtl").read_text(),
-                        "log": (d / "log.csv").read_text()})
-    except OSError:
-        return jsonify({"error": "no such example"}), 404
+        d = _safe(rel)
+        if not d.is_dir():
+            raise OSError(rel)
+        dirs, files = [], []
+        for e in sorted(d.iterdir(), key=lambda e: e.name.lower()):
+            if e.name.startswith("."):
+                continue
+            if e.is_dir():
+                dirs.append(e.name)
+            elif e.suffix in (".qtl", ".csv"):
+                files.append(e.name)
+        return jsonify({"path": rel,
+                        "parent": None if not rel else str(Path(rel).parent)
+                        if str(Path(rel).parent) != "." else "",
+                        "dirs": dirs, "files": files})
+    except (OSError, PermissionError):
+        return jsonify({"error": "no such directory"}), 404
+
+
+@app.get("/file")
+def file_get():
+    try:
+        p = _safe(request.args.get("path", ""))
+        return jsonify({"path": str(p.relative_to(_ROOT)),
+                        "content": p.read_text()})
+    except (OSError, PermissionError):
+        return jsonify({"error": "no such file"}), 404
+
+
+@app.post("/save")
+def file_save():
+    req = request.get_json(force=True)
+    rel = (req.get("path") or "").strip()
+    if not rel:
+        return jsonify({"error": "no path given"}), 400
+    try:
+        p = _safe(rel)
+        if p.suffix not in (".qtl", ".csv"):
+            return jsonify({"error": "only .qtl and .csv files"}), 400
+        if not p.parent.is_dir():
+            return jsonify({"error": f"no such directory: {p.parent.name}/"}), 400
+        p.write_text(req.get("content", ""))
+        return jsonify({"saved": str(p.relative_to(_ROOT))})
+    except PermissionError:
+        return jsonify({"error": "path outside the served root"}), 403
+    except OSError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @app.post("/run")

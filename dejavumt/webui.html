@@ -67,12 +67,30 @@
   .ov { color: var(--yellow); }
   .props { color: var(--dim); font-family: Menlo, Consolas, monospace;
            font-size: 13px; margin: 10px 0 0; }
+  .filebar { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+  .filebar .caption { margin: 0 4px 0 2px; white-space: nowrap; }
+  .filebar input[type=text] { flex: 1; min-width: 60px; background: #2f3238;
+        color: var(--fg); border: 1px solid var(--edge); border-radius: 5px;
+        padding: 3px 8px; font: 12px Menlo, Consolas, monospace; }
+  .filebar button.mini { margin-left: 0; }
+  .flash { color: var(--green); font-size: 12px; min-width: 46px; }
+  #overlay { display: none; position: fixed; inset: 0;
+             background: rgba(0,0,0,.55); z-index: 10; }
+  #browser { position: absolute; top: 12%; left: 50%;
+        transform: translateX(-50%); width: 460px; max-height: 65vh;
+        overflow-y: auto; background: var(--panel);
+        border: 1px solid var(--edge); border-radius: 8px; padding: 12px; }
+  #bpath { color: var(--dim); font: 12px Menlo, Consolas, monospace;
+           margin-bottom: 8px; }
+  #bentries div { padding: 3px 8px; border-radius: 4px; cursor: pointer;
+        font: 13px Menlo, Consolas, monospace; }
+  #bentries div:hover { background: #33363c; }
+  #bentries .dir { color: var(--accent); }
 </style>
 </head>
 <body>
 <header>
   <h1>DejaVu<span>MT</span></h1>
-  <select id="examples"><option value="">example…</option></select>
   <button id="run">Run</button>
   <select id="solver">
     <option value="z3">z3</option>
@@ -86,37 +104,90 @@
 <main>
   <div class="editors">
     <div>
-      <div class="caption">specification (.qtl)</div>
+      <div class="filebar">
+        <span class="caption">specification (.qtl)</span>
+        <input type="text" id="specpath" placeholder="path… (e.g. examples/timed/prop.qtl)" spellcheck="false">
+        <button class="mini" onclick="openBrowser('spec')">open…</button>
+        <button class="mini" onclick="saveFile('spec')">save</button>
+        <span class="flash" id="specflash"></span>
+      </div>
       <textarea id="spec" spellcheck="false"></textarea>
     </div>
     <div>
-      <div class="caption">log (.csv — timed specs: last column is the timestamp)</div>
+      <div class="filebar">
+        <span class="caption">log (.csv — timed: last column is the timestamp)</span>
+        <input type="text" id="logpath" placeholder="path…" spellcheck="false">
+        <button class="mini" onclick="openBrowser('log')">open…</button>
+        <button class="mini" onclick="saveFile('log')">save</button>
+        <span class="flash" id="logflash"></span>
+      </div>
       <textarea id="log" spellcheck="false"></textarea>
     </div>
   </div>
   <div id="error"></div>
   <div id="results"></div>
 </main>
+<div id="overlay" onclick="closeBrowser()">
+  <div id="browser" onclick="event.stopPropagation()">
+    <div id="bpath"></div>
+    <div id="bentries"></div>
+  </div>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 
-async function loadExamples() {
-  const names = await (await fetch('/examples')).json();
-  for (const n of names) {
-    const o = document.createElement('option');
-    o.value = o.textContent = n;
-    $('examples').appendChild(o);
-  }
+// --- file browser / open / save -------------------------------------------
+
+let browseTarget = 'spec';   // which pane the browser fills
+let browseDir = '';
+
+function openBrowser(target) {
+  browseTarget = target;
+  // Start in the directory of the pane's current file, if any.
+  const p = $(target + 'path').value;
+  browseDir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+  $('overlay').style.display = 'block';
+  listDir(browseDir);
 }
-$('examples').onchange = async () => {
-  const n = $('examples').value;
-  if (!n) return;
-  const d = await (await fetch('/examples/' + encodeURIComponent(n))).json();
-  $('spec').value = d.spec || '';
-  $('log').value = d.log || '';
-  $('results').innerHTML = '';
-  $('error').style.display = 'none';
-};
+function closeBrowser() { $('overlay').style.display = 'none'; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeBrowser();
+});
+
+async function listDir(path) {
+  const d = await (await fetch('/fs?path=' + encodeURIComponent(path))).json();
+  if (d.error) { if (path) return listDir(''); return; }
+  browseDir = d.path;
+  $('bpath').textContent = '/' + d.path;
+  let h = '';
+  if (d.parent !== null)
+    h += `<div class="dir" onclick="listDir('${d.parent}')">../</div>`;
+  for (const n of d.dirs)
+    h += `<div class="dir" onclick="listDir('${d.path ? d.path + '/' : ''}${n}')">${n}/</div>`;
+  for (const n of d.files)
+    h += `<div onclick="pickFile('${d.path ? d.path + '/' : ''}${n}')">${n}</div>`;
+  $('bentries').innerHTML = h || '<div>(empty)</div>';
+}
+
+async function pickFile(path) {
+  const d = await (await fetch('/file?path=' + encodeURIComponent(path))).json();
+  if (d.error) return;
+  $(browseTarget).value = d.content;
+  $(browseTarget + 'path').value = d.path;
+  closeBrowser();
+}
+
+async function saveFile(target) {
+  const path = $(target + 'path').value.trim();
+  const flash = $(target + 'flash');
+  if (!path) { flash.textContent = 'no path'; return; }
+  const r = await (await fetch('/save', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path, content: $(target).value}),
+  })).json();
+  flash.textContent = r.saved ? 'saved' : (r.error || 'error');
+  setTimeout(() => flash.textContent = '', 2500);
+}
 
 $('run').onclick = async () => {
   $('run').disabled = true;
@@ -204,7 +275,6 @@ function render(res) {
   }
 }
 
-loadExamples();
 </script>
 </body>
 </html>

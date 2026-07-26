@@ -55,13 +55,33 @@ def test_parse_error(client):
     assert "error" in res
 
 
-def test_examples_listing(client):
-    names = client.get("/examples").get_json()
-    assert "timed" in names
-    d = client.get("/examples/timed").get_json()
-    assert "P[<=5]" in d["spec"] and "open" in d["log"]
+def test_fs_browse_and_read(client):
+    root = client.get("/fs").get_json()
+    assert "examples" in root["dirs"] and root["parent"] is None
+    d = client.get("/fs?path=examples/timed").get_json()
+    assert "prop.qtl" in d["files"] and "log.csv" in d["files"]
+    assert d["parent"] == "examples"
+    f = client.get("/file?path=examples/timed/prop.qtl").get_json()
+    assert "P[<=5]" in f["content"]
 
 
-def test_example_path_traversal_rejected(client):
-    r = client.get("/examples/..%2F..%2Fetc")
-    assert r.status_code == 404
+def test_fs_path_traversal_rejected(client):
+    assert client.get("/fs?path=../..").status_code == 404
+    assert client.get("/file?path=../../etc/passwd").status_code == 404
+    r = client.post("/save", json={"path": "../evil.qtl", "content": "x"})
+    assert r.status_code == 403
+
+
+def test_save_roundtrip(client, tmp_path):
+    import dejavumt.web as web
+    old = web._ROOT
+    web._ROOT = tmp_path
+    try:
+        r = client.post("/save", json={"path": "s.qtl", "content": "prop p : a"})
+        assert r.get_json()["saved"] == "s.qtl"
+        assert (tmp_path / "s.qtl").read_text() == "prop p : a"
+        # non-.qtl/.csv rejected
+        assert client.post("/save", json={"path": "x.py", "content": ""}
+                           ).status_code == 400
+    finally:
+        web._ROOT = old
