@@ -371,6 +371,13 @@ and the bugs listed below in DejaVuMT:
 - 127 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
   quantifiers, 59 recursive rules, and one empty spec file.
 
+The **future fragment** has no DejaVu counterpart to compare against; it is
+validated differentially against a brute-force reference instead
+(`experiments/fuzz_reference.py`): a ~100-line transcription of the
+assignment semantics, evaluated over the whole finite trace, diffed against
+the monitor on random formulas and random timed traces (duplicated
+timestamps included). A fixed-seed slice runs in the test suite.
+
 Notes for reproducing timed comparisons: DejaVu decides that a log is timed
 from its **filename** (it must contain `.timed.`); the harness mirrors this
 convention, and pairs a timed spec only with timed logs.

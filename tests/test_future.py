@@ -302,3 +302,20 @@ def test_until_broken_run_resolves_before_deadline():
     m.step({"busy": [()]}, 0)
     m.step({"r": [()]}, 1)
     assert (1, "q", False) in m.resolved and (2, "q", False) in m.resolved
+
+
+# --- differential fuzzing against the brute-force reference ------------------
+
+def test_fuzz_against_reference():
+    # experiments/fuzz_reference.py transcribes the assignment semantics and
+    # diffs verdicts on random formulas and traces (duplicated timestamps
+    # included).  A fixed-seed slice runs in the suite; run it standalone with
+    # more iterations for real fuzzing.
+    import experiments.fuzz_reference as fr
+    import random
+    rng = random.Random(42)
+    for _ in range(60):
+        body = fr.rand_formula(rng, rng.randint(1, 3))
+        events, times = fr.rand_trace(rng)
+        assert fr.disagrees(body, events, times) is None, (
+            f"{body} on {[sorted(e) for e in events]} @ {times}")
