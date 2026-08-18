@@ -378,6 +378,15 @@ assignment semantics, evaluated over the whole finite trace, diffed against
 the monitor on random formulas and random timed traces (duplicated
 timestamps included). A fixed-seed slice runs in the test suite.
 
+**MonPoly comparison** (`experiments/monpoly.py`, `experiments/monpoly_ab.py`;
+MonPoly built at `~/Desktop/development/monpoly`, opam switch `monpoly`):
+random formulas of the shared fragment (metric past *and* bounded future)
+through both tools — 893 compared, 0 verdict mismatches on MonPoly's
+evaluation frontier. Fragment experiment: MonPoly's own `-check` rejects 80%
+of random first-order formulas of the shared syntax (negation with free
+variables, unbounded future intervals, OR variable mismatches, unbound order
+relations, SINCE/UNTIL containment); DejaVuMT monitors all of them.
+
 Notes for reproducing timed comparisons: DejaVu decides that a log is timed
 from its **filename** (it must contain `.timed.`); the harness mirrors this
 convention, and pairs a timed spec only with timed logs.
