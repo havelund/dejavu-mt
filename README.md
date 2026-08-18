@@ -398,10 +398,9 @@ value-terms (`gc`). The engine also accepts events containing multiple facts
 emits one fact per line.
 
 Not yet implemented: recursive rules (`where ... :=`) and the seen-only
-lowercase `exists`/`forall`. A future operator must occur under the
-propositional connectives and quantifiers only — not below a past-time
-operator, and not inside another future operator's argument (rejected at
-compile time with a message). Growth from
+lowercase `exists`/`forall`. Future operators may occur anywhere — under
+negation, below past-time operators (`P (F[<=2] p)`), and nested inside each
+other (`F[<=5] (p & F[<=3] q)`). Growth from
 genuinely-live data (many distinct values live at once) is not yet bounded —
 `gc` reclaims dead terms but not a large live set, which would need a more
 compact set encoding.

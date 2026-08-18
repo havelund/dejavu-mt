@@ -62,6 +62,20 @@ class Backend:
     def gc_simplify(self, t): return self.simplify(t)   # dead-term reclamation
     def qelim(self, q): ...
 
+    # uninterpreted placeholder functions (future-operator machinery)
+    def func(self, name: str, arg_sorts): ...
+    def apply(self, f, args): ...
+
+    def substitute_fun(self, t, f, params, body):
+        """Replace every application f(a1..an) in t by body[params := a1..an],
+        correctly under binders.  `params` are the constants body is written
+        over."""
+        ...
+
+    def mentions(self, t, fs) -> bool:
+        """Does t contain an application of any of the given functions?"""
+        ...
+
     def prune_expired(self, t, tc, deadline: int):
         """Replace every atom  tc = c  (c a concrete integer < deadline)
         occurring in a positive position (under and/or only) by false --- used
@@ -155,6 +169,40 @@ class Z3Backend(Backend):
             return self._qe(q).as_expr()
         except self.z3.Z3Exception:
             return q
+
+    def func(self, name, arg_sorts):
+        z3 = self.z3
+        return z3.Function(name, *[self._sort(a) for a in arg_sorts],
+                           z3.BoolSort())
+
+    def apply(self, f, args):
+        return f(*args) if args else f()
+
+    def substitute_fun(self, t, f, params, body):
+        z3 = self.z3
+        # substitute_funs expects the body over de Bruijn Vars for the
+        # function's parameters; it handles shifting under binders itself.
+        vbody = z3.substitute(
+            body, *[(p, z3.Var(i, p.sort())) for i, p in enumerate(params)])
+        return z3.substitute_funs(t, (f, vbody))
+
+    def mentions(self, t, fs):
+        z3 = self.z3
+        names = {f.name() for f in fs}
+        seen = set()
+        stack = [t]
+        while stack:
+            e = stack.pop()
+            if e.get_id() in seen:
+                continue
+            seen.add(e.get_id())
+            if z3.is_quantifier(e):
+                stack.append(e.body())
+            elif z3.is_app(e):
+                if e.decl().name() in names:
+                    return True
+                stack.extend(e.children())
+        return False
 
     def prune_expired(self, t, tc, deadline):
         z3 = self.z3
@@ -342,6 +390,51 @@ class Cvc5Backend(Backend):
             return self._mk_solver().getQuantifierElimination(q)
         except Exception:
             return q
+
+    def func(self, name, arg_sorts):
+        tm = self.tm
+        srts = [self._sort(a) for a in arg_sorts]
+        if not srts:
+            return tm.mkConst(tm.getBooleanSort(), name)
+        return tm.mkConst(tm.mkFunctionSort(srts, tm.getBooleanSort()), name)
+
+    def apply(self, f, args):
+        if not args:
+            return f
+        return self.tm.mkTerm(self.Kind.APPLY_UF, f, *args)
+
+    def substitute_fun(self, t, f, params, body):
+        # Rebuild the term, replacing f(a1..an) by body[params := a1..an].
+        # cvc5 binders use named variables (no de Bruijn), so a recursive
+        # rebuild is capture-safe.
+        K = self.Kind
+        tm = self.tm
+
+        def go(e):
+            k = e.getKind()
+            n = e.getNumChildren()
+            if k == K.APPLY_UF and e[0] == f:
+                args = [go(e[i]) for i in range(1, n)]
+                return body.substitute(list(params), args)
+            if n == 0:
+                return e if e != f else body   # 0-ary placeholder
+            kids = [go(e[i]) for i in range(n)]
+            if all(a == b for a, b in zip(kids, (e[i] for i in range(n)))):
+                return e
+            op = e.getOp() if e.hasOp() else None
+            return tm.mkTerm(op, *kids) if op else tm.mkTerm(k, *kids)
+
+        return go(t)
+
+    def mentions(self, t, fs):
+        fset = set(fs)
+        stack = [t]
+        while stack:
+            e = stack.pop()
+            if e in fset:
+                return True
+            stack.extend(e[i] for i in range(e.getNumChildren()))
+        return False
 
     def prune_expired(self, t, tc, deadline):
         K = self.Kind

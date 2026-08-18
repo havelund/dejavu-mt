@@ -188,12 +188,67 @@ def test_verdict_may_be_pending_then_arrive_late():
     assert (1, "q", True) in m.resolved                 # position 1, at event 2
 
 
-def test_future_under_past_operator_is_rejected():
-    for spec in ["prop q : P (F[<=5] a)",
-                 "prop q : F[<=5] (F[<=3] a)",
-                 "prop q : a S (F[<=5] b)"]:
-        with pytest.raises(ValueError, match="future operator"):
-            Monitor(parse_spec(spec))
+# --- nesting: future below past operators, future inside future --------------
+
+def test_once_of_eventually():
+    # P (F[<=2] p): some position so far whose 2-unit lookahead saw a p.
+    spec = "prop q : P (F[<=2] p)"
+    events = [({"r": [()]}, 0), ({"p": [()]}, 1), ({"r": [()]}, 5),
+              ({"r": [()]}, 9)]
+    assert run(spec, events) == [True, True, True, True]
+    # and with no p at all:
+    assert run(spec, [({"r": [()]}, 0), ({"r": [()]}, 5)]) == [False, False]
+
+
+def test_once_of_eventually_resolves_early():
+    m = Monitor(parse_spec("prop q : P (F[<=2] p)"))
+    m.step({"r": [()]}, 0)
+    assert m.resolved == []            # position 1 pending
+    m.step({"p": [()]}, 1)
+    assert (1, "q", True) in m.resolved   # resolved by the p, before deadline
+
+
+def test_eventually_of_eventually():
+    # F[<=5] (p & F[<=3] q): a p within 5 that is itself followed by a q
+    # within 3.
+    spec = "prop q : F[<=5] (p & F[<=3] q)"
+    events = [({"p": [()]}, 0), ({"q": [()]}, 2), ({"r": [()]}, 9),
+              ({"r": [()]}, 20)]
+    assert run(spec, events) == [True, False, False, False]
+
+
+def test_since_of_eventually():
+    # a S (F[<=2] p): the future subformula feeds the since-state.
+    spec = "prop q : a S (F[<=2] p)"
+    events = [({"a": [()]}, 0), ({"p": [()]}, 1), ({"a": [()]}, 2),
+              ({"r": [()]}, 5)]
+    assert run(spec, events) == [True, True, True, False]
+
+
+def test_prev_of_eventually():
+    # @ (F[<=2] p): the future subformula read through @.
+    spec = "prop q : @ (F[<=2] p)"
+    events = [({"r": [()]}, 0), ({"p": [()]}, 1), ({"r": [()]}, 9)]
+    assert run(spec, events) == [False, True, True]
+
+
+def test_nested_with_data():
+    # Every req must, within 5, see a grant that is confirmed within 2.
+    spec = """
+    pred req(x: String)
+    pred grant(x: String)
+    pred conf(x: String)
+    prop q : Forall x . req(x) -> F[<=5] (grant(x) & F[<=2] conf(x))
+    """
+    events = [
+        ({"req": [("a",)]}, 0),
+        ({"grant": [("a",)]}, 2),
+        ({"conf": [("a",)]}, 3),     # grant@2 confirmed@3 -> pos 1 holds
+        ({"req": [("b",)]}, 10),
+        ({"grant": [("b",)]}, 12),   # never confirmed
+        ({"r": [()]}, 30),
+    ]
+    assert run(spec, events) == [True, True, True, False, True, True]
 
 
 def test_tables_are_cleared_when_nothing_is_pending():

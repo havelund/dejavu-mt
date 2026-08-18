@@ -97,13 +97,31 @@ pending window, and no row at all is needed when the pending list is empty —
 so the tables are cleared outright then. This is the dual of the past
 operators' rule, where the moving window kills records from behind.
 
-## Current limitation
+## Nesting: placeholders and staged resolution
 
-A future operator must occur under the propositional connectives and
-quantifiers only: not below a past-time operator (`P (F[<=5] a)`) and not
-inside another future operator's argument (`F[<=5] (F[<=3] a)`). Such nesting
-would require the *earlier* positions' pending values, which the design defers
-to future work. Violations are rejected at compile time with a clear message.
+A future operator below a *stateful* operator (`P (F[<=2] p)`,
+`a S (F[<=2] p)`, `@ (F..)`) or inside another future operator's argument
+(`F[<=5] (p & F[<=3] q)`) poses a harder problem: the enclosing recurrence
+needs the inner node's value *at each position as input*, and that value is
+still pending there. Such "deep" nodes export, instead of a lower bound, an
+**opaque placeholder**: an uninterpreted predicate `_q..(x..)` applied to the
+node's free data variables (a predicate, not a constant, so that quantifiers
+above bind through it). The placeholder flows into states and tables like any
+subformula; `simplify` cannot touch it.
+
+Resolution is staged, innermost first: once a placeholder's answer is final
+(deadline passed or run dead) *and* its node's tables mention no other
+unresolved placeholder, its value is computed from the tables and
+**substituted, as a function, into everything** — node states, exported
+values, future tables, and parked obligations (`backend.substitute_fun`,
+capture-safe under binders). Early verdicts still work: unresolved
+placeholders in an obligation's formula are bracketed by substituting bound
+functions (today's value / ⊤) according to the placeholder node's polarity,
+which composes through stateful operators as well (every recurrence is
+monotone or antitone in each input — see `OPSIGNS`).
+
+Shallow nodes (only stateless ancestors) keep the direct query mechanism —
+the common request-response case pays nothing for any of this.
 
 ## Example
 
