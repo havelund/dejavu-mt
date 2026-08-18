@@ -48,6 +48,34 @@ def test_auction_bids_increase():
     assert violations(spec, events, "p") == [3]
 
 
+# --- string contains (description substring matching) ------------------------
+
+def test_contains_string_substring():
+    # A 2-arg fact E(component, description); `contains` tests the description.
+    spec = """
+    pred MODE_CHANGED(c: String, d: String)
+    prop no_auto : Forall c . Forall d . !(MODE_CHANGED(c, d) & d contains "AUTOMATIC")
+    """
+    events = [
+        {"MODE_CHANGED": [("ctrl", "Control mode changed to MANUAL")]},     # ok
+        {"MODE_CHANGED": [("ctrl", "Control mode changed to AUTOMATIC")]},  # violation
+    ]
+    assert violations(spec, events, "no_auto") == [2]
+
+
+def test_contains_is_substring_not_equality():
+    # `contains` matches a substring, not the whole string.
+    spec = """
+    pred LOG(c: String, d: String)
+    prop p : Forall c . Forall d . LOG(c, d) -> d contains "fault"
+    """
+    events = [
+        {"LOG": [("x", "actuator fault detected")]},   # substring present -> ok
+        {"LOG": [("x", "all nominal")]},                # no "fault" -> violation
+    ]
+    assert violations(spec, events, "p") == [2]
+
+
 # --- macros ------------------------------------------------------------------
 
 def test_access_with_macros():

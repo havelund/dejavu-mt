@@ -46,6 +46,9 @@ class Backend:
     def gt(self, a, b): ...
     def ge(self, a, b): ...
 
+    # string relations
+    def contains(self, a, b): ...  # True iff string a contains substring b
+
     # arithmetic
     def add(self, a, b): ...
     def sub(self, a, b): ...
@@ -141,6 +144,8 @@ class Z3Backend(Backend):
     def le(self, a, b): return a <= b
     def gt(self, a, b): return a > b
     def ge(self, a, b): return a >= b
+
+    def contains(self, a, b): return self.z3.Contains(a, b)
 
     def add(self, a, b): return a + b
     def sub(self, a, b): return a - b
@@ -276,6 +281,8 @@ def _z3_to_str(z3, e, scope=None) -> str:
                      (z3.is_ge, ">="), (z3.is_gt, ">")):
         if pred(e):
             return f"{rec(e.arg(0))} {op} {rec(e.arg(1))}"
+    if z3.is_app_of(e, z3.Z3_OP_SEQ_CONTAINS):
+        return f"{rec(e.arg(0))} contains {rec(e.arg(1))}"
     if z3.is_app_of(e, z3.Z3_OP_UMINUS):
         return "-" + rec(e.arg(0))
     for pred, op in ((z3.is_add, "+"), (z3.is_sub, "-"), (z3.is_mul, "*")):
@@ -364,6 +371,8 @@ class Cvc5Backend(Backend):
     def le(self, a, b): return self.tm.mkTerm(self.Kind.LEQ, a, b)
     def gt(self, a, b): return self.tm.mkTerm(self.Kind.GT, a, b)
     def ge(self, a, b): return self.tm.mkTerm(self.Kind.GEQ, a, b)
+
+    def contains(self, a, b): return self.tm.mkTerm(self.Kind.STRING_CONTAINS, a, b)
 
     def add(self, a, b): return self.tm.mkTerm(self.Kind.ADD, a, b)
     def sub(self, a, b): return self.tm.mkTerm(self.Kind.SUB, a, b)
@@ -503,6 +512,8 @@ def _cvc5_to_str(Kind, t) -> str:
             Kind.GT: ">", Kind.GEQ: ">="}
     if k in rels:
         return f"{rec(t[0])} {rels[k]} {rec(t[1])}"
+    if k == Kind.STRING_CONTAINS:
+        return f"{rec(t[0])} contains {rec(t[1])}"
     ariths = {Kind.ADD: "+", Kind.SUB: "-", Kind.MULT: "*"}
     if k in ariths:
         return "(" + f" {ariths[k]} ".join(rec(c) for c in kids(t)) + ")"

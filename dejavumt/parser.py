@@ -16,6 +16,7 @@ Currently supported (slice 1 -- untimed fragment):
     timed:         S/Z/U/P/H/F/G with a time bound: [a,b], [a,*], or the sugar
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
+    strings:       s contains "sub"   substring test over String terms
 
 Not yet supported (planned): recursive rules (where ... :=) and the seen-only
 lowercase exists/forall quantifiers.
@@ -103,6 +104,7 @@ _GRAMMAR = r"""
     ?leaf: "true"                          -> true_
          | "false"                         -> false_
          | sum OPER sum                     -> compare
+         | sum CONTAINS sum                 -> compare
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
          | "@" leaf                        -> prev
@@ -150,6 +152,11 @@ _GRAMMAR = r"""
          | "-" FLOAT        -> neg_float_const
 
     OPER: "<=" | ">=" | "<" | ">" | "="
+    // `contains` is a string substring test (s contains "sub"). It is an
+    // alphabetic keyword, so it must be boundary-guarded and excluded from NAME
+    // (below) just like the single-letter operators — else it would lex as the
+    // head of an identifier. .2 priority so a bare `contains` beats NAME.
+    CONTAINS.2: /contains(?![A-Za-z0-9_])/
     SORT: "String" | "Int" | "Real" | "Bool"
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
@@ -170,7 +177,7 @@ _GRAMMAR = r"""
     _F: /F(?![A-Za-z0-9_])/
     _G: /G(?![A-Za-z0-9_])/
 
-    NAME: /(?!(Exists|Forall|true|false)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(Exists|Forall|true|false|contains)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
     %import common.ESCAPED_STRING
     %import common.INT

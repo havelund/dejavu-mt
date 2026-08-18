@@ -147,6 +147,11 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                 s = next(iter(numeric))
                 for v in vs:
                     note(v, s)
+            elif g.op == "contains":
+                # `contains` is a string substring test; both operands are
+                # String. Type its bare variables so they never default to Int.
+                for v in vs:
+                    note(v, "String")
             elif g.op in ("<", "<=", ">", ">="):
                 # Order relation with no constant to fix the sort: remember the
                 # variables so they default to Int (DejaVu compares order
@@ -474,7 +479,8 @@ class FormulaMonitor:
         b = self.backend
         l = self._term_expr(c.left)
         r = self._term_expr(c.right)
-        return {"=": b.eq, "<": b.lt, "<=": b.le, ">": b.gt, ">=": b.ge}[c.op](l, r)
+        return {"=": b.eq, "<": b.lt, "<=": b.le, ">": b.gt, ">=": b.ge,
+                "contains": b.contains}[c.op](l, r)
 
     def _arg_sort(self, arg, psorts, j):
         """Sort of predicate argument position j: from the declaration if
