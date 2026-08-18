@@ -65,25 +65,25 @@ _GRAMMAR = r"""
              | ltl_sinceq
     ?ltl_and: ltl_and "&" ltl_since     -> and_
             | ltl_since
-    ?ltl_sinceq: leaf "S" timebound uleafq -> timed_since
-               | leaf "S" uleafq        -> since
-               | leaf "Z" timebound uleafq -> timed_zince
-               | leaf "Z" uleafq        -> zince
+    ?ltl_sinceq: leaf _S timebound uleafq -> timed_since
+               | leaf _S uleafq          -> since
+               | leaf _Z timebound uleafq -> timed_zince
+               | leaf _Z uleafq          -> zince
                | uleafq
-    ?ltl_since: leaf "S" timebound leaf -> timed_since
-              | leaf "S" leaf           -> since
-              | leaf "Z" timebound leaf -> timed_zince
-              | leaf "Z" leaf           -> zince
+    ?ltl_since: leaf _S timebound leaf -> timed_since
+              | leaf _S leaf            -> since
+              | leaf _Z timebound leaf -> timed_zince
+              | leaf _Z leaf            -> zince
               | leaf
 
     // Unary chain that may end in a quantifier (the "q" tail).
     ?uleafq: quant
            | "!" uleafq                     -> not_
            | "@" uleafq                     -> prev
-           | "P" timebound uleafq           -> timed_once
-           | "H" timebound uleafq           -> timed_hist
-           | "P" uleafq                     -> once
-           | "H" uleafq                     -> hist
+           | _P timebound uleafq            -> timed_once
+           | _H timebound uleafq            -> timed_hist
+           | _P uleafq                      -> once
+           | _H uleafq                      -> hist
            | leaf
 
     quant: "Exists" NAME "." ltl            -> exists
@@ -95,10 +95,10 @@ _GRAMMAR = r"""
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
          | "@" leaf                        -> prev
-         | "P" timebound leaf              -> timed_once
-         | "H" timebound leaf              -> timed_hist
-         | "P" leaf                        -> once
-         | "H" leaf                        -> hist
+         | _P timebound leaf               -> timed_once
+         | _H timebound leaf               -> timed_hist
+         | _P leaf                         -> once
+         | _H leaf                         -> hist
          | "[" ltl "," ltl ")"            -> interval
          | "(" ltl ")"                     -> parens
 
@@ -137,6 +137,18 @@ _GRAMMAR = r"""
     SORT: "String" | "Int" | "Real" | "Bool"
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
+
+    // Past-time operators S/Z/P/H are single uppercase letters. They MUST be
+    // word-boundary guarded, else the dynamic lexer matches them at the head of
+    // an ALLCAPS predicate name (e.g. "H" in HEATER_TURNED_ON), splitting it.
+    // The negative lookahead means the operator only lexes when NOT followed by
+    // an identifier char; NAME still matches such identifiers whole. The leading
+    // underscore filters these tokens from the parse tree, so the transformer
+    // sees the same shape it did when these were bare string literals.
+    _S: /S(?![A-Za-z0-9_])/
+    _Z: /Z(?![A-Za-z0-9_])/
+    _P: /P(?![A-Za-z0-9_])/
+    _H: /H(?![A-Za-z0-9_])/
 
     NAME: /(?!(Exists|Forall|true|false)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 

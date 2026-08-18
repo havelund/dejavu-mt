@@ -1,5 +1,6 @@
 """End-to-end tests for the DejaVuMT slice-1 engine."""
 from dejavumt import parse_spec, Monitor
+from dejavumt.ast import Forall, Hist, Since, Zince
 
 
 def verdicts(spec_text, events):
@@ -180,3 +181,52 @@ def test_once_and_hist():
     events = [{"p": [("1",)]}, {"p": [("2",)]}]
     # p(x) -> P p(x) is always true (P includes now), so no violations.
     assert violations(spec, events, "q") == []
+
+
+# --- operator vs. ALLCAPS-identifier lexing ----------------------------------
+# Regression: the past-time operators S/Z/P/H are single uppercase letters. With
+# a dynamic (Earley) lexer and no word boundary they matched the HEAD of an
+# ALLCAPS predicate name — e.g. "H" in HEATER_TURNED_ON, splitting it into
+# H + EATER_TURNED_ON — so verdicts silently referred to the wrong fact. Every
+# predicate below is chosen to START with an operator letter (P/H/S/Z) so a
+# regression re-splits it. All-lowercase specs (used elsewhere) never hit this.
+
+def test_once_does_not_split_H_prefixed_name():
+    # "X may only happen if Y happened before"  ==  X(c) -> P Y(c)
+    spec = """
+    pred AUTO_TO_MANUAL_ON_FAULT(c: String)
+    pred HEATER_TURNED_ON(c: String)
+    prop p : Forall c . AUTO_TO_MANUAL_ON_FAULT(c) -> P HEATER_TURNED_ON(c)
+    """
+    events = [
+        {"HEATER_TURNED_ON": [("ctrl",)]},
+        {"AUTO_TO_MANUAL_ON_FAULT": [("ctrl",)]},   # prior ON for ctrl -> ok
+        {"AUTO_TO_MANUAL_ON_FAULT": [("other",)]},  # no prior ON -> violation
+    ]
+    assert violations(spec, events, "p") == [3]
+
+
+def test_hist_does_not_split_H_prefixed_name():
+    # H (historically) applied to an H-prefixed name must keep the name whole.
+    spec = "pred HEALTHY(c: String)\nprop p : Forall c . H HEALTHY(c)\n"
+    body = parse_spec(spec).properties[0].body
+    assert isinstance(body, Forall) and isinstance(body.arg, Hist)
+    assert body.arg.arg.name == "HEALTHY"  # not "EALTHY"
+
+
+def test_since_does_not_split_S_prefixed_name():
+    # Binary S (since) between two S-prefixed names — neither may be split.
+    spec = ("pred SAFE(c: String)\npred STARTED(c: String)\n"
+            "prop p : Forall c . SAFE(c) S STARTED(c)\n")
+    body = parse_spec(spec).properties[0].body
+    assert isinstance(body.arg, Since)
+    assert body.arg.left.name == "SAFE" and body.arg.right.name == "STARTED"
+
+
+def test_zince_does_not_split_Z_and_P_prefixed_names():
+    # Binary Z (zince) between a Z-prefixed and a P-prefixed name.
+    spec = ("pred ZONE_CLEAR(c: String)\npred PRIMED(c: String)\n"
+            "prop p : Forall c . ZONE_CLEAR(c) Z PRIMED(c)\n")
+    body = parse_spec(spec).properties[0].body
+    assert isinstance(body.arg, Zince)
+    assert body.arg.left.name == "ZONE_CLEAR" and body.arg.right.name == "PRIMED"
