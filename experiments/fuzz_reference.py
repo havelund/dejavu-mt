@@ -141,9 +141,9 @@ def rand_formula(rng, depth):
     lo = rng.randint(0, 3)
     hi = rng.choice([None, lo + rng.randint(0, 4)])
     kind = rng.choice([
-        "not", "and", "or", "implies", "prev", "next",
-        "since", "once", "hist", "interval",
-        "tsince", "tonce", "thist",
+        "not", "and", "or", "implies", "iff", "prev", "next",
+        "since", "zince", "once", "hist", "interval",
+        "tsince", "tzince", "tonce", "thist",
         "fev", "falw", "funtil",
     ])
     sub = lambda: rand_formula(rng, depth - 1)   # noqa: E731
@@ -152,6 +152,9 @@ def rand_formula(rng, depth):
         "and": lambda: ast.And(sub(), sub()),
         "or": lambda: ast.Or(sub(), sub()),
         "implies": lambda: ast.Implies(sub(), sub()),
+        "iff": lambda: ast.Iff(sub(), sub()),
+        "zince": lambda: ast.Zince(sub(), sub()),
+        "tzince": lambda: ast.TimedZince(sub(), lo, hi, sub()),
         "prev": lambda: ast.Prev(sub()),
         "next": lambda: ast.Next(sub()),
         "since": lambda: ast.Since(sub(), sub()),
@@ -180,8 +183,9 @@ def rand_trace(rng, maxlen=14):
 # --- shrinking ----------------------------------------------------------------
 
 def disagrees(body, events, times):
-    spec = "prop q : " + str(body).replace("¬", "!").replace("∧", "&") \
-        .replace("∨", "|").replace("→", "->")
+    spec = ("prop q : " + str(body)
+            .replace("¬", "!").replace("∧", "&").replace("∨", "|")
+            .replace("↔", "<->").replace("→", "->"))
     try:
         got = monitored(spec, events, times)
     except Exception as e:

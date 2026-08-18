@@ -319,3 +319,15 @@ def test_fuzz_against_reference():
         events, times = fr.rand_trace(rng)
         assert fr.disagrees(body, events, times) is None, (
             f"{body} on {[sorted(e) for e in events]} @ {times}")
+
+
+def test_equal_timestamp_past_position_not_a_future_witness():
+    # Found by the reference fuzzer: with duplicate timestamps, a row in the
+    # time window may lie BEFORE the anchor position.  Position 2 must not
+    # count position 1's r as its future witness.
+    events = [({"r": [()]}, 5), ({"q": [()]}, 5)]
+    assert run("prop q : F[<=4] r", events) == [True, False]
+    assert run("prop q : F[<=4] F[<=2] r", events) == [True, False]
+    # dual: position 1's !p must not refute position 2's G either
+    ev2 = [({"q": [()]}, 5), ({"p": [()]}, 5)]
+    assert run("prop q : G[<=4] p", ev2) == [False, True]

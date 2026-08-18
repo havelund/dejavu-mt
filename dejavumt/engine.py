@@ -344,6 +344,11 @@ class FormulaMonitor:
         return {"low": low, "high": high, "clock": clock,
                 "t": b.const(f"_ft{n}", "Int"),
                 "t2": b.const(f"_fw{n}", "Int") if witness else None,
+                # Witness rows also carry their POSITION: with duplicate
+                # timestamps, a time in the window does not imply a position
+                # at or after the anchor (until is immune: runs are per
+                # position by construction).
+                "p": b.const(f"_fp{n}", "Int"),
                 "fvars": fv}
 
     def _compile(self, f: ast.LTL) -> int:
@@ -724,10 +729,13 @@ class FormulaMonitor:
             self.ftab[j] = (A, W)
         else:
             (S,) = self.ftab[j]
-            # For G the table records phi's counterexamples.
+            # For G the table records phi's counterexamples.  Each row carries
+            # its clock stamp AND its position: with duplicate timestamps a
+            # row in the time window may still lie before the anchor position.
             obs = b.not_(psi) if self.nodes[j].kind in FUTURE_NEGATED else psi
             self.ftab[j] = (self._fnorm(
-                b.or_(S, b.and_(obs, b.eq(t, b.lit(clockval, "Int"))))),)
+                b.or_(S, b.and_(obs, b.eq(t, b.lit(clockval, "Int")),
+                                b.eq(d["p"], b.lit(self.position, "Int"))))),)
 
     def _fnorm(self, v):
         return v if self.weak else self._normalize(v)
@@ -748,12 +756,17 @@ class FormulaMonitor:
         else:
             (body,) = self.ftab[j]
             stamp = t
+            # Future means positions >= the anchor's, not merely times in the
+            # window (they differ when timestamps repeat).
+            body = b.and_(body, b.ge(d["p"], b.lit(pos, "Int")))
         body = b.and_(body, b.ge(stamp, b.lit(anchor + lo, "Int")))
         if hi is not None:
             body = b.and_(body, b.le(stamp, b.lit(anchor + hi, "Int")))
         q = b.exists(stamp, body)
         if nd.kind == "funtil":
             q = b.exists(t, q)
+        else:
+            q = b.exists(d["p"], q)
         return self._normalize(self._eliminate(q))
 
     def _fval(self, j, pos, anchor):
