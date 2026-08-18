@@ -74,7 +74,9 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
     print(f"Solver: {monitor.backend.name}"
           + (f"   (GC every {GC_PERIOD} events)" if gc else "")
           + ("   (timed: last log column is the timestamp)" if monitor.timed
-             else ""))
+             else "")
+          + ("   (future operators: verdicts may be reported late)"
+             if monitor.future else ""))
     if strong and not monitor.backend.supports_strong:
         print(f"(note: 'strong' is not supported by {monitor.backend.name}; ignored)")
     print(f"Monitoring {len(monitor.formulas)} property(ies):\n")
@@ -98,40 +100,53 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
 
     violations = 0
     line_nr = 0
-    trace_lines = []
+    facts = {}            # position -> displayed event
+    verdicts_at = {}      # (position, property) -> holds
     for item in read_events(logfile, timed=monitor.timed):
         event, ts = item if monitor.timed else (item, None)
         line_nr += 1
+        facts[line_nr] = _fact(event) + (f" @ {ts}" if monitor.timed else "")
         verdicts = monitor.step(event, ts)
         if debug:
             at = f" @ {ts}" if monitor.timed else ""
             print(f"\n----- event {line_nr}: {_fact(event)}{at} -----\n")
-        if trace:
-            tags = "   ".join(f"{fm.name}: {_verdict_tag(verdicts[fm.name])}"
-                              for fm in monitor.formulas)
-            fact = _fact(event) + (f" @ {ts}" if monitor.timed else "")
-            line = f"{line_nr:>5}  {fact:<28}  {tags}"
-            # With debug, defer the trace to a contiguous block so it is not
-            # scattered between the per-event formula trees.
-            if debug:
-                trace_lines.append(line)
-            else:
-                print(line)
-        if debug:
             for fm in monitor.formulas:
                 # After step(), fm.pre holds the states just computed and
                 # fm.preval the exported values (differing at timed nodes).
                 print(fm.render_tree(values=fm.pre, exported=fm.preval,
                                      color=sys.stdout.isatty()))
-        for name, holds in verdicts.items():
+                if fm.pending:
+                    # The notebook: positions still awaiting their verdict.
+                    # (The root's annotation above is its value assuming
+                    # nothing further arrives, not a verdict.)
+                    poss = ", ".join(str(o["pos"]) for o in fm.pending)
+                    print(f"   pending obligations for position(s): {poss}")
+        for pos, name, holds in monitor.resolved:
+            verdicts_at[(pos, name)] = holds
             if not holds:
                 violations += 1
                 if not debug and not trace:
-                    print(f"*** Violation of {name} at event {line_nr}: {_fact(event)}")
+                    late = "" if pos == line_nr else f" (determined at event {line_nr})"
+                    print(f"*** Violation of {name} at event {pos}: "
+                          f"{facts[pos]}{late}")
+    # Close every remaining window: with future operators some positions are
+    # still awaiting their verdict when the trace ends.
+    for pos, name, holds in monitor.end():
+        verdicts_at[(pos, name)] = holds
+        if not holds:
+            violations += 1
+            if not debug and not trace:
+                print(f"*** Violation of {name} at event {pos}: "
+                      f"{facts[pos]} (determined at end of trace)")
 
-    if trace and debug:
-        print("\n===== trace =====\n")
-        print("\n".join(trace_lines))
+    if trace:
+        print("\n===== trace =====\n" if debug else "")
+        for pos in range(1, line_nr + 1):
+            tags = "   ".join(
+                f"{fm.name}: {_verdict_tag(verdicts_at[(pos, fm.name)])}"
+                if (pos, fm.name) in verdicts_at else f"{fm.name}: pending"
+                for fm in monitor.formulas)
+            print(f"{pos:>5}  {facts[pos]:<28}  {tags}")
     print(f"\nProcessed {line_nr} events, {violations} violation(s).")
     return 1 if violations else 0
 

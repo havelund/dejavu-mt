@@ -2646,20 +2646,40 @@
  {
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log1.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "zince-operator"
+  "events": 5,
+  "dejavu_violations": [],
+  "mt_violations": [],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log2.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "zince-operator"
+  "events": 7,
+  "dejavu_violations": [
+   3,
+   4
+  ],
+  "mt_violations": [
+   3,
+   4
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test52_time/spec.qtl",
   "log": "src/test/scala/tests/test52_time/log3.timed.csv",
-  "status": "SKIP_UNSUPPORTED",
-  "reason": "zince-operator"
+  "events": 13,
+  "dejavu_violations": [
+   4,
+   10,
+   13
+  ],
+  "mt_violations": [
+   4,
+   10,
+   13
+  ],
+  "status": "MATCH"
  },
  {
   "spec": "src/test/scala/tests/test53_time/spec.qtl",

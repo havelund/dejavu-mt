@@ -58,6 +58,7 @@
         font-size: 13px; vertical-align: top; }
   td.holds { color: var(--green); }
   td.viol { color: var(--red); font-weight: 600; }
+  td.pend { color: var(--dim); font-style: italic; }
   tr.violrow td:first-child { border-left: 3px solid var(--red); }
   tr.treerow.hidden { display: none; }
   .treename { color: var(--dim); font-size: 12px; margin: 4px 0 0 2px; }
@@ -187,6 +188,13 @@
     <code>H</code> — it follows as <code>value:&nbsp;…</code>. Colors:
     <span class="tv">true</span>, <span class="fv">false</span>,
     <span class="ov">other formula</span>.</p>
+
+    <h3>Future operators</h3>
+    <p><code>X</code> (next), <code>U</code> (until), <code>F</code>
+    (eventually), <code>G</code> (always), with the same optional time bounds.
+    A position's verdict may then arrive at a <i>later</i> event (or at the
+    end of the trace, which closes every window); until it does, the trace
+    shows <i>pending</i>, and the row is filled in when the verdict lands.</p>
 
     <h3>Timed properties</h3>
     <p>If the spec uses time bounds (<code>S[a,b]</code>, <code>S[&lt;=n]</code>,
@@ -360,14 +368,16 @@ function render(res) {
        (res.timed ? '<th>time</th>' : '') +
        props.map(p => `<th>${esc(p)}</th>`).join('') + '</tr>';
   for (const ev of res.events) {
-    const anyViol = props.some(p => !ev.verdicts[p]);
+    const anyViol = props.some(p => ev.verdicts[p] === false);
     const cls = [anyViol ? 'violrow' : '', ev.trees ? 'clickable evrow' : '']
         .join(' ').trim();
     h += `<tr${cls ? ` class="${cls}"` : ''} data-nr="${ev.nr}"` +
          `${ev.trees ? ' title="click to toggle formula trees"' : ''}>` +
          `<td>${ev.nr}</td><td>${esc(ev.fact)}</td>` +
          (res.timed ? `<td>${ev.ts}</td>` : '') +
-         props.map(p => ev.verdicts[p]
+         props.map(p => ev.verdicts[p] === null
+             ? '<td class="pend">pending</td>'
+             : ev.verdicts[p]
              ? '<td class="holds">holds</td>'
              : '<td class="viol">VIOLATED</td>').join('') + '</tr>';
     if (ev.trees) {

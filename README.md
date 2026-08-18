@@ -215,6 +215,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | formula "&"  formula
                   | leaf "S" [timebound] leaf           // since (optionally timed)
                   | leaf "Z" [timebound] leaf           // zince (optionally timed)
+                  | leaf "U" [timebound] leaf           // until  (future)
                   | leaf
     leaf        ::= "true" | "false"
                   | expr relop expr                     // relation
@@ -223,6 +224,9 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | "@" leaf                            // previous
                   | "P" [timebound] leaf                // once   (sometime in the past)
                   | "H" [timebound] leaf                // historically (always in the past)
+                  | "X" leaf                            // next   (future)
+                  | "F" [timebound] leaf                // eventually (future)
+                  | "G" [timebound] leaf                // always (future)
                   | "[" formula "," formula ")"         // interval
                   | "(" formula ")"
     relop       ::= "=" | "<" | "<=" | ">" | ">="
@@ -257,12 +261,51 @@ Past-time temporal (all refer only to the past and present):
 | `H phi` | `phi` held at **every** past-or-present step; equal to `!P!phi` |
 | `[phi, psi)` | `phi` held at some past-or-present step and `psi` has **not** held since (half-open interval) |
 
+Future (they refer to events not yet read, so their verdicts may arrive late —
+see below):
+
+| operator | meaning |
+|---|---|
+| `X phi` | `phi` holds at the **next** step (future dual of `@`) |
+| `phi U psi` | `psi` holds at some present-or-future step and `phi` holds at every step until then (**until**) |
+| `F phi` | `phi` holds at some present-or-future step (**eventually**); `= true U phi` |
+| `G phi` | `phi` holds at **every** present-or-future step (**always**); `= !F!phi` |
+
+`U`, `F` and `G` take the same optional time bound as the past operators
+(`F[<=5] ack`, `busy U[2,7] ack`, `G[0,60] !alarm`). Unbounded `F`, `G`, `U`
+and `X` need no timestamps and work on ordinary untimed logs.
+
 Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
 (possibly infinite) domain of `x`'s type; they translate directly to Z3
 quantifiers.  A quantifier scopes over everything to its right, and may also
 appear nested in operand position (`! Exists i . phi`, `a | Exists m . phi`),
 again scoping to the end of the enclosing formula; parenthesize to limit the
 scope.
+
+### Future operators and delayed verdicts
+
+A property with a future operator cannot in general be judged at its own
+position — whether `F[<=5] ack(x)` holds at event *i* depends on events not
+yet read. The monitor therefore parks the requirement and returns to it as
+events arrive, so **a position's verdict may be reported at a later event**,
+or at the end of the trace, which closes every window (an unwitnessed `F`
+becomes false, an unrefuted `G` true). Bounded intervals bound the delay.
+
+    prop resp : Forall x . req(x) -> F[<=5] ack(x)
+
+    req,a,3       position 1: pending
+    ack,b,4       holds at once (no req)
+    ack,a,6       answers position 1 -> holds, reported here (deadline was 8)
+    req,c,10      pending
+    other,x,20    deadline 15 has passed -> position 4 VIOLATED, reported here
+
+The `trace` table is therefore printed once the trace has been read, with
+every position's verdict filled in (`pending` if it never resolved), and
+`debug` lists under each tree the positions still awaiting a verdict. In the
+library API, `Monitor.step()` returns the verdict *for this position* —
+possibly `None` — while `Monitor.resolved` holds every `(position, property,
+holds)` determined by that step, and `Monitor.end()` must be called after the
+last event. See `doc/future.md` for the design.
 
 ### Timed (metric) operators
 
@@ -346,16 +389,19 @@ parser.
 
 Implemented: the first-order fragment — propositional connectives,
 `@ S Z P H` and intervals, quantifiers (top-level and nested), macros, typed
-relations with arithmetic (`+ - *`), and the timed operators
+relations with arithmetic (`+ - *`), the timed operators
 `S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
-sugar;
+sugar, and the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`;
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader
 emits one fact per line.
 
 Not yet implemented: recursive rules (`where ... :=`) and the seen-only
-lowercase `exists`/`forall`. Growth from
+lowercase `exists`/`forall`. A future operator must occur under the
+propositional connectives and quantifiers only — not below a past-time
+operator, and not inside another future operator's argument (rejected at
+compile time with a message). Growth from
 genuinely-live data (many distinct values live at once) is not yet bounded —
 `gc` reclaims dead terms but not a large live set, which would need a more
 compact set encoding.

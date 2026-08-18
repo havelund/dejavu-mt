@@ -1,6 +1,6 @@
 # A/B validation: DejaVu vs DejaVuMT
 
-solver: z3; max events/log: 1000; pairs: 333; wall time: 2090s
+solver: z3; max events/log: 1000; pairs: 333; wall time: 1888s
 
 ## Summary
 
@@ -10,12 +10,11 @@ solver: z3; max events/log: 1000; pairs: 333; wall time: 2090s
 
 The 13 MT_TIMEOUT pairs (file/prop, locks/dataraces, test18_gc spec4+5,
 test2_fmcad_file — quantifier-heavy specs whose qe2 cost grows with the
-accumulated formula) were rerun at 300-event prefixes with a 300s timeout:
-**all 13 MATCH**.  Total: 206 comparable pairs, 206 identical verdicts,
-0 mismatches.  Skips: 66 lowercase-quantifier, 59 rules, 2 empty spec
-(test29_renaming/spec2.qtl).  (The three test52 Z[<=10] pairs, previously
-skipped, MATCH since Z was implemented: 0, 2 and 3 violations respectively,
-identical in both tools.)
+accumulated formula) all MATCH at 300-event prefixes with a 300s timeout
+(re-confirmed 2026-07-25).  Total: 206 comparable pairs, 206 identical
+verdicts, 0 mismatches.  Skips: 66 lowercase-quantifier, 59 rules, 2 empty
+spec.  This sweep re-run (2026-08-09) confirms the future-operator
+extension (X/U/F/G) changed no past-fragment verdict.
 
 ## Pairs
 

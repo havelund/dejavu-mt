@@ -277,6 +277,59 @@ class TimedHist(LTL):
 
 
 @dataclass(frozen=True)
+class Next(LTL):
+    """X phi  -- phi holds at the next step (future dual of @)."""
+    arg: LTL
+
+    def __str__(self) -> str:
+        return f"X {_b(self.arg)}"
+
+
+@dataclass(frozen=True)
+class TimedUntil(LTL):
+    """phi U[a,b] psi  -- psi holds at some position between `low` and `high`
+    time units ahead, and phi holds at every position from now until then.
+    high=None means no upper bound (written `*`)."""
+    left: LTL
+    low: int
+    high: Optional[int]
+    right: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"({_b(self.left)} U{b} {_b(self.right)})"
+
+
+@dataclass(frozen=True)
+class TimedEventually(LTL):
+    """F[a,b] phi  -- phi holds at some position between `low` and `high` time
+    units ahead;  = true U[a,b] phi."""
+    low: int
+    high: Optional[int]
+    arg: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"F{b} {_b(self.arg)}"
+
+
+@dataclass(frozen=True)
+class TimedAlways(LTL):
+    """G[a,b] phi  -- phi holds at every position between `low` and `high` time
+    units ahead;  = !F[a,b]!phi."""
+    low: int
+    high: Optional[int]
+    arg: LTL
+    disp: str = ""
+
+    def __str__(self) -> str:
+        b = self.disp or bound_str(self.low, self.high)
+        return f"G{b} {_b(self.arg)}"
+
+
+@dataclass(frozen=True)
 class Interval(LTL):
     """[phi, psi)  -- phi has occurred (incl. now) and psi has not occurred since."""
     left: LTL

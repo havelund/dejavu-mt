@@ -1,0 +1,4 @@
+pred req(x: String)
+pred ack(x: String)
+
+prop resp : Forall x . req(x) -> F[<=5] ack(x)

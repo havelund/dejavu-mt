@@ -210,7 +210,7 @@ def test_untimed_hist_dedicated_node():
     m = Monitor(parse_spec(spec))
     kinds = [n.kind for n in m.formulas[0].nodes]
     assert "hist" in kinds and "once" not in kinds
-    vs = [m.formulas[0].step(ev) for ev in
+    vs = [m.step(ev)["q"] for ev in
           [{"p": [()]}, {"p": [()]}, {"r": [()]}, {"p": [()]}]]
     assert vs == [True, True, False, False]
 

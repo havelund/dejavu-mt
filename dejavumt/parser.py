@@ -11,7 +11,9 @@ Currently supported (slice 1 -- untimed fragment):
     properties:    prop name : <ltl>
 
     operators:     -> <-> | & ! @ S Z P H [_,_)  Exists/Forall
-    timed:         S/Z/P/H with a time bound: [a,b], [a,*], or the sugar
+    future:        X (next), U (until), F (eventually), G (always), with or
+                   without a time bound -- verdicts may then be delayed
+    timed:         S/Z/U/P/H/F/G with a time bound: [a,b], [a,*], or the sugar
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
 
@@ -69,21 +71,30 @@ _GRAMMAR = r"""
                | leaf _S uleafq          -> since
                | leaf _Z timebound uleafq -> timed_zince
                | leaf _Z uleafq          -> zince
+               | leaf _U timebound uleafq -> timed_until
+               | leaf _U uleafq          -> until_
                | uleafq
     ?ltl_since: leaf _S timebound leaf -> timed_since
               | leaf _S leaf            -> since
               | leaf _Z timebound leaf -> timed_zince
               | leaf _Z leaf            -> zince
+              | leaf _U timebound leaf -> timed_until
+              | leaf _U leaf            -> until_
               | leaf
 
     // Unary chain that may end in a quantifier (the "q" tail).
     ?uleafq: quant
            | "!" uleafq                     -> not_
            | "@" uleafq                     -> prev
+           | _X uleafq                      -> next_
            | _P timebound uleafq            -> timed_once
            | _H timebound uleafq            -> timed_hist
+           | _F timebound uleafq            -> timed_ev
+           | _G timebound uleafq            -> timed_alw
            | _P uleafq                      -> once
            | _H uleafq                      -> hist
+           | _F uleafq                      -> eventually
+           | _G uleafq                      -> always
            | leaf
 
     quant: "Exists" NAME "." ltl            -> exists
@@ -95,10 +106,15 @@ _GRAMMAR = r"""
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
          | "@" leaf                        -> prev
+         | _X leaf                         -> next_
          | _P timebound leaf               -> timed_once
          | _H timebound leaf               -> timed_hist
+         | _F timebound leaf               -> timed_ev
+         | _G timebound leaf               -> timed_alw
          | _P leaf                         -> once
          | _H leaf                         -> hist
+         | _F leaf                         -> eventually
+         | _G leaf                         -> always
          | "[" ltl "," ltl ")"            -> interval
          | "(" ltl ")"                     -> parens
 
@@ -149,6 +165,10 @@ _GRAMMAR = r"""
     _Z: /Z(?![A-Za-z0-9_])/
     _P: /P(?![A-Za-z0-9_])/
     _H: /H(?![A-Za-z0-9_])/
+    _U: /U(?![A-Za-z0-9_])/
+    _X: /X(?![A-Za-z0-9_])/
+    _F: /F(?![A-Za-z0-9_])/
+    _G: /G(?![A-Za-z0-9_])/
 
     NAME: /(?!(Exists|Forall|true|false)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
@@ -292,6 +312,28 @@ class _ToAst(Transformer):
 
     def timed_zince(self, l, tb, r):
         return ast.TimedZince(l, tb[0], tb[1], r, tb[2])
+
+    # --- future operators (verdicts may be delayed) ---
+    def next_(self, f):
+        return ast.Next(f)
+
+    def until_(self, l, r):
+        return ast.TimedUntil(l, 0, None, r, "")
+
+    def timed_until(self, l, tb, r):
+        return ast.TimedUntil(l, tb[0], tb[1], r, tb[2])
+
+    def eventually(self, f):
+        return ast.TimedEventually(0, None, f, "")
+
+    def timed_ev(self, tb, f):
+        return ast.TimedEventually(tb[0], tb[1], f, tb[2])
+
+    def always(self, f):
+        return ast.TimedAlways(0, None, f, "")
+
+    def timed_alw(self, tb, f):
+        return ast.TimedAlways(tb[0], tb[1], f, tb[2])
 
     def timed_once(self, tb, f):
         return ast.TimedOnce(tb[0], tb[1], f, tb[2])

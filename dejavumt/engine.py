@@ -54,11 +54,12 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
         return ast.Pred(f.name, tuple(_subst_term(a, m) for a in f.args))
     if isinstance(f, ast.Compare):
         return ast.Compare(_subst_term(f.left, m), f.op, _subst_term(f.right, m))
-    if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
+    if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(_subst(f.arg, m))
-    if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
+    if isinstance(f, (ast.TimedOnce, ast.TimedHist,
+                      ast.TimedEventually, ast.TimedAlways)):
         return type(f)(f.low, f.high, _subst(f.arg, m), f.disp)
-    if isinstance(f, (ast.TimedSince, ast.TimedZince)):
+    if isinstance(f, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
         return type(f)(_subst(f.left, m), f.low, f.high,
                        _subst(f.right, m), f.disp)
     if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
@@ -83,11 +84,12 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
         return expand_macros(_subst(mac.body, mapping), macros)
     if isinstance(f, (ast.TrueC, ast.FalseC, ast.Pred, ast.Compare)):
         return f
-    if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist)):
+    if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(expand_macros(f.arg, macros))
-    if isinstance(f, (ast.TimedOnce, ast.TimedHist)):
+    if isinstance(f, (ast.TimedOnce, ast.TimedHist,
+                      ast.TimedEventually, ast.TimedAlways)):
         return type(f)(f.low, f.high, expand_macros(f.arg, macros), f.disp)
-    if isinstance(f, (ast.TimedSince, ast.TimedZince)):
+    if isinstance(f, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
         return type(f)(expand_macros(f.left, macros), f.low, f.high,
                        expand_macros(f.right, macros), f.disp)
     if isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
@@ -150,12 +152,13 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                 # variables so they default to Int (DejaVu compares order
                 # relations numerically), unless something else types them.
                 ordered_vars.update(vs)
-        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist,
-                            ast.TimedOnce, ast.TimedHist)):
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
+                            ast.TimedOnce, ast.TimedHist,
+                            ast.TimedEventually, ast.TimedAlways)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
                             ast.TimedSince, ast.Zince, ast.TimedZince,
-                            ast.Interval)):
+                            ast.TimedUntil, ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -190,12 +193,13 @@ def collect_vars(f: ast.LTL) -> set:
         elif isinstance(g, ast.Compare):
             term(g.left)
             term(g.right)
-        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist,
-                            ast.TimedOnce, ast.TimedHist)):
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
+                            ast.TimedOnce, ast.TimedHist,
+                            ast.TimedEventually, ast.TimedAlways)):
             walk(g.arg)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
                             ast.TimedSince, ast.Zince, ast.TimedZince,
-                            ast.Interval)):
+                            ast.TimedUntil, ast.Interval)):
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
@@ -209,6 +213,17 @@ def collect_vars(f: ast.LTL) -> set:
 # ---------------------------------------------------------------------------
 # Compiled node
 # ---------------------------------------------------------------------------
+
+# Future-operator node kinds.  Their value at a position generally depends on
+# events not yet read, so instead of a value they contribute an obligation that
+# is resolved later (see the "Bounded Future Operators" section of the paper).
+FUTURE_KINDS = ("fev", "falw", "funtil", "fnext")
+# Future nodes whose export is the negation of their table query.
+FUTURE_NEGATED = ("falw",)
+# Node kinds that are pure functions of their children's values (no state), so
+# an obligation's value can be recomputed through them at check time.
+STATELESS_KINDS = ("not", "and", "or", "implies", "iff", "exists", "forall")
+
 
 class _Node:
     __slots__ = ("kind", "children", "data", "label")
@@ -247,8 +262,23 @@ class FormulaMonitor:
         self.pre = [backend.false()] * n
         self.now = [backend.false()] * n
         self.preval = [backend.false()] * n
-        self.timed = any(nd.kind in ("tsince", "tzince", "tonce", "thist")
-                         for nd in self.nodes)
+        # --- future operators: obligations, polarity, table storage ---
+        self.fnodes = [j for j, nd in enumerate(self.nodes)
+                       if nd.kind in FUTURE_KINDS]
+        self.future = bool(self.fnodes)
+        self.pending: List[dict] = []     # parked obligations (the notebook)
+        self.position = 0                 # index of the last processed event
+        self.ftab: Dict[int, tuple] = {}  # future node -> its stamped table(s)
+        for j in self.fnodes:
+            self.ftab[j] = ((backend.false(), backend.false())
+                            if self.nodes[j].kind == "funtil"
+                            else (backend.false(),))
+        self._polarity = self._compute_polarity()
+        self._path = self._future_path()   # nodes recomputed when checking
+        self.timed = (any(nd.kind in ("tsince", "tzince", "tonce", "thist")
+                          for nd in self.nodes)
+                      or any(self.nodes[j].data["clock"] == "time"
+                             for j in self.fnodes))
         self._time = None            # current event's timestamp (timed specs)
         self._prev_time = None       # previous event's timestamp (tzince)
         self.strong = False          # if True, use solver-backed strong simplify
@@ -261,6 +291,18 @@ class FormulaMonitor:
     def _add(self, kind, children, data=None) -> int:
         self.nodes.append(_Node(kind, children, data))
         return len(self.nodes) - 1
+
+    def _fdata(self, low, high, clock=None, witness=False):
+        """Compile-time data of a future node: window, clock, and its own time
+        constants.  A window that is neither bounded above nor delayed below
+        ([0,*]) needs no timestamps, so it is stamped by position instead."""
+        if clock is None:
+            clock = "pos" if (low == 0 and high is None) else "time"
+        n = len(self.nodes)
+        b = self.backend
+        return {"low": low, "high": high, "clock": clock,
+                "t": b.const(f"_ft{n}", "Int"),
+                "t2": b.const(f"_fw{n}", "Int") if witness else None}
 
     def _compile(self, f: ast.LTL) -> int:
         idx = self._compile_inner(f)
@@ -331,6 +373,22 @@ class FormulaMonitor:
             tc = self.backend.const(f"_t{len(self.nodes)}", "Int")
             return self._add("thist", [self._compile(f.arg)],
                              (f.low, f.high, tc))
+        if isinstance(f, ast.Next):
+            # X phi: the future dual of @.  Stamped by POSITION, window [1,1].
+            return self._add("fnext", [self._compile(f.arg)],
+                             self._fdata(1, 1, clock="pos"))
+        if isinstance(f, ast.TimedEventually):
+            return self._add("fev", [self._compile(f.arg)],
+                             self._fdata(f.low, f.high))
+        if isinstance(f, ast.TimedAlways):
+            # G[a,b] phi: table of phi's counterexamples; export = negation.
+            return self._add("falw", [self._compile(f.arg)],
+                             self._fdata(f.low, f.high))
+        if isinstance(f, ast.TimedUntil):
+            l = self._compile(f.left)
+            r = self._compile(f.right)
+            return self._add("funtil", [l, r],
+                             self._fdata(f.low, f.high, witness=True))
         if isinstance(f, ast.Interval):
             return self._add("interval", [self._compile(f.left), self._compile(f.right)])
         if isinstance(f, ast.Exists):
@@ -407,15 +465,19 @@ class FormulaMonitor:
 
     # --- per-event evaluation ---
 
-    def step(self, event: Dict[str, List[Tuple]], time: int = None) -> bool:
-        """Process one event; return True if the property still holds.  For a
-        timed property `time` is the event's (absolute, non-decreasing integer)
+    def step(self, event: Dict[str, List[Tuple]], time: int = None):
+        """Process one event; return the verdicts it determines, as a list of
+        (position, holds) pairs.  Without future operators that is always the
+        verdict for this position; with them a position's verdict may be
+        emitted at a later event, and several may arrive at once.  For a timed
+        property `time` is the event's (absolute, non-decreasing integer)
         timestamp."""
         if self.timed and time is None:
             raise ValueError(
                 f"property {self.name} uses timed operators; "
                 f"events need timestamps (timed log: last CSV column)")
         self._time = time
+        self.position += 1
         b = self.backend
         now = self.now
         pre = self.pre
@@ -488,6 +550,19 @@ class FormulaMonitor:
                 nowval[i] = self._normalize(
                     b.not_(self._tsince_value(node, now[i])))
                 continue
+            elif k in FUTURE_KINDS:
+                # The node records what this event observed, then exports its
+                # query's value over the table so far -- a lower bound on the
+                # eventual answer, and the first check of any obligation this
+                # position creates.
+                clockval = self._clock(i, self.position, time)
+                phi = nowval[ch[0]] if k == "funtil" else b.true()
+                psi = nowval[ch[-1]]
+                self._future_update(i, phi, psi, clockval)
+                q = self._fquery(i, self.position, clockval)
+                nowval[i] = b.not_(q) if k in FUTURE_NEGATED else q
+                now[i] = self.ftab[i][0]      # for debug rendering
+                continue
             elif k == "exists":
                 v = self._eliminate(b.exists(self.consts[node.data], nowval[ch[0]]))
             elif k == "forall":
@@ -496,7 +571,16 @@ class FormulaMonitor:
                 raise RuntimeError(f"unknown node kind {k}")
             now[i] = self._normalize(v)
             nowval[i] = now[i]
-        holds = self._verdict(nowval[self.root])
+        if self.future:
+            # This position's verdict may depend on events not yet read: park
+            # the root's value as an obligation, then check the whole notebook
+            # (the new entry included -- it resolves at once when the future
+            # parts turn out not to matter).
+            self.pending.append({"pos": self.position, "time": time,
+                                 "vals": list(nowval)})
+            resolved = self._check_pending()
+        else:
+            resolved = [(self.position, self._verdict(nowval[self.root]))]
         self.pre = now
         self.preval = nowval
         self._prev_time = time
@@ -504,7 +588,272 @@ class FormulaMonitor:
         self._steps += 1
         if self.gc_period and self._steps % self.gc_period == 0:
             self._collect_garbage()
-        return holds
+        return resolved
+
+    # --- future operators: obligations and their resolution ---
+
+    def _compute_polarity(self):
+        """Each node's polarity with respect to the root: +1 under an even
+        number of negations, -1 under an odd number, 0 if it occurs in both
+        senses (under an iff) or below a stateful node."""
+        pol = {}
+
+        def go(i, p):
+            pol[i] = p
+            k = self.nodes[i].kind
+            ch = self.nodes[i].children
+            if k == "not":
+                go(ch[0], -p)
+            elif k == "implies":
+                go(ch[0], -p)
+                go(ch[1], p)
+            elif k == "iff":
+                for c in ch:
+                    go(c, 0)
+            elif k in ("and", "or", "exists", "forall"):
+                for c in ch:
+                    go(c, p)
+            else:
+                for c in ch:
+                    go(c, 0)
+
+        go(self.root, 1)
+        return pol
+
+    def _future_path(self):
+        """The nodes whose value must be recomputed when an obligation is
+        checked: every future node and every ancestor of one.  All strict
+        ancestors must be stateless, so that recomputation is exact; a future
+        operator below a past-time operator, or inside another future
+        operator's argument, is rejected (its value would have to be known at
+        earlier positions, which the design defers to future work)."""
+        if not self.fnodes:
+            return []
+        parent = {}
+        for i, nd in enumerate(self.nodes):
+            for c in nd.children:
+                parent[c] = i
+        path = set()
+        for j in self.fnodes:
+            path.add(j)
+            i = parent.get(j)
+            while i is not None:
+                k = self.nodes[i].kind
+                if k not in STATELESS_KINDS:
+                    raise ValueError(
+                        f"property {self.name}: a future operator occurs below "
+                        f"'{self.nodes[i].label or k}'; future operators are "
+                        f"currently supported only under the propositional "
+                        f"connectives and quantifiers")
+                path.add(i)
+                i = parent.get(i)
+        return sorted(path)
+
+    def _clock(self, j, pos, time):
+        return pos if self.nodes[j].data["clock"] == "pos" else time
+
+    def _future_update(self, j, phi, psi, clockval):
+        """Extend a future node's table(s) with what this event observed.
+        Everything recorded is an observed fact, stamped with the clock value
+        of the position at which it was observed.  For until, a *run* is
+        identified by the POSITION at which it starts (positions are unique;
+        timestamps need not be), while the witness stamp uses the clock."""
+        b = self.backend
+        d = self.nodes[j].data
+        t, t2 = d["t"], d["t2"]
+        if self.nodes[j].kind == "funtil":
+            A, W = self.ftab[j]
+            # Runs that reach this position: those that survived the previous
+            # one, plus the run starting here (identified by position).
+            A = self._fnorm(b.or_(A, b.eq(t, b.lit(self.position, "Int"))))
+            # A row of W is an answered run: the run begun at position t was
+            # answered by a psi with clock stamp t2.  One witness answers every
+            # run reaching here -- phi is required strictly *before* the
+            # witness, so it is tested after this, not before.
+            W = self._fnorm(b.or_(W, b.and_(psi, A,
+                                            b.eq(t2, b.lit(clockval, "Int")))))
+            # To reach the next position a run needs phi at this one.
+            A = self._fnorm(b.and_(phi, A))
+            self.ftab[j] = (A, W)
+        else:
+            (S,) = self.ftab[j]
+            # For G the table records phi's counterexamples.
+            obs = b.not_(psi) if self.nodes[j].kind in FUTURE_NEGATED else psi
+            self.ftab[j] = (self._fnorm(
+                b.or_(S, b.and_(obs, b.eq(t, b.lit(clockval, "Int"))))),)
+
+    def _fnorm(self, v):
+        return v if self.weak else self._normalize(v)
+
+    def _fquery(self, j, pos, anchor):
+        """The node's query for an obligation created at position `pos` with
+        clock anchor `anchor`: is there a witness row whose stamp lies in the
+        anchor's window (for until: belonging to this position's run)?  Both
+        are concrete numerals; the stamp variables are what the query binds."""
+        b = self.backend
+        nd = self.nodes[j]
+        d = nd.data
+        lo, hi, t, t2 = d["low"], d["high"], d["t"], d["t2"]
+        if nd.kind == "funtil":
+            _, body = self.ftab[j]
+            body = b.and_(body, b.eq(t, b.lit(pos, "Int")))
+            stamp = t2
+        else:
+            (body,) = self.ftab[j]
+            stamp = t
+        body = b.and_(body, b.ge(stamp, b.lit(anchor + lo, "Int")))
+        if hi is not None:
+            body = b.and_(body, b.le(stamp, b.lit(anchor + hi, "Int")))
+        q = b.exists(stamp, body)
+        if nd.kind == "funtil":
+            q = b.exists(t, q)
+        return self._normalize(self._eliminate(q))
+
+    def _fexact(self, j, pos, anchor, clockval):
+        """Is the node's answer for this obligation already final?  It is once
+        the deadline has passed -- no event can still land in the window;
+        positions are strictly increasing, so a position-clocked window closes
+        at equality, whereas timestamps only non-decrease, so a time-clocked
+        one closes strictly after it -- and, for until, once the run is broken
+        for every data value (no later witness can qualify; a satisfiability
+        check, since the plain simplifier does not collapse the shape)."""
+        b = self.backend
+        d = self.nodes[j].data
+        if d["high"] is not None:
+            closed = (clockval >= anchor + d["high"]
+                      if d["clock"] == "pos"
+                      else clockval > anchor + d["high"])
+            if closed:
+                return True
+        if self.nodes[j].kind == "funtil":
+            A, _ = self.ftab[j]
+            alive = b.and_(A, b.eq(d["t"], b.lit(pos, "Int")))
+            if not b.check_sat(alive):
+                return True
+        return False
+
+    def _recompute(self, vals):
+        """Recompute the root from the frozen values, with the future nodes
+        replaced as given.  Only stateless nodes lie on the path, so this is an
+        exact re-evaluation of that part of the tree."""
+        b = self.backend
+        for i in self._path:
+            if i in self.ftab:
+                continue
+            nd = self.nodes[i]
+            ch = nd.children
+            k = nd.kind
+            if k == "not":
+                v = b.not_(vals[ch[0]])
+            elif k == "and":
+                v = b.and_(vals[ch[0]], vals[ch[1]])
+            elif k == "or":
+                v = b.or_(vals[ch[0]], vals[ch[1]])
+            elif k == "implies":
+                v = b.implies(vals[ch[0]], vals[ch[1]])
+            elif k == "iff":
+                v = b.iff(vals[ch[0]], vals[ch[1]])
+            elif k == "exists":
+                v = self._eliminate(b.exists(self.consts[nd.data], vals[ch[0]]))
+            elif k == "forall":
+                v = self._eliminate(b.forall(self.consts[nd.data], vals[ch[0]]))
+            else:
+                raise RuntimeError(f"non-stateless node {k} on future path")
+            vals[i] = self._normalize(v)
+        return vals[self.root]
+
+    def _check(self, ob, clockval_time, clockval_pos, force=False):
+        """Check one obligation; return its verdict, or None if undecided.
+
+        Each future node's eventual export lies between a lower and an upper
+        bound derived from its table so far (tables only grow).  Substituting
+        the bounds according to each node's polarity brackets the eventual
+        verdict; the obligation resolves as soon as the brackets decide it, and
+        at the latest when every query has become exact."""
+        b = self.backend
+        lo_vals, hi_vals = list(ob["vals"]), list(ob["vals"])
+        all_exact, mixed = True, False
+        for j in self.fnodes:
+            nd = self.nodes[j]
+            anchor = ob["pos"] if nd.data["clock"] == "pos" else ob["time"]
+            clockval = clockval_pos if nd.data["clock"] == "pos" else clockval_time
+            q = self._fquery(j, ob["pos"], anchor)
+            val = b.not_(q) if nd.kind in FUTURE_NEGATED else q
+            if force or self._fexact(j, ob["pos"], anchor, clockval):
+                lo_vals[j] = hi_vals[j] = val
+                continue
+            all_exact = False
+            # The export can still grow (or, when negated, shrink).
+            vlo, vhi = ((b.false(), val) if nd.kind in FUTURE_NEGATED
+                        else (val, b.true()))
+            pol = self._polarity.get(j, 0)
+            if pol > 0:
+                lo_vals[j], hi_vals[j] = vlo, vhi
+            elif pol < 0:
+                lo_vals[j], hi_vals[j] = vhi, vlo
+            else:
+                mixed = True
+                lo_vals[j], hi_vals[j] = vlo, vhi
+        if all_exact:
+            return self._verdict(self._recompute(lo_vals))
+        if mixed:
+            return None
+        if self._verdict(self._recompute(lo_vals)):
+            return True
+        if not self._verdict(self._recompute(hi_vals)):
+            return False
+        return None
+
+    def _check_pending(self, force=False):
+        """Check every parked obligation; return the verdicts resolved now, as
+        (position, holds) pairs, and keep the rest."""
+        out, keep = [], []
+        for ob in self.pending:
+            v = self._check(ob, self._time, self.position, force)
+            if v is None:
+                keep.append(ob)
+            else:
+                out.append((ob["pos"], v))
+        self.pending = keep
+        self._prune_futures()
+        return out
+
+    def _prune_futures(self):
+        """Drop table rows that can serve no parked obligation: everything when
+        the notebook is empty, and otherwise the rows older than the earliest
+        window still awaited."""
+        b = self.backend
+        for j in self.fnodes:
+            nd = self.nodes[j]
+            d = nd.data
+            if not self.pending:
+                self.ftab[j] = tuple(b.false() for _ in self.ftab[j])
+                continue
+            if self.weak:
+                continue
+            if nd.kind == "funtil":
+                # Runs are identified by position, so prune by the earliest
+                # pending position.
+                oldest = min(ob["pos"] for ob in self.pending)
+                A, W = self.ftab[j]
+                A = b.prune_expired(A, d["t"], oldest)
+                W = b.prune_expired(W, d["t"], oldest)
+                self.ftab[j] = (self._normalize(A), self._normalize(W))
+            else:
+                oldest = min(ob["pos"] if d["clock"] == "pos" else ob["time"]
+                             for ob in self.pending)
+                (S,) = self.ftab[j]
+                S = b.prune_expired(S, d["t"], oldest + d["low"])
+                self.ftab[j] = (self._normalize(S),)
+
+    def end(self):
+        """Close every window: force the remaining obligations to a verdict.
+        Called once the trace is over."""
+        if not self.pending:
+            return []
+        out = self._check_pending(force=True)
+        self.pending = []
+        return out
 
     # --- timed since: stored state vs exported value ---
 
@@ -631,7 +980,7 @@ class FormulaMonitor:
             if values is None:
                 return ""
             if exported is not None and self.nodes[i].kind in (
-                    "tsince", "tzince", "tonce", "thist", "hist"):
+                    "tsince", "tzince", "tonce", "thist", "hist") + FUTURE_KINDS:
                 return f"  {paint(values[i])}   value: {paint(exported[i])}"
             return "  " + paint(values[i])
 
@@ -683,6 +1032,31 @@ class Monitor:
                 FormulaMonitor(prop, body, pred_sorts, self.backend))
         # Timed specs read their logs with a timestamp as the last CSV column.
         self.timed = any(fm.timed for fm in self.formulas)
+        # With future operators verdicts may be delayed; the caller must run
+        # end() after the last event to close the remaining windows.
+        self.future = any(fm.future for fm in self.formulas)
+        self.resolved = []
 
-    def step(self, event: Dict[str, List[Tuple]], time: int = None) -> Dict[str, bool]:
-        return {fm.name: fm.step(event, time) for fm in self.formulas}
+    def step(self, event: Dict[str, List[Tuple]], time: int = None):
+        """Process one event.  Returns the verdict of each property *for this
+        position*: True, False, or None when it is still pending (only
+        possible with future operators).  Verdicts resolved during this step,
+        for this position or an earlier one, are collected in `self.resolved`
+        as (position, property, holds) triples."""
+        out, self.resolved = {}, []
+        for fm in self.formulas:
+            res = fm.step(event, time)
+            for pos, holds in res:
+                self.resolved.append((pos, fm.name, holds))
+            out[fm.name] = next((h for p, h in res if p == fm.position), None)
+        return out
+
+    def end(self):
+        """Close the trace: force the remaining obligations to a verdict.
+        Returns a list of (position, property, holds), earliest first."""
+        out = []
+        for fm in self.formulas:
+            out += [(pos, fm.name, holds) for pos, holds in fm.end()]
+        out.sort(key=lambda r: r[0])
+        self.resolved = out
+        return out

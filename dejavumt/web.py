@@ -182,9 +182,9 @@ def run():
             if time.monotonic() - t0 > MAX_SECONDS:
                 truncated = f"stopped after {MAX_SECONDS:.0f}s at event {nr - 1}"
                 break
-            verdicts = monitor.step(event, ts)
+            monitor.step(event, ts)
             row = {"nr": nr, "fact": fact_str(event), "ts": ts,
-                   "verdicts": verdicts}
+                   "verdicts": {fm.name: None for fm in monitor.formulas}}
             if debug:
                 row["trees"] = [
                     {"name": fm.name,
@@ -192,8 +192,17 @@ def run():
                          values=fm.pre, exported=fm.preval, color=True))}
                     for fm in monitor.formulas]
             events_out.append(row)
-            violations += [{"event": nr, "prop": p}
-                           for p, ok in verdicts.items() if not ok]
+            # Verdicts resolved by this event, for this position or (with
+            # future operators) an earlier one.
+            for pos, name, holds in monitor.resolved:
+                events_out[pos - 1]["verdicts"][name] = holds
+                if not holds:
+                    violations.append({"event": pos, "prop": name,
+                                       "at": nr})
+        for pos, name, holds in monitor.end():
+            events_out[pos - 1]["verdicts"][name] = holds
+            if not holds:
+                violations.append({"event": pos, "prop": name, "at": None})
     except Exception as e:
         return jsonify({"error": f"at event {len(events_out) + 1}: "
                                  f"{type(e).__name__}: {e}"})
@@ -202,6 +211,7 @@ def run():
                        for fm in monitor.formulas],
         "solver": monitor.backend.name,
         "timed": monitor.timed,
+        "future": monitor.future,
         "events": events_out,
         "violations": violations,
         "truncated": truncated,
