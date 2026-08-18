@@ -45,9 +45,19 @@ def _iv(low, high):
     return f"[{low},{high}]" if high is not None else f"[{low},*)"
 
 
-def to_mfotl(f) -> str:
-    """Our AST as an MFOTL formula (fully parenthesised)."""
-    r = to_mfotl
+def to_mfotl(f, next_bound=None) -> str:
+    """Our AST as an MFOTL formula (fully parenthesised).
+
+    `next_bound`: our X is position-based ("the next event, whenever it is"),
+    so it translates to NEXT with an interval covering every consecutive time
+    delta of the trace at hand.  This must be finite: MonPoly by default
+    appends a phantom time point at a maximal timestamp (its analogue of our
+    end-of-trace closing), and NEXT[0,*) would look across the trace boundary
+    into it -- X true would hold at the last position.  With the interval
+    bounded by the trace's own maximal delta, the phantom (huge delta) is
+    excluded and the two conventions coincide."""
+    def r(g):
+        return to_mfotl(g, next_bound)
     if isinstance(f, ast.TrueC):
         return "TRUE"
     if isinstance(f, ast.FalseC):
@@ -74,7 +84,9 @@ def to_mfotl(f) -> str:
     if isinstance(f, ast.Prev):
         return f"(PREV[0,*) {r(f.arg)})"
     if isinstance(f, ast.Next):
-        return f"(NEXT[0,*) {r(f.arg)})"
+        if next_bound is None:
+            raise Unsupported("X needs a per-trace NEXT bound (next_bound)")
+        return f"(NEXT[0,{next_bound}] {r(f.arg)})"
     if isinstance(f, ast.Since):
         return f"({r(f.left)} SINCE[0,*) {r(f.right)})"
     if isinstance(f, ast.TimedSince):
@@ -179,7 +191,25 @@ def monitorable(sig_text, formula_text):
         return ("is monitorable" in out and "NOT monitorable" not in out), out.strip()
 
 
-def violations(sig_text, formula_text, log_text, n_events, timeout=60):
+def judgements(sig_text, formula_text, log_text, n_events, timeout=60):
+    """(violated, satisfied, message): the positions MonPoly reports as
+    violating (run with -negate) and as satisfying (run without).  Their
+    union is MonPoly's *evaluation frontier*: with nested future operators
+    outrunning its single appended maximal timestamp, trailing positions are
+    never evaluated at all, and are in neither set."""
+    v, msg = violations(sig_text, formula_text, log_text, n_events,
+                        timeout, negate=True)
+    if v is None:
+        return None, None, msg
+    s_, msg = violations(sig_text, formula_text, log_text, n_events,
+                         timeout, negate=False)
+    if s_ is None:
+        return None, None, msg
+    return v, s_, ""
+
+
+def violations(sig_text, formula_text, log_text, n_events, timeout=60,
+               negate=True):
     """The positions (1-based, as DejaVuMT counts them) at which MonPoly says
     the closed formula is violated.  Returns (set|None, message)."""
     with tempfile.TemporaryDirectory() as d:
@@ -188,8 +218,10 @@ def violations(sig_text, formula_text, log_text, n_events, timeout=60):
         fp.write_text(formula_text + "\n")
         lp.write_text(log_text)
         try:
-            r = _run(["-sig", str(sp), "-formula", str(fp), "-log", str(lp),
-                      "-negate"], timeout=timeout)
+            args = ["-sig", str(sp), "-formula", str(fp), "-log", str(lp)]
+            if negate:
+                args.append("-negate")
+            r = _run(args, timeout=timeout)
         except subprocess.TimeoutExpired:
             return None, "timeout"
         out = r.stdout
