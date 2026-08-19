@@ -105,7 +105,12 @@ contribution is at most `n >= elapsed` — and the obligation resolves when
 the two eliminated root brackets agree **for every parameter value** (one
 satisfiability check of their iff). For `F` that happens at the first
 witness (a later one is only slower: subsumed); for `G` at the first
-counterexample; otherwise at end of trace. Emitted constraints accumulate
+counterexample; otherwise at end of trace. For `U` the upper bracket is
+tightened to `q | (alive & n >= max(a, elapsed))`, where `alive` is the
+run's surviving data values (from the `A` table): a future witness also
+needs `phi` to have held since the anchor, so a broken run collapses the
+brackets and yields `false` for every `n` at once. Emitted constraints
+accumulate
 into a running *feasible region* (`FormulaMonitor.region`), kept
 subsumption-free.
 
@@ -118,7 +123,7 @@ grows with the trace.
 
 Well-formedness, checked at compile time (`collect_params` and the deep-node
 check in `FormulaMonitor.__init__`): a parameter occurs in exactly one
-bound, on any timed operator except `U`; a parametric `F`/`G` must not be
+bound, on any timed operator; a parametric future operator must not be
 nested under other temporal operators — there its exactness would itself be
 a region over `n`, and the staged resolution below would need
 region-guarded bindings (future work) — while parametric past operators may

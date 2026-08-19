@@ -396,8 +396,8 @@ satisfiability check.
 
 ### Parametric monitoring
 
-The upper bound of a timed operator — past (`P/H/S/Z`) or future (`F/G`, not
-`U`) — may be a **symbolic parameter** instead of a number:
+The upper bound of any timed operator — past (`P/H/S/Z`) or future
+(`F/G/U`) — may be a **symbolic parameter** instead of a number:
 
     pred req(x: String)
     pred ack(x: String)
@@ -420,7 +420,9 @@ position, so each constraint is emitted immediately. Future verdicts resolve
 at the **first witness** (for `F`; a later witness is only slower) or the
 first counterexample (for `G`), not at a deadline — with a symbolic bound
 there is none; unanswered positions resolve at end of trace (`false` for
-every `n`, collapsing the region).
+every `n`, collapsing the region). For `U` the same holds with one twist: a
+future witness also needs its run alive (`p` holding since the anchor), so a
+broken run yields `false` for every `n` as soon as it breaks.
 
 The trade: a parametric *past* window can prune nothing — a record at any age
 is still in the window for large enough `n` and outside it for small `n` — so
@@ -429,10 +431,10 @@ rescue). Parametric `F`/`G` obligations, by contrast, die at their first
 witness/counterexample as usual.
 
 Well-formedness (checked at compile time): a parameter may occur in **exactly
-one** bound, on `P/H/S/Z/F/G` (not `U`); a parametric `F`/`G` must not be
-nested under other temporal operators (its window never closes, so staged
-resolution would need region-valued bookkeeping — future work), while
-parametric past operators may nest anywhere. Several *distinct* parameters
+one** bound; a parametric future operator must not be nested under other
+temporal operators (its window never closes, so staged resolution would need
+region-valued bookkeeping — future work), while parametric past operators may
+nest anywhere. Several *distinct* parameters
 are fine, and each verdict/region is then a constraint over all of them. In
 the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
 booleans) and each `FormulaMonitor` exposes `region`.
@@ -494,8 +496,8 @@ Implemented: the first-order fragment — propositional connectives,
 relations with arithmetic (`+ - *`), the timed operators
 `S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
 sugar, the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`, and
-parametric bounds on `P/H/S/Z/F/G` (`F[<=n]` with `n` symbolic — verdicts
-become constraints on `n`);
+parametric bounds on every timed operator (`F[<=n]` with `n` symbolic —
+verdicts become constraints on `n`);
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader

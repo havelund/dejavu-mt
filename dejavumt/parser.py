@@ -17,8 +17,8 @@ Currently supported (slice 1 -- untimed fragment):
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
     strings:       s contains "sub"   substring test over String terms
-    parametric:    a symbolic upper bound on a timed operator (P[<=n],
-                   F[<=n], S[0,n]; not U) -- the monitor leaves n free and
+    parametric:    a symbolic upper bound on any timed operator (P[<=n],
+                   F[<=n], p U[0,n] q) -- the monitor leaves n free and
                    reports, per position, the constraint on n under which
                    the property holds
 
@@ -129,7 +129,7 @@ _GRAMMAR = r"""
     // Time bounds on S/Z/P/H: an interval [a,b] or [a,*], or comparison sugar.
     // The upper bound may also be a NAME: a symbolic parameter, left free by
     // the monitor, whose verdicts then become constraints on it (parametric
-    // monitoring; every timed operator except U -- see engine.collect_params).
+    // monitoring; any timed operator -- see engine.collect_params).
     ?timebound: "[" "<=" INT "]"       -> tb_le
               | "[" "<" INT "]"        -> tb_lt
               | "[" ">=" INT "]"       -> tb_ge

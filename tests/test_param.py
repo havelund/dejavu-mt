@@ -193,11 +193,46 @@ def test_past_param_nested_under_once():
     assert equiv(b, got[2], n_ge(m, "n", 0))
 
 
-# --- well-formedness ---------------------------------------------------------
+# --- until -------------------------------------------------------------------
 
-def test_reject_param_on_until():
-    with pytest.raises(ValueError, match="not supported on U"):
-        Monitor(parse_spec("pred p()\npred q()\nprop x : p U[<=n] q"))
+UNTIL_SPEC = """
+pred p()
+pred q()
+pred r()
+prop u : p U[0,n] q
+"""
+
+
+def test_until_threshold():
+    events = [({"p": [()]}, 0), ({"p": [()]}, 3), ({"q": [()]}, 7)]
+    m, got = replay(UNTIL_SPEC, events, prop="u")
+    b = m.backend
+    # q arrives at delay 7 with p holding until then.
+    assert equiv(b, got[1], n_ge(m, "n", 7))
+    assert equiv(b, got[2], n_ge(m, "n", 4))
+    assert equiv(b, got[3], n_ge(m, "n", 0))   # q now: delay 0
+
+
+def test_until_first_witness_is_final():
+    """The verdict resolves at the first witness, before end of trace."""
+    m = Monitor(parse_spec(UNTIL_SPEC), solver="z3")
+    m.step({"p": [()]}, 0)
+    m.step({"q": [()]}, 5)
+    emitted = {pos: h for pos, name, h in m.resolved if name == "u"}
+    assert 1 in emitted
+    assert equiv(m.backend, emitted[1], n_ge(m, "n", 5))
+
+
+def test_until_dead_run_is_false_early():
+    """p fails before any witness: false for every n, known at that event."""
+    m = Monitor(parse_spec(UNTIL_SPEC), solver="z3")
+    m.step({"p": [()]}, 0)
+    m.step({"r": [()]}, 2)     # neither p nor q: the run from position 1 dies
+    emitted = {pos: h for pos, name, h in m.resolved if name == "u"}
+    assert emitted.get(1) is False
+
+
+# --- well-formedness ---------------------------------------------------------
 
 
 def test_reject_param_used_twice():

@@ -267,13 +267,13 @@ def free_vars(f: ast.LTL) -> set:
 def collect_params(f: ast.LTL) -> list:
     """Names used as symbolic interval bounds (parametric monitoring), with
     the well-formedness checks of the supported fragment: a symbolic bound
-    may be the UPPER bound of the timed past operators (S, Z, P, H) and of
-    F and G -- not of U -- and each parameter name may occur exactly once.
-    A past occurrence needs no nesting restriction (its verdict is known at
-    its own position, and the state recurrences carry the parameter through
-    like any constant); for F/G the single positive occurrence keeps the
-    verdict a threshold synthesized from witness delays, and the nesting
-    restriction is enforced once the formula is compiled -- see
+    may be the UPPER bound of any timed operator (S, Z, P, H, F, G, U), and
+    each parameter name may occur exactly once.  A past occurrence needs no
+    nesting restriction (its verdict is known at its own position, and the
+    state recurrences carry the parameter through like any constant); for
+    the future operators the single positive occurrence keeps the verdict a
+    threshold synthesized from witness delays, and the nesting restriction
+    is enforced once the formula is compiled -- see
     FormulaMonitor.__init__."""
     counts: Dict[str, int] = {}
 
@@ -286,15 +286,8 @@ def collect_params(f: ast.LTL) -> list:
                           ast.TimedOnce, ast.TimedHist)):
             note(g)
             walk(g.arg)
-        elif isinstance(g, (ast.TimedSince, ast.TimedZince)):
+        elif isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
             note(g)
-            walk(g.left)
-            walk(g.right)
-        elif isinstance(g, ast.TimedUntil):
-            if isinstance(g.high, str):
-                raise ValueError(
-                    f"symbolic bound '{g.high}' is not supported on U "
-                    f"(in {g})")
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
@@ -1104,6 +1097,17 @@ class FormulaMonitor:
                 elapsed = 0 if clockval is None else clockval - anchor
                 growth = b.ge(self.params[hi_bound],
                               b.lit(max(nd.data["low"], elapsed), "Int"))
+                if nd.kind == "funtil":
+                    # A future witness additionally needs its run alive:
+                    # phi must have held from the anchor through now, so its
+                    # contribution is bounded by the run's surviving data
+                    # values as well.
+                    A, _ = self.ftab[j]
+                    alive = self._normalize(self._eliminate(b.exists(
+                        nd.data["t"],
+                        b.and_(A, b.eq(nd.data["t"],
+                                       b.lit(ob["pos"], "Int"))))))
+                    growth = b.and_(alive, growth)
                 if nd.kind in FUTURE_NEGATED:
                     vlo, vhi = b.not_(b.or_(q, growth)), b.not_(q)
                 else:
