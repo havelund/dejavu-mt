@@ -123,15 +123,80 @@ def test_cvc5_threshold():
     assert got[2] is True
 
 
+# --- past operators: verdicts are immediate ----------------------------------
+
+PAST_SPEC = """
+pred req(x: String)
+pred rsp(x: String)
+prop t : Forall x . rsp(x) -> P[<=n] req(x)
+"""
+
+
+def test_past_threshold():
+    events = [({"req": [("a",)]}, 0), ({"rsp": [("a",)]}, 7)]
+    m, got = replay(PAST_SPEC, events, prop="t")
+    b = m.backend
+    assert got[1] is True                       # no response there: vacuous
+    assert equiv(b, got[2], n_ge(m, "n", 7))    # response 7 units after req
+
+
+def test_past_verdict_is_immediate():
+    """A past verdict is known at its own position -- no pending, no end()."""
+    m = Monitor(parse_spec(PAST_SPEC), solver="z3")
+    m.step({"req": [("a",)]}, 0)
+    m.step({"rsp": [("a",)]}, 7)
+    emitted = {pos: h for pos, name, h in m.resolved if name == "t"}
+    assert 2 in emitted
+    assert equiv(m.backend, emitted[2], n_ge(m, "n", 7))
+
+
+def test_past_no_witness_is_false():
+    events = [({"rsp": [("b",)]}, 5)]
+    m, got = replay(PAST_SPEC, events, prop="t")
+    assert got[1] is False
+
+
+def test_past_region():
+    events = [({"req": [("a",)]}, 0), ({"rsp": [("a",)]}, 7),
+              ({"req": [("b",)]}, 10), ({"rsp": [("b",)]}, 13)]
+    m, got = replay(PAST_SPEC, events, prop="t")
+    b = m.backend
+    assert equiv(b, got[2], n_ge(m, "n", 7))
+    assert equiv(b, got[4], n_ge(m, "n", 3))
+    assert equiv(b, m.formulas[0].region, n_ge(m, "n", 7))
+
+
+def test_past_since_param():
+    spec = """
+    pred p()
+    pred q()
+    prop s : p S[0,n] q
+    """
+    events = [({"q": [()]}, 0), ({"p": [()]}, 3), ({"p": [()]}, 5)]
+    m, got = replay(spec, events, prop="s")
+    b = m.backend
+    # q at age 5, p ever since: holds iff the window reaches back that far.
+    assert equiv(b, got[3], n_ge(m, "n", 5))
+
+
+def test_past_param_nested_under_once():
+    """Past parametric operators may nest under other temporal operators."""
+    spec = """
+    pred q()
+    pred r()
+    prop x : P (P[<=n] q)
+    """
+    events = [({"q": [()]}, 0), ({"r": [()]}, 4)]
+    m, got = replay(spec, events, prop="x")
+    b = m.backend
+    # At position 1 the inner window holds for n >= 0; Once keeps that alive.
+    assert equiv(b, got[2], n_ge(m, "n", 0))
+
+
 # --- well-formedness ---------------------------------------------------------
 
-def test_reject_param_on_past_operator():
-    with pytest.raises(ValueError, match="only supported on the future"):
-        Monitor(parse_spec("pred p()\nprop x : P[<=n] p"))
-
-
 def test_reject_param_on_until():
-    with pytest.raises(ValueError, match="only supported on the future"):
+    with pytest.raises(ValueError, match="not supported on U"):
         Monitor(parse_spec("pred p()\npred q()\nprop x : p U[<=n] q"))
 
 

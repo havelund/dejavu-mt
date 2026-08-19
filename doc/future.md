@@ -109,11 +109,20 @@ counterexample; otherwise at end of trace. Emitted constraints accumulate
 into a running *feasible region* (`FormulaMonitor.region`), kept
 subsumption-free.
 
+The timed *past* operators (`P/H/S/Z`) take symbolic bounds too, and more
+simply: a past verdict is fully known at its own position, so the constraint
+is emitted immediately, with no obligations or brackets involved; the cost
+moves to state instead — a parametric past window can prune nothing (every
+record is inside the window for large enough `n`), so that node's state
+grows with the trace.
+
 Well-formedness, checked at compile time (`collect_params` and the deep-node
 check in `FormulaMonitor.__init__`): a parameter occurs in exactly one
-bound, only on `F`/`G`, and never nested under other temporal operators —
-there its exactness would itself be a region over `n`, and the staged
-resolution below would need region-guarded bindings (future work).
+bound, on any timed operator except `U`; a parametric `F`/`G` must not be
+nested under other temporal operators — there its exactness would itself be
+a region over `n`, and the staged resolution below would need
+region-guarded bindings (future work) — while parametric past operators may
+nest anywhere.
 
 ## Pruning
 

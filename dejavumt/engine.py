@@ -266,30 +266,35 @@ def free_vars(f: ast.LTL) -> set:
 
 def collect_params(f: ast.LTL) -> list:
     """Names used as symbolic interval bounds (parametric monitoring), with
-    the well-formedness checks of the supported fragment: a symbolic bound is
-    allowed only as the UPPER bound of F or G, and each parameter name may
-    occur exactly once.  (A single positive occurrence keeps the verdict a
-    threshold synthesized from witness delays; the nesting restriction is
-    enforced separately, once the formula is compiled -- see
-    FormulaMonitor.__init__.)"""
+    the well-formedness checks of the supported fragment: a symbolic bound
+    may be the UPPER bound of the timed past operators (S, Z, P, H) and of
+    F and G -- not of U -- and each parameter name may occur exactly once.
+    A past occurrence needs no nesting restriction (its verdict is known at
+    its own position, and the state recurrences carry the parameter through
+    like any constant); for F/G the single positive occurrence keeps the
+    verdict a threshold synthesized from witness delays, and the nesting
+    restriction is enforced once the formula is compiled -- see
+    FormulaMonitor.__init__."""
     counts: Dict[str, int] = {}
 
+    def note(g):
+        if isinstance(g.high, str):
+            counts[g.high] = counts.get(g.high, 0) + 1
+
     def walk(g):
-        if isinstance(g, (ast.TimedEventually, ast.TimedAlways)):
-            if isinstance(g.high, str):
-                counts[g.high] = counts.get(g.high, 0) + 1
+        if isinstance(g, (ast.TimedEventually, ast.TimedAlways,
+                          ast.TimedOnce, ast.TimedHist)):
+            note(g)
             walk(g.arg)
-        elif isinstance(g, (ast.TimedOnce, ast.TimedHist)):
+        elif isinstance(g, (ast.TimedSince, ast.TimedZince)):
+            note(g)
+            walk(g.left)
+            walk(g.right)
+        elif isinstance(g, ast.TimedUntil):
             if isinstance(g.high, str):
                 raise ValueError(
-                    f"symbolic bound '{g.high}' is only supported on the "
-                    f"future operators F and G (in {g})")
-            walk(g.arg)
-        elif isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
-            if isinstance(g.high, str):
-                raise ValueError(
-                    f"symbolic bound '{g.high}' is only supported on the "
-                    f"future operators F and G (in {g})")
+                    f"symbolic bound '{g.high}' is not supported on U "
+                    f"(in {g})")
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
@@ -792,7 +797,13 @@ class FormulaMonitor:
             self._resolve_bindings()
             resolved = self._check_pending()
         else:
-            resolved = [(self.position, self._verdict(nowval[self.root]))]
+            # A parametric verdict (free parameters in the root) is a
+            # constraint, not a Boolean; without future operators it is
+            # nevertheless final right here.
+            v = nowval[self.root]
+            resolved = [(self.position,
+                         self._pverdict(b.simplify(v)) if self.params
+                         else self._verdict(v))]
         self._prev_time = time
         self.now = [b.false()] * len(self.nodes)
         self._steps += 1
@@ -1261,6 +1272,12 @@ class FormulaMonitor:
         if self.weak:
             return S
         S = self._normalize(S)
+        if isinstance(hi, str):
+            # Parametric upper bound: a record at any age is inside the
+            # window for large enough parameter values, so nothing expires;
+            # and outside it for small ones, so nothing saturates either.
+            # State grows with the trace -- the price of parametric past.
+            return S
         if hi is not None:
             # A record's stamp t = T_j with T_j < T - hi is false under every
             # window the value query will ever apply (timestamps are
@@ -1284,7 +1301,11 @@ class FormulaMonitor:
         if lo > 0:
             q = b.and_(q, b.ge(age, b.lit(lo, "Int")))
         if hi is not None:
-            q = b.and_(q, b.le(age, b.lit(hi, "Int")))
+            # A symbolic (parametric) bound stays a free constant; the
+            # eliminated value is then a formula over it.
+            hiterm = (self.params[hi] if isinstance(hi, str)
+                      else b.lit(hi, "Int"))
+            q = b.and_(q, b.le(age, hiterm))
         return self._normalize(self._eliminate(b.exists(tc, q)))
 
     def _collect_garbage(self):
