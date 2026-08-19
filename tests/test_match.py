@@ -121,3 +121,74 @@ def test_match_on_cvc5():
         {"login": [("user doron",)], "ok": [("klaus",)]},
     ]
     assert violations(spec, events, solver="cvc5") == [2]
+
+
+# --- gaps ("..." / {:re}) and the slashed regex flavour ----------------------
+
+def test_gap_pattern_unanchored():
+    # "...user {u}..." -- no pre/post variables needed; compiles to the
+    # quantifier-free contains/prefixof/suffixof encodings.
+    spec = """
+    pred log(m: String)
+    pred armed(u: String)
+    prop p : Forall m . Forall u .
+        log(m) & m matches "...user {u:[a-z]+}" -> P armed(u)
+    """
+    events = [
+        {"armed": [("klaus",)]},
+        {"log": [("hi user klaus",)]},     # captured across the gap: ok
+        {"log": [("hi user doron",)]},     # doron not armed -> violation
+        {"log": [("no match here",)]},     # vacuous
+    ]
+    assert violations(spec, events) == [3]
+
+
+def test_anonymous_constrained_gap():
+    spec = """
+    pred log(m: String)
+    prop p : Forall m . log(m) -> m matches "{:[A-Z]+}: {u}" | m matches "..."
+    """
+    # just a parse/compile smoke test: {:RE} is a gap, binds nothing
+    m = Monitor(parse_spec(spec))
+    assert m.step({"log": [("ERR: boom",)]})["p"] is True
+
+
+def test_regex_flavour():
+    # Slashed pattern: full regex between holes.
+    spec = """
+    pred log(m: String)
+    pred armed(u: String)
+    prop p : Forall m . Forall u .
+        log(m) & m matches /[a-z ]*user {u:[a-z]+}( .*)?/ -> P armed(u)
+    """
+    events = [
+        {"armed": [("klaus",)]},
+        {"log": [("hi user klaus",)]},         # ok
+        {"log": [("hi user klaus again",)]},   # trailing regex group: ok
+        {"log": [("hi user doron",)]},         # violation
+    ]
+    assert violations(spec, events) == [4]
+
+
+def test_regex_flavour_equals_quoted_gaps():
+    # /.*user {u}.*/ and "...user {u}..." are the same constraint.
+    spec_q = """
+    pred log(m: String)
+    prop p : Forall m . log(m) -> Exists u . m matches "...user {u:[a-z]+}..."
+    """
+    spec_r = spec_q.replace('"...user {u:[a-z]+}..."', '/.*user {u:[a-z]+}.*/')
+    events = [{"log": [("a user bob here",)]}, {"log": [("nobody",)]}]
+    assert violations(spec_q, events) == violations(spec_r, events)
+
+
+def test_gaps_on_cvc5():
+    pytest.importorskip("cvc5")
+    spec = """
+    pred log(m: String)
+    pred armed(u: String)
+    prop p : Forall m . Forall u .
+        log(m) & m matches "...user {u:[a-z]+}" -> P armed(u)
+    """
+    events = [{"armed": [("klaus",)]}, {"log": [("hi user klaus",)]},
+              {"log": [("hi user doron",)]}]
+    assert violations(spec, events, solver="cvc5") == [3]

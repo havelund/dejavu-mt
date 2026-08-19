@@ -370,6 +370,22 @@ an ordinary quantified variable and flows anywhere data flows, e.g.
     prop resp : Forall m . Forall u .
         login(m) & m matches "user {u}" -> F[<=5] logout(u)
 
+Patterns come in two flavours. **Quoted** patterns are literal text with
+holes plus `...` **gaps** (match anything, bind nothing) and `{:RE}`
+(anonymous constrained gap):
+
+    m matches "...user {u:[a-z]+}..."       -- unanchored capture, no
+                                               pre/post variables needed
+
+**Slashed** patterns are a full regex with embedded holes:
+
+    m matches /[a-z ]*user {u:[a-z]+}( .*)?/
+
+Unconstrained gaps at the pattern's ends compile to the native
+quantifier-free string atoms (`contains`/`prefixof`/`suffixof`); internal or
+constrained gaps use existentially-quantified slack, the shape where string
+quantifier elimination may need the bounded fallback.
+
 If a pattern decomposes ambiguously (`"{a}-{c}"` against `"x-y-z"`), **all
 decompositions count** (declarative matching, not leftmost-greedy).
 Matching log values is as cheap as equality (see

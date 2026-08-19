@@ -81,6 +81,8 @@ class Backend:
 
     # strings and regular expressions (for `matches`)
     def concat(self, parts): ...
+    def prefixof(self, pre, s): ...
+    def suffixof(self, suf, s): ...
     def in_re(self, s, rast):
         """Membership of string term s in the regex given as the neutral AST
         of dejavumt.pattern."""
@@ -216,6 +218,9 @@ class Z3Backend(Backend):
         if k == "alt":
             return z3.Union(*[self._re(x) for x in r[1]])
         raise ValueError(f"bad regex node {k}")
+
+    def prefixof(self, pre, s): return self.z3.PrefixOf(pre, s)
+    def suffixof(self, suf, s): return self.z3.SuffixOf(suf, s)
 
     def in_re(self, s, rast):
         return self.z3.InRe(s, self._re(rast))
@@ -475,6 +480,12 @@ class Cvc5Backend(Backend):
         if k == "alt":
             return tm.mkTerm(K.REGEXP_UNION, *[self._re(x) for x in r[1]])
         raise ValueError(f"bad regex node {k}")
+
+    def prefixof(self, pre, s):
+        return self.tm.mkTerm(self.Kind.STRING_PREFIX, pre, s)
+
+    def suffixof(self, suf, s):
+        return self.tm.mkTerm(self.Kind.STRING_SUFFIX, suf, s)
 
     def in_re(self, s, rast):
         return self.tm.mkTerm(self.Kind.STRING_IN_REGEXP, s, self._re(rast))

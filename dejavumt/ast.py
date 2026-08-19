@@ -123,10 +123,13 @@ class Match(LTL):
     data variables (String); ALL decompositions count (declarative matching,
     not leftmost-greedy)."""
     subject: Term
-    segments: tuple    # of ("lit", str) | ("hole", var, regex-ast-or-None)
+    segments: tuple    # ("lit", s) | ("hole", var, re-or-None) | ("gap", re-or-None)
     pattern: str       # as written, for display
+    regex: bool = False   # slashed flavour /re with {holes}/
 
     def __str__(self) -> str:
+        if self.regex:
+            return f"{self.subject} matches /{self.pattern}/"
         return f'{self.subject} matches "{self.pattern}"'
 
 

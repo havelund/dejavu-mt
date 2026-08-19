@@ -57,7 +57,10 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
     if isinstance(f, ast.Match):
         segs = []
         for seg in f.segments:
-            if seg[0] == "hole" and seg[1] in m:
+            if seg[0] != "hole":
+                segs.append(seg)
+                continue
+            if seg[1] in m:
                 tgt = m[seg[1]]
                 if isinstance(tgt, ast.Var):
                     segs.append(("hole", tgt.name, seg[2]))
@@ -68,7 +71,8 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
                         f"cannot substitute {tgt} into pattern hole {seg[1]}")
             else:
                 segs.append(seg)
-        return ast.Match(_subst_term(f.subject, m), tuple(segs), f.pattern)
+        return ast.Match(_subst_term(f.subject, m), tuple(segs), f.pattern,
+                         f.regex)
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(_subst(f.arg, m))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist,
@@ -511,22 +515,51 @@ class FormulaMonitor:
                 "contains": b.contains}[c.op](l, r)
 
     def _match_expr(self, f: ast.Match):
-        """subject matches "..{u}.."  as a static constraint: subject equals
-        the concatenation of the literal parts and the hole variables, each
-        constrained hole a member of its regex."""
+        """subject matches a pattern, as a static constraint.
+
+        Holes are the node's free String variables; gaps bind nothing.
+        Unconstrained gaps at the pattern's ends compile to the native
+        quantifier-free atoms (prefixof/suffixof/contains); every other gap
+        becomes a fresh slack constant, existentially wrapped -- the shape on
+        which string quantifier elimination may diverge, which the bounded
+        qelim tolerates."""
         b = self.backend
-        parts, conjs = [], []
-        for seg in f.segments:
+        segs = list(f.segments)
+        lead = segs and segs[0] == ("gap", None)
+        trail = len(segs) > 1 and segs[-1] == ("gap", None)
+        core = segs[1 if lead else 0: -1 if trail else len(segs)]
+
+        parts, conjs, slacks = [], [], []
+        for seg in core:
             if seg[0] == "lit":
                 parts.append(b.lit(seg[1], "String"))
-            else:
+            elif seg[0] == "hole":
                 _, name, rast = seg
                 hole = self._term_expr(ast.Var(name))
                 parts.append(hole)
                 if rast is not None:
                     conjs.append(b.in_re(hole, rast))
-        eqc = b.eq(self._term_expr(f.subject), b.concat(parts))
-        return b.and_(eqc, *conjs) if conjs else eqc
+            else:                                   # internal/constrained gap
+                _, rast = seg
+                g = b.const(f"_gap{len(self.nodes)}_{len(slacks)}", "String")
+                slacks.append(g)
+                parts.append(g)
+                if rast is not None:
+                    conjs.append(b.in_re(g, rast))
+        subj = self._term_expr(f.subject)
+        body = b.concat(parts)
+        if lead and trail:
+            base = b.contains(subj, body)
+        elif lead:
+            base = b.suffixof(body, subj)
+        elif trail:
+            base = b.prefixof(body, subj)
+        else:
+            base = b.eq(subj, body)
+        out = b.and_(base, *conjs) if conjs else base
+        for g in reversed(slacks):
+            out = b.exists(g, out)
+        return out
 
     def _arg_sort(self, arg, psorts, j):
         """Sort of predicate argument position j: from the declaration if

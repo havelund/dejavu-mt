@@ -105,6 +105,7 @@ _GRAMMAR = r"""
          | "false"                         -> false_
          | sum OPER sum                     -> compare
          | atom MATCHES ESCAPED_STRING     -> matches_
+         | atom MATCHES REGEX_LIT          -> matches_re
          | sum CONTAINS sum                 -> compare
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
@@ -163,6 +164,9 @@ _GRAMMAR = r"""
     //   m matches "id {n:[0-9]+}"   hole constrained by a regex subset
     // Semantics is a constraint (all decompositions), see dejavumt/pattern.py.
     MATCHES.2: /matches(?![A-Za-z0-9_])/
+    // Slashed pattern: full regex with embedded {holes}.  May not start
+    // with '*' (would collide with the /* comment opener).
+    REGEX_LIT: /\/(?!\*)([^\/\\\n]|\\.)+\//
     SORT: "String" | "Int" | "Real" | "Bool"
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
@@ -250,6 +254,12 @@ class _ToAst(Transformer):
         from .pattern import parse_pattern
         text = str(pat)[1:-1]
         return ast.Match(subject, tuple(parse_pattern(text)), text)
+
+    def matches_re(self, subject, _kw, pat):
+        from .pattern import parse_regex_pattern
+        text = str(pat)[1:-1]
+        return ast.Match(subject, tuple(parse_regex_pattern(text)), text,
+                         regex=True)
 
     def pred(self, name, args=None):
         return ast.Pred(str(name), tuple(args) if args else ())
