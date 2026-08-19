@@ -79,6 +79,13 @@ class Backend:
         """Does t contain an application of any of the given functions?"""
         ...
 
+    # strings and regular expressions (for `matches`)
+    def concat(self, parts): ...
+    def in_re(self, s, rast):
+        """Membership of string term s in the regex given as the neutral AST
+        of dejavumt.pattern."""
+        ...
+
     def prune_expired(self, t, tc, deadline: int):
         """Replace every atom  tc = c  (c a concrete integer < deadline)
         occurring in a positive position (under and/or only) by false --- used
@@ -106,7 +113,12 @@ class Z3Backend(Backend):
         import z3
         self.z3 = z3
         self._solver = z3.Solver()
-        self._qe = z3.Tactic("qe2")
+        # qe2 can DIVERGE (not fail) on existentials over string
+        # concatenations -- word equations, regex membership.  TryFor turns
+        # divergence into a Z3Exception, which qelim() below already treats
+        # as "leave the quantifier in place"; the verdict then falls to the
+        # closed root's satisfiability check, which handles the ground case.
+        self._qe = z3.TryFor(z3.Tactic("qe2"), 3000)
         self._ctx = z3.Tactic("ctx-solver-simplify")
         self._gc = z3.Tactic("ctx-simplify")  # cheap contextual dead-term pruning
 
@@ -174,6 +186,39 @@ class Z3Backend(Backend):
             return self._qe(q).as_expr()
         except self.z3.Z3Exception:
             return q
+
+    def concat(self, parts):
+        z3 = self.z3
+        parts = list(parts)
+        if not parts:
+            return z3.StringVal("")
+        return parts[0] if len(parts) == 1 else z3.Concat(*parts)
+
+    def _re(self, r):
+        z3 = self.z3
+        k = r[0]
+        if k == "lit":
+            return z3.Re(z3.StringVal(r[1]))
+        if k == "any":
+            return z3.AllChar(z3.ReSort(z3.StringSort()))
+        if k == "class":
+            rs = [z3.Range(z3.StringVal(lo), z3.StringVal(hi))
+                  for lo, hi in r[1]]
+            return rs[0] if len(rs) == 1 else z3.Union(*rs)
+        if k == "star":
+            return z3.Star(self._re(r[1]))
+        if k == "plus":
+            return z3.Plus(self._re(r[1]))
+        if k == "opt":
+            return z3.Option(self._re(r[1]))
+        if k == "cat":
+            return z3.Concat(*[self._re(x) for x in r[1]])
+        if k == "alt":
+            return z3.Union(*[self._re(x) for x in r[1]])
+        raise ValueError(f"bad regex node {k}")
+
+    def in_re(self, s, rast):
+        return self.z3.InRe(s, self._re(rast))
 
     def func(self, name, arg_sorts):
         z3 = self.z3
@@ -399,6 +444,40 @@ class Cvc5Backend(Backend):
             return self._mk_solver().getQuantifierElimination(q)
         except Exception:
             return q
+
+    def concat(self, parts):
+        parts = list(parts)
+        if not parts:
+            return self.tm.mkString("")
+        if len(parts) == 1:
+            return parts[0]
+        return self.tm.mkTerm(self.Kind.STRING_CONCAT, *parts)
+
+    def _re(self, r):
+        tm, K = self.tm, self.Kind
+        k = r[0]
+        if k == "lit":
+            return tm.mkTerm(K.STRING_TO_REGEXP, tm.mkString(r[1]))
+        if k == "any":
+            return tm.mkTerm(K.REGEXP_ALLCHAR)
+        if k == "class":
+            rs = [tm.mkTerm(K.REGEXP_RANGE, tm.mkString(lo), tm.mkString(hi))
+                  for lo, hi in r[1]]
+            return rs[0] if len(rs) == 1 else tm.mkTerm(K.REGEXP_UNION, *rs)
+        if k == "star":
+            return tm.mkTerm(K.REGEXP_STAR, self._re(r[1]))
+        if k == "plus":
+            return tm.mkTerm(K.REGEXP_PLUS, self._re(r[1]))
+        if k == "opt":
+            return tm.mkTerm(K.REGEXP_OPT, self._re(r[1]))
+        if k == "cat":
+            return tm.mkTerm(K.REGEXP_CONCAT, *[self._re(x) for x in r[1]])
+        if k == "alt":
+            return tm.mkTerm(K.REGEXP_UNION, *[self._re(x) for x in r[1]])
+        raise ValueError(f"bad regex node {k}")
+
+    def in_re(self, s, rast):
+        return self.tm.mkTerm(self.Kind.STRING_IN_REGEXP, s, self._re(rast))
 
     def func(self, name, arg_sorts):
         tm = self.tm

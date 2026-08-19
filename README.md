@@ -229,7 +229,9 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | "G" [timebound] leaf                // always (future)
                   | "[" formula "," formula ")"         // interval
                   | "(" formula ")"
-    relop       ::= "=" | "<" | "<=" | ">" | ">="
+    relop       ::= "=" | "<" | "<=" | ">" | ">=" | "contains"
+
+    match       ::= term "matches" string      // pattern with {var} holes
 
     timebound   ::= "[" int "," int "]"                 // between a and b time units ago
                   | "[" int "," "*" "]"                 // at least a time units ago
@@ -350,6 +352,31 @@ operands may be arithmetic expressions built with `+ - *` and unary minus, e.g.
 `v2 = v1 + 1` or `a * 2 <= b`; the variables involved must be numeric
 (`Int`/`Real`), typically via their predicate declarations. Arithmetic is not
 allowed inside predicate arguments (those are plain variables or constants).
+
+### String matching
+
+Two relations over `String` terms:
+
+    d contains "AUTOMATIC"          -- substring test
+    m matches "user {u}"            -- pattern with holes
+
+`matches` tests a term against a pattern of literal text and **holes**
+`{var}`; a hole names a data variable and captures a substring, optionally
+constrained by a regular expression: `{n:[0-9]+}` (subset: literals, `.`,
+classes, `* + ?`, `|`, grouping). A capture is a *constraint*, not an
+extraction — the pattern means `m = "user " ++ u` — so the hole variable is
+an ordinary quantified variable and flows anywhere data flows, e.g.
+
+    prop resp : Forall m . Forall u .
+        login(m) & m matches "user {u}" -> F[<=5] logout(u)
+
+If a pattern decomposes ambiguously (`"{a}-{c}"` against `"x-y-z"`), **all
+decompositions count** (declarative matching, not leftmost-greedy).
+Matching log values is as cheap as equality (see
+`experiments/string_bench.py`); quantifier elimination over string
+constraints can diverge, in which case the engine falls back to leaving the
+quantifier in place (a bounded `qe2` attempt) and deciding via the final
+satisfiability check.
 
 Macros (`pred name(args) = formula`) are named abbreviations, expanded
 syntactically before monitoring.

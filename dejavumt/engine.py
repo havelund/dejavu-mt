@@ -54,6 +54,21 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
         return ast.Pred(f.name, tuple(_subst_term(a, m) for a in f.args))
     if isinstance(f, ast.Compare):
         return ast.Compare(_subst_term(f.left, m), f.op, _subst_term(f.right, m))
+    if isinstance(f, ast.Match):
+        segs = []
+        for seg in f.segments:
+            if seg[0] == "hole" and seg[1] in m:
+                tgt = m[seg[1]]
+                if isinstance(tgt, ast.Var):
+                    segs.append(("hole", tgt.name, seg[2]))
+                elif isinstance(tgt, ast.Const) and tgt.kind == "String":
+                    segs.append(("lit", str(tgt.value)))
+                else:
+                    raise TypeError(
+                        f"cannot substitute {tgt} into pattern hole {seg[1]}")
+            else:
+                segs.append(seg)
+        return ast.Match(_subst_term(f.subject, m), tuple(segs), f.pattern)
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(_subst(f.arg, m))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist,
@@ -82,7 +97,7 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
             )
         mapping = {p: a for p, a in zip(mac.params, f.args)}
         return expand_macros(_subst(mac.body, mapping), macros)
-    if isinstance(f, (ast.TrueC, ast.FalseC, ast.Pred, ast.Compare)):
+    if isinstance(f, (ast.TrueC, ast.FalseC, ast.Pred, ast.Compare, ast.Match)):
         return f
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(expand_macros(f.arg, macros))
@@ -123,6 +138,12 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
             for j, arg in enumerate(g.args):
                 if isinstance(arg, ast.Var) and psorts is not None and j < len(psorts):
                     note(arg.name, psorts[j])
+        elif isinstance(g, ast.Match):
+            if isinstance(g.subject, ast.Var):
+                note(g.subject.name, "String")
+            for seg in g.segments:
+                if seg[0] == "hole":
+                    note(seg[1], "String")
         elif isinstance(g, ast.Compare):
             # Collect the bare variables and constant kinds on both sides
             # (recursing through arithmetic).  If a single numeric kind
@@ -195,6 +216,11 @@ def collect_vars(f: ast.LTL) -> set:
         if isinstance(g, ast.Pred):
             for a in g.args:
                 term(a)
+        elif isinstance(g, ast.Match):
+            term(g.subject)
+            for seg in g.segments:
+                if seg[0] == "hole":
+                    out.add(seg[1])
         elif isinstance(g, ast.Compare):
             term(g.left)
             term(g.right)
@@ -229,7 +255,7 @@ def free_vars(f: ast.LTL) -> set:
                       ast.Zince, ast.Interval,
                       ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
         return free_vars(f.left) | free_vars(f.right)
-    if isinstance(f, (ast.Pred, ast.Compare)):
+    if isinstance(f, (ast.Pred, ast.Compare, ast.Match)):
         return collect_vars(f)
     return set()
 
@@ -372,6 +398,8 @@ class FormulaMonitor:
             return self._add("pred", [], (f.name, f.args))
         if isinstance(f, ast.Compare):
             return self._add("const_expr", [], self._compare_expr(f))
+        if isinstance(f, ast.Match):
+            return self._add("const_expr", [], self._match_expr(f))
         if isinstance(f, ast.Not):
             return self._add("not", [self._compile(f.arg)])
         if isinstance(f, ast.And):
@@ -481,6 +509,24 @@ class FormulaMonitor:
         r = self._term_expr(c.right)
         return {"=": b.eq, "<": b.lt, "<=": b.le, ">": b.gt, ">=": b.ge,
                 "contains": b.contains}[c.op](l, r)
+
+    def _match_expr(self, f: ast.Match):
+        """subject matches "..{u}.."  as a static constraint: subject equals
+        the concatenation of the literal parts and the hole variables, each
+        constrained hole a member of its regex."""
+        b = self.backend
+        parts, conjs = [], []
+        for seg in f.segments:
+            if seg[0] == "lit":
+                parts.append(b.lit(seg[1], "String"))
+            else:
+                _, name, rast = seg
+                hole = self._term_expr(ast.Var(name))
+                parts.append(hole)
+                if rast is not None:
+                    conjs.append(b.in_re(hole, rast))
+        eqc = b.eq(self._term_expr(f.subject), b.concat(parts))
+        return b.and_(eqc, *conjs) if conjs else eqc
 
     def _arg_sort(self, arg, psorts, j):
         """Sort of predicate argument position j: from the declaration if

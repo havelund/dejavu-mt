@@ -116,6 +116,21 @@ class Compare(LTL):
 
 
 @dataclass(frozen=True)
+class Match(LTL):
+    """subject matches "lit {u} lit {v:regex} ..."  -- a pattern constraint:
+    subject equals the concatenation of the literal parts and the hole
+    variables, each constrained hole a member of its regex.  Holes are free
+    data variables (String); ALL decompositions count (declarative matching,
+    not leftmost-greedy)."""
+    subject: Term
+    segments: tuple    # of ("lit", str) | ("hole", var, regex-ast-or-None)
+    pattern: str       # as written, for display
+
+    def __str__(self) -> str:
+        return f'{self.subject} matches "{self.pattern}"'
+
+
+@dataclass(frozen=True)
 class Not(LTL):
     arg: LTL
 

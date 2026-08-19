@@ -104,6 +104,7 @@ _GRAMMAR = r"""
     ?leaf: "true"                          -> true_
          | "false"                         -> false_
          | sum OPER sum                     -> compare
+         | atom MATCHES ESCAPED_STRING     -> matches_
          | sum CONTAINS sum                 -> compare
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
@@ -157,6 +158,11 @@ _GRAMMAR = r"""
     // (below) just like the single-letter operators — else it would lex as the
     // head of an identifier. .2 priority so a bare `contains` beats NAME.
     CONTAINS.2: /contains(?![A-Za-z0-9_])/
+    // `matches` tests a String term against a pattern with holes:
+    //   m matches "user {u}"        binds hole u to the captured substring
+    //   m matches "id {n:[0-9]+}"   hole constrained by a regex subset
+    // Semantics is a constraint (all decompositions), see dejavumt/pattern.py.
+    MATCHES.2: /matches(?![A-Za-z0-9_])/
     SORT: "String" | "Int" | "Real" | "Bool"
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
@@ -177,7 +183,7 @@ _GRAMMAR = r"""
     _F: /F(?![A-Za-z0-9_])/
     _G: /G(?![A-Za-z0-9_])/
 
-    NAME: /(?!(Exists|Forall|true|false|contains)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(Exists|Forall|true|false|contains|matches)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
     %import common.ESCAPED_STRING
     %import common.INT
@@ -239,6 +245,11 @@ class _ToAst(Transformer):
 
     def compare(self, left, op, right):
         return ast.Compare(left, str(op), right)
+
+    def matches_(self, subject, _kw, pat):
+        from .pattern import parse_pattern
+        text = str(pat)[1:-1]
+        return ast.Match(subject, tuple(parse_pattern(text)), text)
 
     def pred(self, name, args=None):
         return ast.Pred(str(name), tuple(args) if args else ())

@@ -44,7 +44,15 @@ prop p : Forall c . Forall d .
     MODE_CHANGED(c, d) & d contains "AUTO" -> P[<=5] armed(c)
 """
 
+CAPTURE_SPEC = """
+pred LOGIN(m: String)
+pred armed(u: String)
+prop p : Forall m . Forall u .
+    LOGIN(m) & m matches "user {u}" -> P[<=5] armed(u)
+"""
+
 MODES = ["MANUAL", "SAFE", "AUTOMATIC", "IDLE", "AUTONAV"]
+USERS = ["klaus", "doron", "grigore", "eugen"]
 
 
 def make_log(n, seed=0):
@@ -53,8 +61,11 @@ def make_log(n, seed=0):
     t = 0
     for i in range(n):
         c = f"ctrl{rng.randint(0, 3)}"
-        if rng.random() < 0.3:
-            events.append({"armed": [(c,)]})
+        r = rng.random()
+        if r < 0.3:
+            events.append({"armed": [(rng.choice(USERS),)]})
+        elif r < 0.45:
+            events.append({"LOGIN": [(f"user {rng.choice(USERS)}",)]})
         else:
             d = f"Control mode changed to {rng.choice(MODES)}"
             events.append({"MODE_CHANGED": [(c, d)]})
@@ -81,7 +92,8 @@ def main():
     print(f"{'property':<10} {'n':>5} {'z3 (s)':>9} {'cvc5 (s)':>9} "
           f"{'ratio':>6}  verdicts")
     for name, spec in (("equality", EQ_SPEC), ("contains", CONTAINS_SPEC),
-                       ("temporal", TEMPORAL_SPEC)):
+                       ("temporal", TEMPORAL_SPEC),
+                       ("capture", CAPTURE_SPEC)):
         for n in lengths:
             ev, tm = events[:n], times[:n]
             tz, vz = run(spec, ev, tm, "z3")
