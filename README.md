@@ -437,7 +437,9 @@ region-valued bookkeeping — future work), while parametric past operators may
 nest anywhere. Several *distinct* parameters
 are fine, and each verdict/region is then a constraint over all of them. In
 the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
-booleans) and each `FormulaMonitor` exposes `region`.
+booleans) and each `FormulaMonitor` exposes `region`. See
+`doc/parametric.md` for how verdicts are decided (immediately for past
+operators; by bracket agreement for future ones) and the memory trade-offs.
 
 Macros (`pred name(args) = formula`) are named abbreviations, expanded
 syntactically before monitoring.

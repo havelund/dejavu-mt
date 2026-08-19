@@ -92,42 +92,13 @@ runs on an untimed log, with the end of the trace as the only forcing point.
 
 ## Parametric bounds
 
-The upper bound of `F`/`G` may be a *symbolic parameter* (`F[<=n] ack`): an
-Int constant the engine never eliminates, so the query
-`Exists t . S & T+a <= t <= T+n` eliminates to a formula over `n` and the
-verdict becomes a constraint — "holds iff n >= 7" — rather than a Boolean.
-Almost nothing changes: the tables, queries and recurrences are untouched,
-`n` just flows through them. What does change is finality. A parametric
-window has no numeric deadline, so `_fexact` never closes it; instead the
-bracket for the node is `[q, q | n >= max(a, elapsed)]` — any *future*
-witness lies at delay >= the time elapsed since the anchor, so its
-contribution is at most `n >= elapsed` — and the obligation resolves when
-the two eliminated root brackets agree **for every parameter value** (one
-satisfiability check of their iff). For `F` that happens at the first
-witness (a later one is only slower: subsumed); for `G` at the first
-counterexample; otherwise at end of trace. For `U` the upper bracket is
-tightened to `q | (alive & n >= max(a, elapsed))`, where `alive` is the
-run's surviving data values (from the `A` table): a future witness also
-needs `phi` to have held since the anchor, so a broken run collapses the
-brackets and yields `false` for every `n` at once. Emitted constraints
-accumulate
-into a running *feasible region* (`FormulaMonitor.region`), kept
-subsumption-free.
-
-The timed *past* operators (`P/H/S/Z`) take symbolic bounds too, and more
-simply: a past verdict is fully known at its own position, so the constraint
-is emitted immediately, with no obligations or brackets involved; the cost
-moves to state instead — a parametric past window can prune nothing (every
-record is inside the window for large enough `n`), so that node's state
-grows with the trace.
-
-Well-formedness, checked at compile time (`collect_params` and the deep-node
-check in `FormulaMonitor.__init__`): a parameter occurs in exactly one
-bound, on any timed operator; a parametric future operator must not be
-nested under other temporal operators — there its exactness would itself be
-a region over `n`, and the staged resolution below would need
-region-guarded bindings (future work) — while parametric past operators may
-nest anywhere.
+The upper bound may also be a *symbolic parameter* (`F[<=n] ack`), turning
+verdicts into constraints on it ("holds iff n >= 7"). That feature spans
+past and future operators alike and has its own document: see
+`doc/parametric.md`. The future-side mechanism in one sentence: a
+parametric window has no deadline, so an obligation resolves when its two
+brackets — the query, and the query weakened by the most any future witness
+can still contribute — agree for every parameter value.
 
 ## Pruning
 
