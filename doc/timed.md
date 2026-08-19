@@ -181,10 +181,20 @@ Semantics agreement with DejaVu is validated by the differential harness
 distribution produce identical verdicts (DejaVu decides a log is timed by its
 *filename* containing `.timed.` — the harness mirrors this convention).
 
-## Variable bounds (future)
+## Variable bounds
 
-Nothing in the encoding requires `a`, `b` to be literals — a bound could be a
+Nothing in the encoding requires `a`, `b` to be literals — the window test
+is just a linear constraint with one more free variable. Two cases:
+
+**Symbolic parameters (implemented).** The upper bound may be a parameter
+the monitor never fixes (`P[<=n]`), turning each verdict into a constraint
+on it ("holds iff n >= 7") — see `doc/parametric.md`. For the past
+operators the verdicts come for free (a past verdict is known at its own
+position); the price is state: with `n` symbolic neither the expiry pruning
+nor the `[a,*]` saturation of this document applies — every record matters
+for some `n` — so the node's state grows with the trace.
+
+**Data-dependent bounds (not yet implemented).** A bound could also be a
 data variable from the trace (per-request deadlines: `request(x,d) ->
-... P[0,d] ...`), since the window test is just a linear constraint with one
-more free variable. This is grammar/inference work only; the engine already
-supports it structurally. Not yet implemented.
+... P[0,d] ...`). This is grammar/inference work only; the engine already
+supports it structurally.
