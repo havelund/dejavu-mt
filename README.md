@@ -394,6 +394,39 @@ constraints can diverge, in which case the engine falls back to leaving the
 quantifier in place (a bounded `qe2` attempt) and deciding via the final
 satisfiability check.
 
+### Parametric monitoring
+
+The upper bound of `F`/`G` may be a **symbolic parameter** instead of a
+number:
+
+    pred req(x: String)
+    pred ack(x: String)
+    prop r : Forall x . req(x) -> F[<=n] ack(x)
+
+The monitor leaves `n` free (an ordinary Int constant it simply never
+eliminates) and reports, per position, the **constraint on `n`** under which
+that position holds, plus a running **feasible region** — the conjunction of
+the constraints so far:
+
+    --- r at event 1: req(a) @ 0 holds iff 7 <= n
+    --- r at event 3: req(b) @ 10 holds iff 3 <= n
+
+    Parametric verdict for r: holds iff 7 <= n
+
+So instead of checking one deadline, the monitor *synthesizes* the tightest
+deadline the trace meets. Verdicts resolve at the **first witness** (for `F`;
+a later witness is only slower) or the first counterexample (for `G`), not at
+a deadline — with a symbolic bound there is none; unanswered positions
+resolve at end of trace (`false` for every `n`, collapsing the region).
+
+Well-formedness (checked at compile time): a parameter may occur in **exactly
+one** bound, only on `F`/`G`, and the parametric operator must not be nested
+under other temporal operators (its window never closes, so staged resolution
+would need region-valued bookkeeping — future work). Several *distinct*
+parameters are fine, and each verdict/region is then a constraint over all of
+them. In the API, `Monitor.step`/`end` verdicts are then backend formulas
+(instead of booleans) and each `FormulaMonitor` exposes `region`.
+
 Macros (`pred name(args) = formula`) are named abbreviations, expanded
 syntactically before monitoring.
 
@@ -450,7 +483,9 @@ Implemented: the first-order fragment — propositional connectives,
 `@ S Z P H` and intervals, quantifiers (top-level and nested), macros, typed
 relations with arithmetic (`+ - *`), the timed operators
 `S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
-sugar, and the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`;
+sugar, the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`, and
+parametric bounds on `F`/`G` (`F[<=n]` with `n` symbolic — verdicts become
+constraints on `n`);
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader

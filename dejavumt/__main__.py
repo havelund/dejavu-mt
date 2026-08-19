@@ -44,7 +44,11 @@ def _fact(event) -> str:
     return pred + ("(" + ",".join(args[0]) + ")" if args[0] else "")
 
 
-def _verdict_tag(holds: bool) -> str:
+def _verdict_tag(holds) -> str:
+    if isinstance(holds, str):
+        # Parametric constraint verdict (already rendered by the backend).
+        s = f"holds iff {holds}"
+        return f"\033[33m{s}\033[0m" if sys.stdout.isatty() else s
     if not sys.stdout.isatty():
         return "holds" if holds else "VIOLATED"
     return "\033[32mholds\033[0m" if holds else "\033[31mVIOLATED\033[0m"
@@ -123,30 +127,47 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
                     print(f"   pending obligations for position(s): {poss}")
         for pos, name, holds in monitor.resolved:
             verdicts_at[(pos, name)] = holds
-            if not holds:
+            if holds is False:
                 violations += 1
                 if not debug and not trace:
                     late = "" if pos == line_nr else f" (determined at event {line_nr})"
                     print(f"*** Violation of {name} at event {pos}: "
                           f"{facts[pos]}{late}")
+            elif holds is not True and not debug and not trace:
+                print(f"--- {name} at event {pos}: {facts[pos]} holds iff "
+                      f"{monitor.backend.to_str(holds)}")
     # Close every remaining window: with future operators some positions are
     # still awaiting their verdict when the trace ends.
     for pos, name, holds in monitor.end():
         verdicts_at[(pos, name)] = holds
-        if not holds:
+        if holds is False:
             violations += 1
             if not debug and not trace:
                 print(f"*** Violation of {name} at event {pos}: "
                       f"{facts[pos]} (determined at end of trace)")
+        elif holds is not True and not debug and not trace:
+            print(f"--- {name} at event {pos}: {facts[pos]} holds iff "
+                  f"{monitor.backend.to_str(holds)} (determined at end of trace)")
 
     if trace:
         print("\n===== trace =====\n" if debug else "")
+
+        def tag(v):
+            return _verdict_tag(v if isinstance(v, bool)
+                                else monitor.backend.to_str(v))
+
         for pos in range(1, line_nr + 1):
             tags = "   ".join(
-                f"{fm.name}: {_verdict_tag(verdicts_at[(pos, fm.name)])}"
+                f"{fm.name}: {tag(verdicts_at[(pos, fm.name)])}"
                 if (pos, fm.name) in verdicts_at else f"{fm.name}: pending"
                 for fm in monitor.formulas)
             print(f"{pos:>5}  {facts[pos]:<28}  {tags}")
+    # Parametric properties: report the feasible region -- the constraint on
+    # the parameters under which every position of the trace holds.
+    for fm in monitor.formulas:
+        if fm.params:
+            print(f"\nParametric verdict for {fm.name}: holds iff "
+                  f"{monitor.backend.to_str(fm.region)}")
     print(f"\nProcessed {line_nr} events, {violations} violation(s).")
     return 1 if violations else 0
 

@@ -17,6 +17,9 @@ Currently supported (slice 1 -- untimed fragment):
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
     strings:       s contains "sub"   substring test over String terms
+    parametric:    F/G with a symbolic upper bound (F[<=n], G[0,n]) -- the
+                   monitor leaves n free and reports, per position, the
+                   constraint on n under which the property holds
 
 Not yet supported (planned): recursive rules (where ... :=) and the seen-only
 lowercase exists/forall quantifiers.
@@ -123,12 +126,17 @@ _GRAMMAR = r"""
          | "(" ltl ")"                     -> parens
 
     // Time bounds on S/Z/P/H: an interval [a,b] or [a,*], or comparison sugar.
+    // The upper bound may also be a NAME: a symbolic parameter, left free by
+    // the monitor, whose verdicts then become constraints on it (parametric
+    // monitoring; F and G only -- see engine.collect_params).
     ?timebound: "[" "<=" INT "]"       -> tb_le
               | "[" "<" INT "]"        -> tb_lt
               | "[" ">=" INT "]"       -> tb_ge
               | "[" ">" INT "]"        -> tb_gt
               | "[" INT "," INT "]"    -> tb_ab
               | "[" INT "," "*" "]"    -> tb_astar
+              | "[" "<=" NAME "]"      -> tb_le_p
+              | "[" INT "," NAME "]"   -> tb_ab_p
 
     // Arithmetic expressions in relation operands (* binds tighter than +/-).
     ?sum: sum "+" product   -> add
@@ -331,6 +339,14 @@ class _ToAst(Transformer):
 
     def tb_astar(self, a):
         return self._tb(int(a), None, f"[{a},*]")
+
+    # Parametric bounds: the upper bound is a name (kept as a str), standing
+    # for a symbolic Int parameter the monitor never fixes.
+    def tb_le_p(self, n):
+        return (0, str(n), f"[<={n}]")
+
+    def tb_ab_p(self, a, n):
+        return (int(a), str(n), f"[{a},{n}]")
 
     def timed_since(self, l, tb, r):
         return ast.TimedSince(l, tb[0], tb[1], r, tb[2])

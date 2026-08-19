@@ -90,6 +90,31 @@ node exports the negated query. `X phi` is the degenerate case, stamped by
 (no interval) also use positions, so they need no timestamps at all: `F p`
 runs on an untimed log, with the end of the trace as the only forcing point.
 
+## Parametric bounds
+
+The upper bound of `F`/`G` may be a *symbolic parameter* (`F[<=n] ack`): an
+Int constant the engine never eliminates, so the query
+`Exists t . S & T+a <= t <= T+n` eliminates to a formula over `n` and the
+verdict becomes a constraint — "holds iff n >= 7" — rather than a Boolean.
+Almost nothing changes: the tables, queries and recurrences are untouched,
+`n` just flows through them. What does change is finality. A parametric
+window has no numeric deadline, so `_fexact` never closes it; instead the
+bracket for the node is `[q, q | n >= max(a, elapsed)]` — any *future*
+witness lies at delay >= the time elapsed since the anchor, so its
+contribution is at most `n >= elapsed` — and the obligation resolves when
+the two eliminated root brackets agree **for every parameter value** (one
+satisfiability check of their iff). For `F` that happens at the first
+witness (a later one is only slower: subsumed); for `G` at the first
+counterexample; otherwise at end of trace. Emitted constraints accumulate
+into a running *feasible region* (`FormulaMonitor.region`), kept
+subsumption-free.
+
+Well-formedness, checked at compile time (`collect_params` and the deep-node
+check in `FormulaMonitor.__init__`): a parameter occurs in exactly one
+bound, only on `F`/`G`, and never nested under other temporal operators —
+there its exactness would itself be a region over `n`, and the staged
+resolution below would need region-guarded bindings (future work).
+
 ## Pruning
 
 A table row can serve no obligation once its stamp lies before the earliest

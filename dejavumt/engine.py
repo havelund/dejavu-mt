@@ -264,6 +264,51 @@ def free_vars(f: ast.LTL) -> set:
     return set()
 
 
+def collect_params(f: ast.LTL) -> list:
+    """Names used as symbolic interval bounds (parametric monitoring), with
+    the well-formedness checks of the supported fragment: a symbolic bound is
+    allowed only as the UPPER bound of F or G, and each parameter name may
+    occur exactly once.  (A single positive occurrence keeps the verdict a
+    threshold synthesized from witness delays; the nesting restriction is
+    enforced separately, once the formula is compiled -- see
+    FormulaMonitor.__init__.)"""
+    counts: Dict[str, int] = {}
+
+    def walk(g):
+        if isinstance(g, (ast.TimedEventually, ast.TimedAlways)):
+            if isinstance(g.high, str):
+                counts[g.high] = counts.get(g.high, 0) + 1
+            walk(g.arg)
+        elif isinstance(g, (ast.TimedOnce, ast.TimedHist)):
+            if isinstance(g.high, str):
+                raise ValueError(
+                    f"symbolic bound '{g.high}' is only supported on the "
+                    f"future operators F and G (in {g})")
+            walk(g.arg)
+        elif isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
+            if isinstance(g.high, str):
+                raise ValueError(
+                    f"symbolic bound '{g.high}' is only supported on the "
+                    f"future operators F and G (in {g})")
+            walk(g.left)
+            walk(g.right)
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
+                            ast.Exists, ast.Forall)):
+            walk(g.arg)
+        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                            ast.Zince, ast.Interval)):
+            walk(g.left)
+            walk(g.right)
+
+    walk(f)
+    for name, c in counts.items():
+        if c > 1:
+            raise ValueError(
+                f"parameter '{name}' occurs in {c} bounds; a parameter may "
+                f"occur in exactly one")
+    return sorted(counts)
+
+
 # ---------------------------------------------------------------------------
 # Compiled node
 # ---------------------------------------------------------------------------
@@ -315,6 +360,20 @@ class FormulaMonitor:
         for v in collect_vars(body):
             self.var_sorts.setdefault(v, "String")
         self.consts = {v: backend.const(v, s) for v, s in self.var_sorts.items()}
+        # Parametric monitoring: symbolic interval bounds are Int constants
+        # the engine simply never eliminates, so verdicts become constraints
+        # on them (e.g. "holds iff n >= 7") instead of Booleans.
+        self.pnames = collect_params(body)
+        clash = set(self.pnames) & collect_vars(body)
+        if clash:
+            raise ValueError(
+                f"parameter(s) {', '.join(sorted(clash))} also occur as data "
+                f"variables; a parameter must be a fresh name")
+        self.params = {p: backend.const(p, "Int") for p in self.pnames}
+        # Running feasible region: the conjunction of the constraint-verdicts
+        # emitted so far -- the parameter values under which every judged
+        # position holds.  Only shrinks.
+        self.region = backend.true() if self.params else None
         self.nodes: List[_Node] = []
         self.root = self._compile(body)
         n = len(self.nodes)
@@ -345,6 +404,16 @@ class FormulaMonitor:
         # uninterpreted placeholder, resolved by substitution later.  Shallow
         # nodes (only stateless ancestors) use the direct query mechanism.
         self.deep = self._deep_nodes()
+        # A parametric window never closes by deadline, so its node must stay
+        # shallow: nested under a stateful or future operator, its exactness
+        # (and hence the staged-resolution bookkeeping) would itself become a
+        # region over the parameter -- out of the supported fragment.
+        for j in self.fnodes:
+            if isinstance(self.nodes[j].data["high"], str) and j in self.deep:
+                raise ValueError(
+                    f"parametric bound '{self.nodes[j].data['high']}' must "
+                    f"not be nested under temporal operators "
+                    f"(in {self.nodes[j].label or 'future subformula'})")
         self.qbind: List[dict] = []        # unresolved placeholder bindings
         self._qn = 0                       # fresh placeholder counter
         self._path = self._future_path()   # nodes recomputed when checking
@@ -846,7 +915,11 @@ class FormulaMonitor:
             body = b.and_(body, b.ge(d["p"], b.lit(pos, "Int")))
         body = b.and_(body, b.ge(stamp, b.lit(anchor + lo, "Int")))
         if hi is not None:
-            body = b.and_(body, b.le(stamp, b.lit(anchor + hi, "Int")))
+            # A symbolic (parametric) upper bound stays a free constant; the
+            # eliminated query is then a formula over it.
+            hiterm = (b.add(b.lit(anchor, "Int"), self.params[hi])
+                      if isinstance(hi, str) else b.lit(anchor + hi, "Int"))
+            body = b.and_(body, b.le(stamp, hiterm))
         q = b.exists(stamp, body)
         if nd.kind == "funtil":
             q = b.exists(t, q)
@@ -928,7 +1001,10 @@ class FormulaMonitor:
         check, since the plain simplifier does not collapse the shape)."""
         b = self.backend
         d = self.nodes[j].data
-        if d["high"] is not None:
+        # A symbolic (parametric) bound gives no numeric deadline: the window
+        # never closes early; obligations resolve by bracket agreement (see
+        # _check) or at end of trace.
+        if isinstance(d["high"], int):
             closed = (clockval >= anchor + d["high"]
                       if d["clock"] == "pos"
                       else clockval > anchor + d["high"])
@@ -997,15 +1073,33 @@ class FormulaMonitor:
             nd = self.nodes[j]
             anchor = ob["pos"] if nd.data["clock"] == "pos" else ob["time"]
             clockval = clockval_pos if nd.data["clock"] == "pos" else clockval_time
-            val = self._fval(j, ob["pos"], anchor)
+            q = self._fquery(j, ob["pos"], anchor)
+            val = b.not_(q) if nd.kind in FUTURE_NEGATED else q
             if ((force or self._fexact(j, ob["pos"], anchor, clockval))
                     and self._fready(j)):
                 lo_vals[j] = hi_vals[j] = val
                 continue
             all_exact = False
             # The export can still grow (or, when negated, shrink).
-            vlo, vhi = ((b.false(), val) if nd.kind in FUTURE_NEGATED
-                        else (val, b.true()))
+            hi_bound = nd.data["high"]
+            if isinstance(hi_bound, str):
+                # Parametric window: the query can only grow by later
+                # witnesses.  Timestamps are non-decreasing, so any future
+                # witness has delay >= max(low, elapsed) and contributes at
+                # most  n >= that delay  -- a tight upper bracket, which
+                # meets the lower one exactly when nothing later can matter
+                # (e.g. F: the first witness is in; G: the first
+                # counterexample is in).
+                elapsed = 0 if clockval is None else clockval - anchor
+                growth = b.ge(self.params[hi_bound],
+                              b.lit(max(nd.data["low"], elapsed), "Int"))
+                if nd.kind in FUTURE_NEGATED:
+                    vlo, vhi = b.not_(b.or_(q, growth)), b.not_(q)
+                else:
+                    vlo, vhi = q, b.or_(q, growth)
+            else:
+                vlo, vhi = ((b.false(), val) if nd.kind in FUTURE_NEGATED
+                            else (val, b.true()))
             pol = self._polarity.get(j, 0)
             if pol > 0:
                 lo_vals[j], hi_vals[j] = vlo, vhi
@@ -1046,6 +1140,19 @@ class FormulaMonitor:
             if mixed and (b.mentions(root_lo, decls)
                           or b.mentions(root_hi, decls)):
                 return None
+        if self.params:
+            # Parametric verdicts.  The root is a formula over the free
+            # parameters; it is final when the two brackets agree for EVERY
+            # parameter value, and the verdict is the constraint itself.
+            lo = b.simplify(self._eliminate(root_lo))
+            if all_exact:
+                return self._pverdict(lo)
+            if mixed:
+                return None
+            hi = b.simplify(self._eliminate(root_hi))
+            if not b.check_sat(b.not_(b.iff(lo, hi))):
+                return self._pverdict(lo)
+            return None
         if all_exact:
             return self._verdict(b.simplify(self._eliminate(root_lo)))
         if mixed:
@@ -1256,6 +1363,28 @@ class FormulaMonitor:
         go(self.root, "", True, True)
         return "\n".join(lines)
 
+    def _pverdict(self, f):
+        """Verdict of a parametric obligation: True when the constraint holds
+        for every parameter value, False when for none, otherwise the
+        constraint on the parameters itself.  Also narrows the running
+        feasible region by it."""
+        b = self.backend
+        if b.is_true(f) or not b.check_sat(b.not_(f)):
+            return True
+        if b.is_false(f) or not b.check_sat(f):
+            self.region = b.false()
+            return False
+        # The region is user-facing output: keep it free of subsumed
+        # constraints (n>=7 already implies n>=3) rather than a growing
+        # conjunction.  Two satisfiability checks per emitted constraint.
+        if not b.check_sat(b.and_(self.region, b.not_(f))):
+            pass                                  # region already implies f
+        elif not b.check_sat(b.and_(f, b.not_(self.region))):
+            self.region = f                       # f is strictly stronger
+        else:
+            self.region = b.simplify(b.and_(self.region, f))
+        return f
+
     def _verdict(self, root_formula) -> bool:
         b = self.backend
         f = b.simplify(root_formula)
@@ -1297,9 +1426,12 @@ class Monitor:
     def step(self, event: Dict[str, List[Tuple]], time: int = None):
         """Process one event.  Returns the verdict of each property *for this
         position*: True, False, or None when it is still pending (only
-        possible with future operators).  Verdicts resolved during this step,
-        for this position or an earlier one, are collected in `self.resolved`
-        as (position, property, holds) triples."""
+        possible with future operators).  For a parametric property (a
+        symbolic bound, e.g. F[<=n]) a verdict may instead be a backend
+        formula: the constraint on the parameter under which the position
+        holds.  Verdicts resolved during this step, for this position or an
+        earlier one, are collected in `self.resolved` as (position, property,
+        holds) triples."""
         out, self.resolved = {}, []
         for fm in self.formulas:
             res = fm.step(event, time)
