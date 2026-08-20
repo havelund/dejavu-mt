@@ -232,6 +232,92 @@ def test_until_dead_run_is_false_early():
     assert emitted.get(1) is False
 
 
+# --- lower bounds: discovered minimum delays/ages ----------------------------
+
+def n_le(m, name, k):
+    b = m.backend
+    return b.le(pconst(m, name), b.lit(k, "Int"))
+
+
+def test_past_lower_bound():
+    """rsp -> P[>=n] req: holds iff the witness request is at least n old --
+    the monitor discovers the guaranteed minimum age."""
+    spec = """
+    pred req(x: String)
+    pred rsp(x: String)
+    prop t : Forall x . rsp(x) -> P[>=n] req(x)
+    """
+    events = [({"req": [("a",)]}, 0), ({"rsp": [("a",)]}, 7),
+              ({"req": [("b",)]}, 10), ({"rsp": [("b",)]}, 13)]
+    m, got = replay(spec, events, prop="t")
+    b = m.backend
+    assert equiv(b, got[2], n_le(m, "n", 7))
+    assert equiv(b, got[4], n_le(m, "n", 3))
+    # Region: every response's request was at least n old, iff n <= 3.
+    assert equiv(b, m.formulas[0].region, n_le(m, "n", 3))
+
+
+def test_past_lower_bound_with_concrete_upper():
+    """P[n,10]: the concrete upper bound still prunes; verdict over n."""
+    spec = """
+    pred req(x: String)
+    pred rsp(x: String)
+    prop t : Forall x . rsp(x) -> P[n,10] req(x)
+    """
+    events = [({"req": [("a",)]}, 0), ({"rsp": [("a",)]}, 7)]
+    m, got = replay(spec, events, prop="t")
+    assert equiv(m.backend, got[2], n_le(m, "n", 7))
+
+
+def test_future_lower_bound_concrete_deadline():
+    """F[n,10]: the deadline is concrete, so the obligation resolves once
+    time passes it, with the constraint n <= (witness delay)."""
+    spec = """
+    pred req(x: String)
+    pred ack(x: String)
+    prop t : Forall x . req(x) -> F[n,10] ack(x)
+    """
+    m = Monitor(parse_spec(spec), solver="z3")
+    m.step({"req": [("a",)]}, 0)
+    m.step({"ack": [("a",)]}, 7)
+    m.step({"noise": [()]}, 12)          # past the deadline: resolves now
+    emitted = {pos: h for pos, name, h in m.resolved if name == "t"}
+    assert 1 in emitted
+    assert equiv(m.backend, emitted[1], n_le(m, "n", 7))
+
+
+def test_future_lower_bound_unbounded():
+    """F[n,*]: no deadline; resolves at end of trace."""
+    spec = """
+    pred req(x: String)
+    pred ack(x: String)
+    prop t : Forall x . req(x) -> F[n,*] ack(x)
+    """
+    events = [({"req": [("a",)]}, 0), ({"ack": [("a",)]}, 7)]
+    m, got = replay(spec, events, prop="t")
+    assert equiv(m.backend, got[1], n_le(m, "n", 7))
+
+
+def test_g_lower_bound():
+    """G[n,10] p: the counterexample at delay 5 rules out windows reaching
+    it: holds iff n > 5."""
+    spec = """
+    pred p()
+    pred q()
+    prop g : G[n,10] p
+    """
+    events = [({"p": [()]}, 0), ({"p": [()]}, 2), ({"q": [()]}, 5),
+              ({"p": [()]}, 12)]
+    m, got = replay(spec, events, prop="g")
+    b = m.backend
+    assert equiv(b, got[1], b.gt(pconst(m, "n"), b.lit(5, "Int")))
+
+
+def test_reject_two_symbolic_bounds():
+    with pytest.raises(ValueError, match="one symbolic bound"):
+        Monitor(parse_spec("pred p()\nprop x : P[m,n] p"))
+
+
 # --- well-formedness ---------------------------------------------------------
 
 

@@ -267,19 +267,24 @@ def free_vars(f: ast.LTL) -> set:
 def collect_params(f: ast.LTL) -> list:
     """Names used as symbolic interval bounds (parametric monitoring), with
     the well-formedness checks of the supported fragment: a symbolic bound
-    may be the UPPER bound of any timed operator (S, Z, P, H, F, G, U), and
-    each parameter name may occur exactly once.  A past occurrence needs no
+    may be the upper OR the lower bound of any timed operator (S, Z, P, H,
+    F, G, U) -- at most one symbolic bound per operator -- and each
+    parameter name may occur exactly once.  A past occurrence needs no
     nesting restriction (its verdict is known at its own position, and the
     state recurrences carry the parameter through like any constant); for
-    the future operators the single positive occurrence keeps the verdict a
+    the future operators the single occurrence keeps the verdict a
     threshold synthesized from witness delays, and the nesting restriction
     is enforced once the formula is compiled -- see
     FormulaMonitor.__init__."""
     counts: Dict[str, int] = {}
 
     def note(g):
-        if isinstance(g.high, str):
-            counts[g.high] = counts.get(g.high, 0) + 1
+        if isinstance(g.low, str) and isinstance(g.high, str):
+            raise ValueError(
+                f"at most one symbolic bound per operator (in {g})")
+        for bound in (g.low, g.high):
+            if isinstance(bound, str):
+                counts[bound] = counts.get(bound, 0) + 1
 
     def walk(g):
         if isinstance(g, (ast.TimedEventually, ast.TimedAlways,
@@ -410,9 +415,12 @@ class FormulaMonitor:
         # (and hence the staged-resolution bookkeeping) would itself become a
         # region over the parameter -- out of the supported fragment.
         for j in self.fnodes:
-            if isinstance(self.nodes[j].data["high"], str) and j in self.deep:
+            d = self.nodes[j].data
+            sym = next((bnd for bnd in (d["high"], d["low"])
+                        if isinstance(bnd, str)), None)
+            if sym is not None and j in self.deep:
                 raise ValueError(
-                    f"parametric bound '{self.nodes[j].data['high']}' must "
+                    f"parametric bound '{sym}' must "
                     f"not be nested under temporal operators "
                     f"(in {self.nodes[j].label or 'future subformula'})")
         self.qbind: List[dict] = []        # unresolved placeholder bindings
@@ -925,10 +933,12 @@ class FormulaMonitor:
             # Future means positions >= the anchor's, not merely times in the
             # window (they differ when timestamps repeat).
             body = b.and_(body, b.ge(d["p"], b.lit(pos, "Int")))
-        body = b.and_(body, b.ge(stamp, b.lit(anchor + lo, "Int")))
+        # A symbolic (parametric) bound stays a free constant; the eliminated
+        # query is then a formula over it.
+        loterm = (b.add(b.lit(anchor, "Int"), self.params[lo])
+                  if isinstance(lo, str) else b.lit(anchor + lo, "Int"))
+        body = b.and_(body, b.ge(stamp, loterm))
         if hi is not None:
-            # A symbolic (parametric) upper bound stays a free constant; the
-            # eliminated query is then a formula over it.
             hiterm = (b.add(b.lit(anchor, "Int"), self.params[hi])
                       if isinstance(hi, str) else b.lit(anchor + hi, "Int"))
             body = b.and_(body, b.le(stamp, hiterm))
@@ -1227,8 +1237,13 @@ class FormulaMonitor:
                 obs = [ob["pos"] if d["clock"] == "pos" else ob["time"]
                        for ob in self.pending]
                 oldest = min(obs + [qb["anchor"] for qb in binds])
+                # With a symbolic lower bound the window start is unknown,
+                # but rows stamped before the earliest awaited anchor are
+                # dead regardless (future witnesses lie at or after their
+                # anchor's position, hence time).
+                lo_off = d["low"] if isinstance(d["low"], int) else 0
                 (S,) = self.ftab[j]
-                S = b.prune_expired(S, d["t"], oldest + d["low"])
+                S = b.prune_expired(S, d["t"], oldest + lo_off)
                 self.ftab[j] = (self._normalize(S),)
 
     def end(self):
@@ -1290,6 +1305,13 @@ class FormulaMonitor:
             # and outside it for small ones, so nothing saturates either.
             # State grows with the trace -- the price of parametric past.
             return S
+        if hi is None and isinstance(lo, str):
+            # Parametric lower bound with no upper: no expiry to prune by,
+            # and maturation depends on the parameter, so no saturation
+            # either.  State grows with the trace.  (With a concrete upper
+            # bound, expiry pruning below stays valid whatever the lower
+            # bound is.)
+            return S
         if hi is not None:
             # A record's stamp t = T_j with T_j < T - hi is false under every
             # window the value query will ever apply (timestamps are
@@ -1310,11 +1332,13 @@ class FormulaMonitor:
         T = b.lit(self._time, "Int")
         age = b.sub(T, tc)
         q = state
-        if lo > 0:
+        # A symbolic (parametric) bound stays a free constant; the eliminated
+        # value is then a formula over it.
+        if isinstance(lo, str):
+            q = b.and_(q, b.ge(age, self.params[lo]))
+        elif lo > 0:
             q = b.and_(q, b.ge(age, b.lit(lo, "Int")))
         if hi is not None:
-            # A symbolic (parametric) bound stays a free constant; the
-            # eliminated value is then a formula over it.
             hiterm = (self.params[hi] if isinstance(hi, str)
                       else b.lit(hi, "Int"))
             q = b.and_(q, b.le(age, hiterm))

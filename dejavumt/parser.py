@@ -142,6 +142,10 @@ _GRAMMAR = r"""
               | "[" INT "," "*" "]"    -> tb_astar
               | "[" "<=" NAME "]"      -> tb_le_p
               | "[" INT "," NAME "]"   -> tb_ab_p
+              | "[" ">=" NAME "]"      -> tb_ge_p
+              | "[" NAME "," INT "]"   -> tb_lo_p
+              | "[" NAME "," "*" "]"   -> tb_lostar_p
+              | "[" NAME "," NAME "]"  -> tb_pp
 
     // Arithmetic expressions in relation operands (* binds tighter than +/-).
     ?sum: sum "+" product   -> add
@@ -345,13 +349,28 @@ class _ToAst(Transformer):
     def tb_astar(self, a):
         return self._tb(int(a), None, f"[{a},*]")
 
-    # Parametric bounds: the upper bound is a name (kept as a str), standing
-    # for a symbolic Int parameter the monitor never fixes.
+    # Parametric bounds: a bound may be a name (kept as a str), standing for
+    # a symbolic Int parameter the monitor never fixes.  Upper or lower, at
+    # most one per operator (checked in engine.collect_params).
     def tb_le_p(self, n):
         return (0, str(n), f"[<={n}]")
 
     def tb_ab_p(self, a, n):
         return (int(a), str(n), f"[{a},{n}]")
+
+    def tb_ge_p(self, n):
+        return (str(n), None, f"[>={n}]")
+
+    def tb_lo_p(self, a, b):
+        return (str(a), int(b), f"[{a},{b}]")
+
+    def tb_lostar_p(self, a):
+        return (str(a), None, f"[{a},*]")
+
+    def tb_pp(self, a, b):
+        # Parses, but rejected by the engine's well-formedness check with a
+        # clear message (at most one symbolic bound per operator).
+        return (str(a), str(b), f"[{a},{b}]")
 
     def timed_since(self, l, tb, r):
         return ast.TimedSince(l, tb[0], tb[1], r, tb[2])

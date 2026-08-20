@@ -1,7 +1,8 @@
 # Parametric monitoring: symbolic bounds, synthesized constraints
 
-The upper bound of any timed operator — past (`P/H/S/Z`) or future
-(`F/G/U`) — may be a *symbolic parameter* instead of a number:
+An interval bound — upper or lower — of any timed operator, past
+(`P/H/S/Z`) or future (`F/G/U`), may be a *symbolic parameter* instead of a
+number:
 
     pred req(x: String)
     pred ack(x: String)
@@ -69,6 +70,26 @@ their iff). Consequences:
 - anything still open resolves at end of trace (`false` for every `n` if
   unanswered, collapsing the region).
 
+## Lower bounds: discovered minimum delays
+
+An upper-bound parameter synthesizes the tightest deadline met (`n >= 7`);
+a lower-bound parameter is the antitone twin and synthesizes guaranteed
+*minimum* ages and delays — thresholds of the form `n <= d`:
+
+    prop t : Forall x . rsp(x) -> P[>=n] req(x)     -- every response's
+                                                       request was at least
+                                                       n old: holds iff n <= 3
+
+Mechanically the lower bound is the easier direction for the future
+operators: `F[n,10]` still has its *concrete* deadline at +10, so the
+standard finality machinery applies unchanged — the obligation resolves
+when time passes the deadline, with the constraint `n <= (witness delay)`.
+`F[n,*]` has no deadline and resolves at end of trace. On the past side,
+`P[n,10]` keeps its expiry pruning (expiry depends only on the concrete
+upper bound), while `P[>=n]` can neither expire nor saturate and grows like
+the parametric-upper case. At most one bound per operator may be symbolic
+(`P[m,n]` is rejected); distinct operators may carry distinct parameters.
+
 ## The feasible region
 
 Emitted constraints accumulate into `FormulaMonitor.region`, the parameter
@@ -83,8 +104,8 @@ violation: no parameter value rescues the trace.
 Checked at compile time (`collect_params`, plus the deep-node check in
 `FormulaMonitor.__init__`):
 
-- a parameter occurs in **exactly one** bound, and only as an **upper**
-  bound, on any timed operator;
+- a parameter occurs in **exactly one** bound — upper or lower, on any
+  timed operator — and an operator carries at most one symbolic bound;
 - a parameter name must not also be used as a data variable;
 - a parametric **future** operator must not be nested under other temporal
   operators: its window never closes, so nested it would need the staged
@@ -95,6 +116,5 @@ Checked at compile time (`collect_params`, plus the deep-node check in
 Several *distinct* parameters are fine; verdicts and the region are then
 constraints over all of them.
 
-Still open: symbolic *lower* bounds (antitone: windows shrink as the
-parameter grows, so the bracket argument flips), nested parametric future
+Still open: two symbolic bounds on one operator, nested parametric future
 operators, and multiple or mixed-polarity occurrences of one parameter.

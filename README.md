@@ -409,8 +409,9 @@ satisfiability check.
 
 ### Parametric monitoring
 
-The upper bound of any timed operator — past (`P/H/S/Z`) or future
-(`F/G/U`) — may be a **symbolic parameter** instead of a number:
+An interval bound — upper or lower — of any timed operator, past
+(`P/H/S/Z`) or future (`F/G/U`), may be a **symbolic parameter** instead of
+a number:
 
     pred req(x: String)
     pred ack(x: String)
