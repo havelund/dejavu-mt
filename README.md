@@ -490,6 +490,30 @@ of random first-order formulas of the shared syntax (negation with free
 variables, unbounded future intervals, OR variable mismatches, unbound order
 relations, SINCE/UNTIL containment); DejaVuMT monitors all of them.
 
+**MonPoly performance** (`experiments/monpoly_bench.py`; same property, same
+trace, 20 distinct data values, one violation per ~50 events; DejaVuMT =
+in-process monitoring loop on Z3, MonPoly = its usual `-negate` subprocess;
+violation counts agreed on every row):
+
+    property     events   DejaVuMT   us/ev   MonPoly  us/ev   ratio
+    prop-past     16000      3.98s     249    0.016s    1.0    247x
+    timed-past    16000     58.97s    3685    0.019s    1.2   3063x
+    future        16000    191.40s   11962    0.022s    1.4   8552x
+    since         16000      6.68s     417    0.021s    1.3    313x
+
+(`prop-past` = `close(f) -> P open(f)`, `timed-past` = `rsp -> P[<=10] req`,
+`future` = `req -> F[<=10] ack`, `since` = `use -> [grant, reset)`.)
+
+MonPoly runs at 1–2 µs/event regardless of the property — its finite
+relations are exactly the right data structure when the data *is* a finite
+relation. DejaVuMT pays 0.25–12 ms/event for symbolic formula manipulation
+and solver calls: flat over trace length for the untimed properties, growing
+mildly for the timed/future ones (larger in-window tables and per-obligation
+checks). So on the shared fragment MonPoly is two to four orders of
+magnitude faster; DejaVuMT's case is the 80% of formulas *outside* that
+fragment, plus infinite domains, theories, and parametric bounds — coverage,
+not speed.
+
 Notes for reproducing timed comparisons: DejaVu decides that a log is timed
 from its **filename** (it must contain `.timed.`); the harness mirrors this
 convention, and pairs a timed spec only with timed logs.
