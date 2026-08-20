@@ -322,9 +322,9 @@ class TimedUntil(LTL):
 @dataclass(frozen=True)
 class TimedEventually(LTL):
     """F[a,b] phi  -- phi holds at some position between `low` and `high` time
-    units ahead;  = true U[a,b] phi.  `high` may also be a str: a symbolic
-    parameter the monitor leaves free, so that verdicts become constraints on
-    it (parametric monitoring)."""
+    units ahead;  = true U[a,b] phi.  `low`/`high` may also be a str (at
+    most one of them): a symbolic parameter the monitor leaves free, so
+    that verdicts become constraints on it (parametric monitoring)."""
     low: int
     high: Optional[int]
     arg: LTL
@@ -338,8 +338,8 @@ class TimedEventually(LTL):
 @dataclass(frozen=True)
 class TimedAlways(LTL):
     """G[a,b] phi  -- phi holds at every position between `low` and `high` time
-    units ahead;  = !F[a,b]!phi.  `high` may also be a str: a symbolic
-    parameter (see TimedEventually)."""
+    units ahead;  = !F[a,b]!phi.  `low`/`high` may also be a str: a
+    symbolic parameter (see TimedEventually)."""
     low: int
     high: Optional[int]
     arg: LTL

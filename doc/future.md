@@ -92,13 +92,15 @@ runs on an untimed log, with the end of the trace as the only forcing point.
 
 ## Parametric bounds
 
-The upper bound may also be a *symbolic parameter* (`F[<=n] ack`), turning
-verdicts into constraints on it ("holds iff n >= 7"). That feature spans
-past and future operators alike and has its own document: see
-`doc/parametric.md`. The future-side mechanism in one sentence: a
-parametric window has no deadline, so an obligation resolves when its two
-brackets — the query, and the query weakened by the most any future witness
-can still contribute — agree for every parameter value.
+Either bound may also be a *symbolic parameter* (`F[<=n] ack`, `F[n,10]
+ack`), turning verdicts into constraints on it ("holds iff n >= 7"). That
+feature spans past and future operators alike, nests anywhere (deep
+parametric placeholders resolve conservatively), and has its own document:
+see `doc/parametric.md`. The future-side mechanism in one sentence: a
+parametric upper bound leaves the window without a deadline, so an
+obligation resolves when its two brackets — the query, and the query
+weakened by the most any future witness can still contribute — agree for
+every parameter value.
 
 ## Pruning
 
