@@ -269,13 +269,10 @@ def collect_params(f: ast.LTL) -> list:
     the well-formedness checks of the supported fragment: a symbolic bound
     may be the upper OR the lower bound of any timed operator (S, Z, P, H,
     F, G, U) -- at most one symbolic bound per operator -- and each
-    parameter name may occur exactly once.  A past occurrence needs no
-    nesting restriction (its verdict is known at its own position, and the
-    state recurrences carry the parameter through like any constant); for
-    the future operators the single occurrence keeps the verdict a
-    threshold synthesized from witness delays, and the nesting restriction
-    is enforced once the formula is compiled -- see
-    FormulaMonitor.__init__."""
+    parameter name may occur exactly once.  Parametric operators may nest
+    anywhere: past occurrences are known at their own position, and deep
+    future occurrences resolve conservatively (see the deep-node comment in
+    FormulaMonitor.__init__)."""
     counts: Dict[str, int] = {}
 
     def note(g):
@@ -410,19 +407,15 @@ class FormulaMonitor:
         # uninterpreted placeholder, resolved by substitution later.  Shallow
         # nodes (only stateless ancestors) use the direct query mechanism.
         self.deep = self._deep_nodes()
-        # A parametric window never closes by deadline, so its node must stay
-        # shallow: nested under a stateful or future operator, its exactness
-        # (and hence the staged-resolution bookkeeping) would itself become a
-        # region over the parameter -- out of the supported fragment.
-        for j in self.fnodes:
-            d = self.nodes[j].data
-            sym = next((bnd for bnd in (d["high"], d["low"])
-                        if isinstance(bnd, str)), None)
-            if sym is not None and j in self.deep:
-                raise ValueError(
-                    f"parametric bound '{sym}' must "
-                    f"not be nested under temporal operators "
-                    f"(in {self.nodes[j].label or 'future subformula'})")
+        # Parametric future operators may also be DEEP (nested under other
+        # temporal operators).  A symbolic upper bound gives its placeholder
+        # no deadline, so early resolution would need region-guarded
+        # bindings (exactness holds only for part of the parameter space);
+        # instead such a placeholder simply never resolves early (_fexact is
+        # False for it) and is substituted at end of trace -- or sooner when
+        # its run dies, or when the obligation brackets (pointwise sound in
+        # the parameter, refined by _fbrackets) already agree for every
+        # parameter value.  Conservative in latency, exact in verdicts.
         self.qbind: List[dict] = []        # unresolved placeholder bindings
         self._qn = 0                       # fresh placeholder counter
         self._path = self._future_path()   # nodes recomputed when checking
@@ -1077,6 +1070,40 @@ class FormulaMonitor:
             vals[i] = self._normalize(v)
         return vals[self.root]
 
+    def _fbrackets(self, j, pos, anchor, clockval, q=None):
+        """Lower/upper brackets of a future node's eventual export for this
+        anchor, from the tables as they stand (tables only grow, so the
+        brackets are pointwise sound for every parameter value).  Plain
+        nodes: [query, true] (negated: [false, not query]).  A parametric
+        upper bound refines the growing side: any future witness lies at
+        delay >= max(low, elapsed) -- timestamps are non-decreasing -- and
+        contributes at most  n >= that delay  (for until, only while its run
+        stays alive), a bracket tight enough to close at the first witness
+        (F) or counterexample (G)."""
+        b = self.backend
+        nd = self.nodes[j]
+        if q is None:
+            q = self._fquery(j, pos, anchor)
+        hi_bound = nd.data["high"]
+        if isinstance(hi_bound, str):
+            elapsed = 0 if clockval is None else clockval - anchor
+            lo_off = (nd.data["low"]
+                      if isinstance(nd.data["low"], int) else 0)
+            growth = b.ge(self.params[hi_bound],
+                          b.lit(max(lo_off, elapsed), "Int"))
+            if nd.kind == "funtil":
+                A, _ = self.ftab[j]
+                alive = self._normalize(self._eliminate(b.exists(
+                    nd.data["t"],
+                    b.and_(A, b.eq(nd.data["t"], b.lit(pos, "Int"))))))
+                growth = b.and_(alive, growth)
+            if nd.kind in FUTURE_NEGATED:
+                return b.not_(b.or_(q, growth)), b.not_(q)
+            return q, b.or_(q, growth)
+        val = b.not_(q) if nd.kind in FUTURE_NEGATED else q
+        return ((b.false(), val) if nd.kind in FUTURE_NEGATED
+                else (val, b.true()))
+
     def _check(self, ob, clockval_time, clockval_pos, force=False):
         """Check one obligation; return its verdict, or None if undecided.
 
@@ -1103,36 +1130,7 @@ class FormulaMonitor:
                 continue
             all_exact = False
             # The export can still grow (or, when negated, shrink).
-            hi_bound = nd.data["high"]
-            if isinstance(hi_bound, str):
-                # Parametric window: the query can only grow by later
-                # witnesses.  Timestamps are non-decreasing, so any future
-                # witness has delay >= max(low, elapsed) and contributes at
-                # most  n >= that delay  -- a tight upper bracket, which
-                # meets the lower one exactly when nothing later can matter
-                # (e.g. F: the first witness is in; G: the first
-                # counterexample is in).
-                elapsed = 0 if clockval is None else clockval - anchor
-                growth = b.ge(self.params[hi_bound],
-                              b.lit(max(nd.data["low"], elapsed), "Int"))
-                if nd.kind == "funtil":
-                    # A future witness additionally needs its run alive:
-                    # phi must have held from the anchor through now, so its
-                    # contribution is bounded by the run's surviving data
-                    # values as well.
-                    A, _ = self.ftab[j]
-                    alive = self._normalize(self._eliminate(b.exists(
-                        nd.data["t"],
-                        b.and_(A, b.eq(nd.data["t"],
-                                       b.lit(ob["pos"], "Int"))))))
-                    growth = b.and_(alive, growth)
-                if nd.kind in FUTURE_NEGATED:
-                    vlo, vhi = b.not_(b.or_(q, growth)), b.not_(q)
-                else:
-                    vlo, vhi = q, b.or_(q, growth)
-            else:
-                vlo, vhi = ((b.false(), val) if nd.kind in FUTURE_NEGATED
-                            else (val, b.true()))
+            vlo, vhi = self._fbrackets(j, ob["pos"], anchor, clockval, q=q)
             pol = self._polarity.get(j, 0)
             if pol > 0:
                 lo_vals[j], hi_vals[j] = vlo, vhi
@@ -1157,10 +1155,9 @@ class FormulaMonitor:
                     break
                 for qb in self.qbind:
                     j = qb["node"]
-                    cur = self._fval(j, qb["pos"], qb["anchor"])
-                    vlo, vhi = ((b.false(), cur)
-                                if self.nodes[j].kind in FUTURE_NEGATED
-                                else (cur, b.true()))
+                    cv = (clockval_pos if qb["clock"] == "pos"
+                          else clockval_time)
+                    vlo, vhi = self._fbrackets(j, qb["pos"], qb["anchor"], cv)
                     pol = self._polarity.get(j, 0)
                     if pol == 0:
                         mixed = True

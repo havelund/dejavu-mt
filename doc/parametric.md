@@ -106,15 +106,24 @@ Checked at compile time (`collect_params`, plus the deep-node check in
 
 - a parameter occurs in **exactly one** bound — upper or lower, on any
   timed operator — and an operator carries at most one symbolic bound;
-- a parameter name must not also be used as a data variable;
-- a parametric **future** operator must not be nested under other temporal
-  operators: its window never closes, so nested it would need the staged
-  resolution of `doc/future.md` to track region-valued exactness (future
-  work). Parametric **past** operators may nest anywhere — the recurrences
-  carry `n` like any constant.
+- a parameter name must not also be used as a data variable.
+
+Parametric operators may **nest anywhere**. Past occurrences are known at
+their own position; a nested (deep) future occurrence with a symbolic
+*upper* bound has no deadline, so its placeholder never resolves early —
+it is substituted at end of trace, or sooner when its run dies or when the
+obligation brackets (pointwise sound in `n`, refined by the same growth
+bound) already agree for every parameter value; `@ (F[<=n] p)` still
+resolves at the first witness. A nested symbolic *lower* bound keeps its
+concrete deadline and resolves early through the ordinary machinery.
+Verdicts are exact in all cases (validated by pointwise instantiation
+against concrete-bound runs); only latency is conservative.
 
 Several *distinct* parameters are fine; verdicts and the region are then
 constraints over all of them.
 
-Still open: two symbolic bounds on one operator, nested parametric future
-operators, and multiple or mixed-polarity occurrences of one parameter.
+Still open: two symbolic bounds on one operator, multiple or
+mixed-polarity occurrences of one parameter, and *eager* resolution of
+nested parametric future operators in general (region-guarded staged
+resolution — tracking, per placeholder, the parameter region on which its
+answer is already final).

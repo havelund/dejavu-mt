@@ -445,10 +445,10 @@ rescue). Parametric `F`/`G` obligations, by contrast, die at their first
 witness/counterexample as usual.
 
 Well-formedness (checked at compile time): a parameter may occur in **exactly
-one** bound; a parametric future operator must not be nested under other
-temporal operators (its window never closes, so staged resolution would need
-region-valued bookkeeping — future work), while parametric past operators may
-nest anywhere. Several *distinct* parameters
+one** bound, and an operator carries at most one symbolic bound. Parametric
+operators may **nest anywhere** — a nested `F[<=n]` has no deadline, so its
+verdicts may wait until end of trace (they come earlier when a witness or a
+broken run already decides them for every `n`). Several *distinct* parameters
 are fine, and each verdict/region is then a constraint over all of them. In
 the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
 booleans) and each `FormulaMonitor` exposes `region`. See

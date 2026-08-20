@@ -333,9 +333,100 @@ def test_reject_param_clashing_with_variable():
                            "prop x : Forall n . p(n) -> F[<=n] p(n)"))
 
 
-def test_reject_nested_param():
-    with pytest.raises(ValueError, match="not be nested"):
-        Monitor(parse_spec("pred p()\nprop x : P (F[<=n] p)"))
+def _pointwise(spec_par, spec_conc_fmt, events, cs, prop="x"):
+    """The parametric verdict formulas, instantiated at n=c, must agree with
+    a concrete-bound run for every c -- position by position."""
+    import z3
+    m, got = replay(spec_par, events, prop=prop)
+    b = m.backend
+    nconst = pconst(m, "n")
+    for c in cs:
+        mc, gotc = replay(spec_conc_fmt.format(c=c), events, prop=prop)
+        assert set(got) == set(gotc)
+        for pos, vc in gotc.items():
+            vp = got[pos]
+            if isinstance(vp, bool):
+                assert vp == vc, (c, pos)
+            else:
+                inst = z3.substitute(vp, (nconst, z3.IntVal(c)))
+                assert b.check_sat(inst) == vc, (c, pos)
+                assert b.check_sat(b.not_(inst)) == (not vc), (c, pos)
+
+
+# --- nested parametric future -------------------------------------------------
+
+def test_nested_under_once_pointwise():
+    spec_par = "pred p()\npred q()\nprop x : P (F[<=n] p)"
+    spec_conc = "pred p()\npred q()\nprop x : P (F[<={c}] p)"
+    events = [({"q": [()]}, 0), ({"q": [()]}, 3), ({"p": [()]}, 7),
+              ({"q": [()]}, 9), ({"p": [()]}, 15)]
+    _pointwise(spec_par, spec_conc, events, [0, 2, 4, 7, 8, 20])
+
+
+def test_nested_under_prev_early_resolution():
+    """@ (F[<=n] p): position 2's verdict (F at position 1) resolves at the
+    first witness via the growth bracket, before end of trace."""
+    m = Monitor(parse_spec("pred p()\npred q()\nprop x : @ (F[<=n] p)"))
+    m.step({"q": [()]}, 0)
+    m.step({"q": [()]}, 3)
+    m.step({"p": [()]}, 7)
+    emitted = {pos: h for pos, name, h in m.resolved if name == "x"}
+    assert 2 in emitted
+    assert equiv(m.backend, emitted[2], n_ge(m, "n", 7))
+
+
+def test_nested_with_data_pointwise():
+    spec_par = ("pred req(x: String)\npred ack(x: String)\n"
+                "prop x : P (Exists y . req(y) & F[<=n] ack(y))")
+    spec_conc = ("pred req(x: String)\npred ack(x: String)\n"
+                 "prop x : P (Exists y . req(y) & F[<={c}] ack(y))")
+    events = [({"req": [("a",)]}, 0), ({"req": [("b",)]}, 2),
+              ({"ack": [("a",)]}, 5), ({"ack": [("b",)]}, 9)]
+    _pointwise(spec_par, spec_conc, events, [0, 2, 3, 5, 7, 10])
+
+
+def test_nested_future_in_future_pointwise():
+    spec_par = "pred p()\npred q()\nprop x : F[<=6] (F[<=n] p)"
+    spec_conc = "pred p()\npred q()\nprop x : F[<=6] (F[<={c}] p)"
+    events = [({"q": [()]}, 0), ({"q": [()]}, 4), ({"p": [()]}, 9),
+              ({"q": [()]}, 17)]
+    _pointwise(spec_par, spec_conc, events, [0, 3, 5, 9, 12])
+
+
+def test_nested_until_pointwise():
+    spec_par = "pred p()\npred q()\nprop x : P (p U[<=n] q)"
+    spec_conc = "pred p()\npred q()\nprop x : P (p U[<={c}] q)"
+    events = [({"p": [()]}, 0), ({"p": [()]}, 2), ({"q": [()]}, 5),
+              ({"p": [()]}, 8)]
+    _pointwise(spec_par, spec_conc, events, [0, 3, 5, 6, 10])
+
+
+def test_nested_pointwise_fuzz():
+    """Random traces (duplicate timestamps included) through nested
+    parametric shapes; instantiation must match concrete runs everywhere."""
+    import random
+    rng = random.Random(7)
+    shapes = [("prop x : P (F[<=n] p)", "prop x : P (F[<={c}] p)"),
+              ("prop x : @ (G[<=n] p)", "prop x : @ (G[<={c}] p)"),
+              ("prop x : ! P (F[<=n] q)", "prop x : ! P (F[<={c}] q)")]
+    decls = "pred p()\npred q()\n"
+    for _ in range(8):
+        events, t = [], 0
+        for _ in range(rng.randint(3, 7)):
+            t += rng.choice([0, 0, 1, 2, 3])
+            events.append(({rng.choice("pq"): [()]}, t))
+        for par, conc in shapes:
+            _pointwise(decls + par, decls + conc, events, [0, 1, 2, 4, 9])
+
+
+def test_nested_lower_bound_pointwise():
+    """Symbolic LOWER bound nested: the deadline stays concrete, so the
+    placeholder resolves early through the ordinary machinery."""
+    spec_par = "pred p()\npred q()\nprop x : P (F[n,10] p)"
+    spec_conc = "pred p()\npred q()\nprop x : P (F[{c},10] p)"
+    events = [({"q": [()]}, 0), ({"p": [()]}, 7), ({"q": [()]}, 12),
+              ({"q": [()]}, 20)]
+    _pointwise(spec_par, spec_conc, events, [0, 5, 7, 8, 10])
 
 
 def test_two_distinct_params_ok():
