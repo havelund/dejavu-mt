@@ -268,45 +268,79 @@ def collect_params(f: ast.LTL) -> list:
     """Names used as symbolic interval bounds (parametric monitoring), with
     the well-formedness checks of the supported fragment: a symbolic bound
     may be the upper OR the lower bound of any timed operator (S, Z, P, H,
-    F, G, U) -- at most one symbolic bound per operator -- and each
-    parameter name may occur exactly once.  Parametric operators may nest
-    anywhere: past occurrences are known at their own position, and deep
-    future occurrences resolve conservatively (see the deep-node comment in
-    FormulaMonitor.__init__)."""
+    F, G, U).  A name that is IN SCOPE of a quantifier binding it is not a
+    parameter but a DATA-DEPENDENT bound (`Forall n . a(n) -> F[0,n] b`:
+    each a-event carries its own deadline; verdicts stay Boolean) -- those
+    are collected by collect_bound_vars instead.  Parameters obey: exactly
+    one occurrence each, at most one parameter bound per operator.
+    Parametric operators may nest anywhere: past occurrences are known at
+    their own position, and deep future occurrences resolve conservatively
+    (see the deep-node comment in FormulaMonitor.__init__)."""
     counts: Dict[str, int] = {}
 
-    def note(g):
-        if isinstance(g.low, str) and isinstance(g.high, str):
+    def note(g, scope):
+        unscoped = [bnd for bnd in (g.low, g.high)
+                    if isinstance(bnd, str) and bnd not in scope]
+        if len(unscoped) == 2:
             raise ValueError(
                 f"at most one symbolic bound per operator (in {g})")
-        for bound in (g.low, g.high):
-            if isinstance(bound, str):
-                counts[bound] = counts.get(bound, 0) + 1
+        for bound in unscoped:
+            counts[bound] = counts.get(bound, 0) + 1
 
-    def walk(g):
+    def walk(g, scope):
         if isinstance(g, (ast.TimedEventually, ast.TimedAlways,
                           ast.TimedOnce, ast.TimedHist)):
-            note(g)
-            walk(g.arg)
+            note(g, scope)
+            walk(g.arg, scope)
         elif isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
-            note(g)
-            walk(g.left)
-            walk(g.right)
-        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
-                            ast.Exists, ast.Forall)):
-            walk(g.arg)
+            note(g, scope)
+            walk(g.left, scope)
+            walk(g.right, scope)
+        elif isinstance(g, (ast.Exists, ast.Forall)):
+            walk(g.arg, scope | {g.var})
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
+            walk(g.arg, scope)
         elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
                             ast.Zince, ast.Interval)):
-            walk(g.left)
-            walk(g.right)
+            walk(g.left, scope)
+            walk(g.right, scope)
 
-    walk(f)
+    walk(f, frozenset())
     for name, c in counts.items():
         if c > 1:
             raise ValueError(
                 f"parameter '{name}' occurs in {c} bounds; a parameter may "
                 f"occur in exactly one")
     return sorted(counts)
+
+
+def collect_bound_vars(f: ast.LTL) -> set:
+    """Names used as DATA-DEPENDENT interval bounds: symbolic bounds that a
+    quantifier in scope binds (`Forall n . a(n) -> F[0,n] b`)."""
+    out = set()
+
+    def walk(g, scope):
+        if isinstance(g, (ast.TimedEventually, ast.TimedAlways,
+                          ast.TimedOnce, ast.TimedHist)):
+            out.update(bnd for bnd in (g.low, g.high)
+                       if isinstance(bnd, str) and bnd in scope)
+            walk(g.arg, scope)
+        elif isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
+            out.update(bnd for bnd in (g.low, g.high)
+                       if isinstance(bnd, str) and bnd in scope)
+            walk(g.left, scope)
+            walk(g.right, scope)
+        elif isinstance(g, (ast.Exists, ast.Forall)):
+            walk(g.arg, scope | {g.var})
+        elif isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
+            walk(g.arg, scope)
+        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                            ast.Zince, ast.Interval)):
+            walk(g.left, scope)
+            walk(g.right, scope)
+
+    walk(f, frozenset())
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +407,15 @@ class FormulaMonitor:
                 f"parameter(s) {', '.join(sorted(clash))} also occur as data "
                 f"variables; a parameter must be a fresh name")
         self.params = {p: backend.const(p, "Int") for p in self.pnames}
+        # Data-dependent bounds: a quantified variable used as an interval
+        # bound (`Forall n . a(n) -> F[0,n] b`).  The quantifier discharges
+        # it, so verdicts stay Boolean; it must be an Int.
+        self.databounds = collect_bound_vars(body)
+        for v in sorted(self.databounds):
+            if self.var_sorts.get(v) != "Int":
+                raise ValueError(
+                    f"data-dependent bound '{v}' must be an Int variable "
+                    f"(declare the predicate parameter it comes from as Int)")
         # Running feasible region: the conjunction of the constraint-verdicts
         # emitted so far -- the parameter values under which every judged
         # position holds.  Only shrinks.
@@ -446,7 +489,12 @@ class FormulaMonitor:
             clock = "pos" if (low == 0 and high is None) else "time"
         n = len(self.nodes)
         b = self.backend
-        fv = sorted(free_vars(f))
+        # A data-dependent bound is one of the node's variables too: a deep
+        # node's placeholder must take it as an argument, or the quantifier
+        # binding it could not bind through the placeholder.
+        fv = sorted(set(free_vars(f))
+                    | {bnd for bnd in (low, high)
+                       if isinstance(bnd, str) and bnd not in self.params})
         return {"low": low, "high": high, "clock": clock,
                 "t": b.const(f"_ft{n}", "Int"),
                 "t2": b.const(f"_fw{n}", "Int") if witness else None,
@@ -871,6 +919,14 @@ class FormulaMonitor:
     def _clock(self, j, pos, time):
         return pos if self.nodes[j].data["clock"] == "pos" else time
 
+    def _bound_term(self, bnd):
+        """Solver term for a symbolic interval bound: a global parameter
+        (parametric monitoring) or a quantified Int variable
+        (data-dependent bound)."""
+        if bnd in self.params:
+            return self.params[bnd]
+        return self.consts[bnd]
+
     def _future_update(self, j, phi, psi, clockval):
         """Extend a future node's table(s) with what this event observed.
         Everything recorded is an observed fact, stamped with the clock value
@@ -928,11 +984,11 @@ class FormulaMonitor:
             body = b.and_(body, b.ge(d["p"], b.lit(pos, "Int")))
         # A symbolic (parametric) bound stays a free constant; the eliminated
         # query is then a formula over it.
-        loterm = (b.add(b.lit(anchor, "Int"), self.params[lo])
+        loterm = (b.add(b.lit(anchor, "Int"), self._bound_term(lo))
                   if isinstance(lo, str) else b.lit(anchor + lo, "Int"))
         body = b.and_(body, b.ge(stamp, loterm))
         if hi is not None:
-            hiterm = (b.add(b.lit(anchor, "Int"), self.params[hi])
+            hiterm = (b.add(b.lit(anchor, "Int"), self._bound_term(hi))
                       if isinstance(hi, str) else b.lit(anchor + hi, "Int"))
             body = b.and_(body, b.le(stamp, hiterm))
         q = b.exists(stamp, body)
@@ -1089,7 +1145,7 @@ class FormulaMonitor:
             elapsed = 0 if clockval is None else clockval - anchor
             lo_off = (nd.data["low"]
                       if isinstance(nd.data["low"], int) else 0)
-            growth = b.ge(self.params[hi_bound],
+            growth = b.ge(self._bound_term(hi_bound),
                           b.lit(max(lo_off, elapsed), "Int"))
             if nd.kind == "funtil":
                 A, _ = self.ftab[j]
@@ -1332,11 +1388,11 @@ class FormulaMonitor:
         # A symbolic (parametric) bound stays a free constant; the eliminated
         # value is then a formula over it.
         if isinstance(lo, str):
-            q = b.and_(q, b.ge(age, self.params[lo]))
+            q = b.and_(q, b.ge(age, self._bound_term(lo)))
         elif lo > 0:
             q = b.and_(q, b.ge(age, b.lit(lo, "Int")))
         if hi is not None:
-            hiterm = (self.params[hi] if isinstance(hi, str)
+            hiterm = (self._bound_term(hi) if isinstance(hi, str)
                       else b.lit(hi, "Int"))
             q = b.and_(q, b.le(age, hiterm))
         return self._normalize(self._eliminate(b.exists(tc, q)))

@@ -194,7 +194,16 @@ position); the price is state: with `n` symbolic neither the expiry pruning
 nor the `[a,*]` saturation of this document applies — every record matters
 for some `n` — so the node's state grows with the trace.
 
-**Data-dependent bounds (not yet implemented).** A bound could also be a
-data variable from the trace (per-request deadlines: `request(x,d) ->
-... P[0,d] ...`). This is grammar/inference work only; the engine already
-supports it structurally.
+**Data-dependent bounds (implemented).** A bound may also be a *quantified
+variable* — a deadline carried by the trace:
+
+    Forall n . a(n) -> F[0,n] b        -- each a-event brings its own deadline
+    Forall d . rsp(d) -> P[0,d] req    -- per-response allowance
+
+The variable must be `Int`. Unlike a parameter, the quantifier discharges
+the bound, so verdicts stay Boolean. There is no numeric deadline to close
+future windows by; instead the obligation brackets do it — the upper
+bracket `Forall n . a(n) -> (q | n >= elapsed)` turns false exactly when
+time outruns the carried deadline, so violations are still reported
+promptly. As with symbolic bounds, records under a data-dependent window
+cannot be pruned or saturated.

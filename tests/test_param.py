@@ -328,9 +328,12 @@ def test_reject_param_used_twice():
 
 
 def test_reject_param_clashing_with_variable():
+    # An UNSCOPED bound name that also occurs as a data variable is
+    # ambiguous and rejected.  (Scoped, it is a data-dependent bound --
+    # see tests/test_databounds.py.)
     with pytest.raises(ValueError, match="also occur as data variables"):
-        Monitor(parse_spec("pred p(n: Int)\n"
-                           "prop x : Forall n . p(n) -> F[<=n] p(n)"))
+        Monitor(parse_spec("pred p(n: Int)\npred q()\n"
+                           "prop x : (Exists n . p(n)) & F[<=n] q"))
 
 
 def _pointwise(spec_par, spec_conc_fmt, events, cs, prop="x"):

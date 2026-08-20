@@ -360,6 +360,18 @@ the witnessing timestamps (`t = 17`), and its exported value is the
 quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
 `doc/timed.md` for the full story.
 
+A bound may also be a **quantified `Int` variable** — a deadline carried by
+the trace, different for every event:
+
+    pred request(x: String, d: Int)
+    pred ack(x: String)
+    prop own : Forall x . Forall d . request(x,d) -> F[0,d] ack(x)
+
+Verdicts stay Boolean (the quantifier discharges `d`); see `doc/timed.md`
+("Variable bounds"). This is distinct from a *symbolic parameter* bound,
+where the name is bound by nothing and verdicts become constraints on it —
+see below.
+
 Relations `= < <= > >=` compare two expressions of compatible type. Relation
 operands may be arithmetic expressions built with `+ - *` and unary minus, e.g.
 `v2 = v1 + 1` or `a * 2 <= b`; the variables involved must be numeric

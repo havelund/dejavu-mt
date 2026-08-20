@@ -18,10 +18,13 @@ Currently supported (slice 1 -- untimed fragment):
                    [<=n] [<n] [>=n] [>n]  (e.g.  p S[<=3] q,  P[10,20] p)
     relations:     = < <= > >=   over variables and constants
     strings:       s contains "sub"   substring test over String terms
-    parametric:    a symbolic upper bound on any timed operator (P[<=n],
-                   F[<=n], p U[0,n] q) -- the monitor leaves n free and
-                   reports, per position, the constraint on n under which
-                   the property holds
+    parametric:    a symbolic bound on any timed operator (P[<=n], F[n,10],
+                   p U[0,n] q) -- the monitor leaves n free and reports,
+                   per position, the constraint on n under which the
+                   property holds
+    data bounds:   a bound may also be a QUANTIFIED Int variable
+                   (Forall n . a(n) -> F[0,n] b): each event carries its
+                   own deadline; verdicts stay Boolean
 
 Not yet supported (planned): recursive rules (where ... :=) and the seen-only
 lowercase exists/forall quantifiers.

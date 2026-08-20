@@ -2,7 +2,10 @@
 
 An interval bound — upper or lower — of any timed operator, past
 (`P/H/S/Z`) or future (`F/G/U`), may be a *symbolic parameter* instead of a
-number:
+number. (A bound that names a variable a quantifier *binds* is a different
+feature — a **data-dependent bound** like `Forall n . a(n) -> F[0,n] b`,
+with ordinary Boolean verdicts; see `doc/timed.md`. A parameter is a name
+bound by nothing: the monitor's output constrains it.)
 
     pred req(x: String)
     pred ack(x: String)
