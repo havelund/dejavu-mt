@@ -490,8 +490,8 @@ of random first-order formulas of the shared syntax (negation with free
 variables, unbounded future intervals, OR variable mismatches, unbound order
 relations, SINCE/UNTIL containment); DejaVuMT monitors all of them.
 
-Performance comparisons (DejaVu / DejaVuMT / MonPoly) live in the paper;
-`experiments/monpoly_bench.py` reproduces them.
+Performance comparisons (reference evaluator / MonPoly / DejaVu / DejaVuMT)
+live in the paper; `experiments/perf_bench.py` reproduces them.
 
 Notes for reproducing timed comparisons: DejaVu decides that a log is timed
 from its **filename** (it must contain `.timed.`); the harness mirrors this

@@ -30,8 +30,20 @@ from dejavumt import ast                  # noqa: E402
 # --- the reference: assignment semantics over the whole trace ---------------
 
 def reference(body, events, times):
-    """Verdict of `body` at every position (1-based), by the definitions."""
+    """Verdict of `body` at every position (1-based), by the definitions.
+
+    First-order support: quantifiers enumerate the trace's value universe
+    plus one fresh value (all unseen values behave identically in an
+    equality-free formula, so one representative suffices for the infinite
+    domain).  Instantiation substitutes a constant into the body, and the
+    memoisation works structurally over the instantiated formulas."""
+    from dejavumt.engine import _subst
     n = len(events)
+    # (The propositional fuzzer represents an event as a frozenset of
+    # predicate names; only dict events carry data values.)
+    universe = sorted({str(v) for ev in events if isinstance(ev, dict)
+                       for tuples in ev.values()
+                       for tup in tuples for v in tup}) + ["_fresh_"]
 
     def holds(f, i):
         return _holds(f, i)
@@ -43,7 +55,22 @@ def reference(body, events, times):
         if isinstance(f, ast.FalseC):
             return False
         if isinstance(f, ast.Pred):
-            return f.name in events[i - 1]
+            if not f.args:
+                return f.name in events[i - 1]
+            # Arity-sensitive ground match; every argument must be a
+            # constant by now (quantifiers substitute before descending).
+            def m(tup):
+                return (len(tup) == len(f.args)
+                        and all(isinstance(a, ast.Const)
+                                and str(a.value) == str(v)
+                                for a, v in zip(f.args, tup)))
+            return any(m(t) for t in events[i - 1].get(f.name, []))
+        if isinstance(f, (ast.Exists, ast.Forall)):
+            def inst(v):
+                return _subst(f.arg, {f.var: ast.Const(v, "String")})
+            if isinstance(f, ast.Exists):
+                return any(holds(inst(v), i) for v in universe)
+            return all(holds(inst(v), i) for v in universe)
         if isinstance(f, ast.Not):
             return not holds(f.arg, i)
         if isinstance(f, ast.And):
