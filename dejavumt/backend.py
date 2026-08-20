@@ -65,9 +65,15 @@ class Backend:
     def gc_simplify(self, t): return self.simplify(t)   # dead-term reclamation
     def qelim(self, q): ...
 
-    # uninterpreted placeholder functions (future-operator machinery)
-    def func(self, name: str, arg_sorts): ...
+    # uninterpreted functions (future-operator placeholders; interpreted
+    # Python functions from the spec's python block)
+    def func(self, name: str, arg_sorts, ret_sort="Bool"): ...
     def apply(self, f, args): ...
+
+    def eval_funs(self, t, registry, cache):
+        """Fold applications of registered pure Python functions whose
+        arguments have become ground (see Z3Backend.eval_funs)."""
+        return t
 
     def substitute_fun(self, t, f, params, body):
         """Replace every application f(a1..an) in t by body[params := a1..an],
@@ -225,13 +231,131 @@ class Z3Backend(Backend):
     def in_re(self, s, rast):
         return self.z3.InRe(s, self._re(rast))
 
-    def func(self, name, arg_sorts):
+    def func(self, name, arg_sorts, ret_sort="Bool"):
         z3 = self.z3
         return z3.Function(name, *[self._sort(a) for a in arg_sorts],
-                           z3.BoolSort())
+                           self._sort(ret_sort))
 
     def apply(self, f, args):
         return f(*args) if args else f()
+
+    # --- interpreted Python functions: lazy graph folding ---
+
+    def _litval(self, e):
+        """Python value of a literal term, or None if not a literal."""
+        z3 = self.z3
+        if z3.is_string_value(e):
+            return e.as_string()
+        if z3.is_int_value(e):
+            return e.as_long()
+        if z3.is_rational_value(e):
+            return e.numerator_as_long() / e.denominator_as_long()
+        if z3.is_true(e):
+            return True
+        if z3.is_false(e):
+            return False
+        return None
+
+    def eval_funs(self, t, registry, cache):
+        """Fold applications of registered pure Python functions.  First
+        propagate  var = literal  equalities within each conjunction into
+        their sibling conjuncts (the equalities themselves are kept), then
+        replace every application whose arguments are all literals by the
+        memoized result of calling the function.  `registry` maps
+        name -> {"fdecl", "fn", "args", "ret"}; `cache` maps
+        (name, argvalues) -> result."""
+        z3 = self.z3
+        PYCONV = {"String": str, "Int": int, "Real": float, "Bool": bool}
+
+        def is_plain_const(x):
+            return (z3.is_app(x) and x.num_args() == 0
+                    and x.decl().kind() == z3.Z3_OP_UNINTERPRETED
+                    and x.decl().name() not in registry)
+
+        def eqs_of(c, positive):
+            """var=literal equalities carried by one child: for an And
+            scope, positive equalities among the conjuncts; for an Or
+            scope, equalities under a negated conjunction (the guard of an
+            implication:  !(d=v & R) | C  ==  !(d=v & R) | C[d:=v],  since
+            the first disjunct is true whenever d != v)."""
+            if positive:
+                cands = [c]
+            else:
+                if not z3.is_not(c):
+                    return []
+                g = c.arg(0)
+                cands = list(g.children()) if z3.is_and(g) else [g]
+            out = []
+            for cc in cands:
+                if z3.is_eq(cc):
+                    a, b = cc.arg(0), cc.arg(1)
+                    for v, l in ((a, b), (b, a)):
+                        if is_plain_const(v) and self._litval(l) is not None:
+                            out.append((v, l))
+                            break
+            return out
+
+        def prop(e):
+            if z3.is_quantifier(e):
+                return e
+            if not z3.is_app(e) or e.num_args() == 0:
+                return e
+            ch = [prop(c) for c in e.children()]
+            conj, disj = z3.is_and(e), z3.is_or(e)
+            if conj or disj:
+                pairs, sources, seen = [], set(), set()
+                for c in ch:
+                    got = eqs_of(c, positive=conj)
+                    fresh = [(v, l) for v, l in got
+                             if v.decl().name() not in seen]
+                    if fresh:
+                        seen.update(v.decl().name() for v, _ in fresh)
+                        pairs.extend(fresh)
+                        sources.add(c.get_id())
+                if pairs:
+                    ch = [c if c.get_id() in sources
+                          else prop(z3.substitute(c, *pairs)) for c in ch]
+                return z3.And(*ch) if conj else z3.Or(*ch)
+            return e.decl()(*ch)
+
+        def scan(e, out):
+            if z3.is_quantifier(e):
+                scan(e.body(), out)
+                return
+            for c in e.children():
+                scan(c, out)
+            if z3.is_app(e):
+                reg = registry.get(e.decl().name())
+                if (reg is not None
+                        and e.decl().kind() == z3.Z3_OP_UNINTERPRETED
+                        and e.num_args() == len(reg["args"])):
+                    vals = tuple(self._litval(c) for c in e.children())
+                    if all(v is not None for v in vals):
+                        out[e] = vals
+
+        t = prop(t)
+        for _ in range(8):     # nested applications fold inside-out
+            out = {}
+            scan(t, out)
+            if not out:
+                break
+            pairs = []
+            for app, vals in out.items():
+                name = app.decl().name()
+                reg = registry[name]
+                key = (name, vals)
+                if key not in cache:
+                    args = [PYCONV[s](v) for v, s in zip(vals, reg["args"])]
+                    cache[key] = reg["fn"](*args)
+                try:
+                    pairs.append((app, self.lit(cache[key], reg["ret"])))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Python function '{name}' returned "
+                        f"{cache[key]!r}, not convertible to its declared "
+                        f"return sort {reg['ret']}") from exc
+            t = z3.substitute(t, *pairs)
+        return t
 
     def substitute_fun(self, t, f, params, body):
         z3 = self.z3
@@ -490,12 +614,119 @@ class Cvc5Backend(Backend):
     def in_re(self, s, rast):
         return self.tm.mkTerm(self.Kind.STRING_IN_REGEXP, s, self._re(rast))
 
-    def func(self, name, arg_sorts):
+    def func(self, name, arg_sorts, ret_sort="Bool"):
         tm = self.tm
         srts = [self._sort(a) for a in arg_sorts]
+        rs = self._sort(ret_sort)
         if not srts:
-            return tm.mkConst(tm.getBooleanSort(), name)
-        return tm.mkConst(tm.mkFunctionSort(srts, tm.getBooleanSort()), name)
+            return tm.mkConst(rs, name)
+        return tm.mkConst(tm.mkFunctionSort(srts, rs), name)
+
+    # --- interpreted Python functions: lazy graph folding ---
+
+    def _litval(self, e):
+        if e.isStringValue():
+            return e.getStringValue()
+        if e.isIntegerValue():
+            return e.getIntegerValue()
+        if e.isRealValue():
+            num, den = e.getRealValue().as_integer_ratio()
+            return num / den
+        if e.isBooleanValue():
+            return e.getBooleanValue()
+        return None
+
+    def eval_funs(self, t, registry, cache):
+        """See Z3Backend.eval_funs: equality propagation within
+        conjunctions, then folding of ground applications."""
+        K = self.Kind
+        tm = self.tm
+        PYCONV = {"String": str, "Int": int, "Real": float, "Bool": bool}
+        fdecls = {reg["fdecl"]: name for name, reg in registry.items()}
+
+        def is_plain_const(x):
+            return (x.getKind() == K.CONSTANT
+                    and x not in fdecls)
+
+        def eqs_of(c, positive):
+            # See Z3Backend: positive equalities in an And scope; guard
+            # equalities under a negated conjunction in an Or scope.
+            if positive:
+                cands = [c]
+            else:
+                if c.getKind() != K.NOT:
+                    return []
+                g = c[0]
+                cands = ([g[i] for i in range(g.getNumChildren())]
+                         if g.getKind() == K.AND else [g])
+            out = []
+            for cc in cands:
+                if cc.getKind() == K.EQUAL:
+                    a, b = cc[0], cc[1]
+                    for v, l in ((a, b), (b, a)):
+                        if is_plain_const(v) and self._litval(l) is not None:
+                            out.append((v, l))
+                            break
+            return out
+
+        def prop(e):
+            k = e.getKind()
+            if k in (K.FORALL, K.EXISTS) or e.getNumChildren() == 0:
+                return e
+            ch = [prop(e[i]) for i in range(e.getNumChildren())]
+            if k in (K.AND, K.OR):
+                pairs_from, pairs_to, sources, seen = [], [], set(), set()
+                for c in ch:
+                    got = eqs_of(c, positive=(k == K.AND))
+                    fresh = [(v, l) for v, l in got if v not in seen]
+                    if fresh:
+                        seen.update(v for v, _ in fresh)
+                        pairs_from.extend(v for v, _ in fresh)
+                        pairs_to.extend(l for _, l in fresh)
+                        sources.add(c)
+                if pairs_from:
+                    ch = [c if c in sources
+                          else prop(c.substitute(pairs_from, pairs_to))
+                          for c in ch]
+                return tm.mkTerm(k, *ch) if len(ch) > 1 else ch[0]
+            op = e.getOp() if e.hasOp() else None
+            return tm.mkTerm(op, *ch) if op else tm.mkTerm(k, *ch)
+
+        def scan(e, out):
+            for i in range(e.getNumChildren()):
+                scan(e[i], out)
+            if (e.getKind() == K.APPLY_UF and e[0] in fdecls):
+                name = fdecls[e[0]]
+                reg = registry[name]
+                if e.getNumChildren() - 1 == len(reg["args"]):
+                    vals = tuple(self._litval(e[i])
+                                 for i in range(1, e.getNumChildren()))
+                    if all(v is not None for v in vals):
+                        out[e] = (name, vals)
+
+        t = prop(t)
+        for _ in range(8):
+            out = {}
+            scan(t, out)
+            if not out:
+                break
+            frm, to = [], []
+            for app, (name, vals) in out.items():
+                reg = registry[name]
+                key = (name, vals)
+                if key not in cache:
+                    args = [PYCONV[s](v) for v, s in zip(vals, reg["args"])]
+                    cache[key] = reg["fn"](*args)
+                try:
+                    to.append(self.lit(cache[key], reg["ret"]))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Python function '{name}' returned "
+                        f"{cache[key]!r}, not convertible to its declared "
+                        f"return sort {reg['ret']}") from exc
+                frm.append(app)
+            t = t.substitute(frm, to)
+        return t
 
     def apply(self, f, args):
         if not args:

@@ -43,6 +43,8 @@ def _subst_term(t, m: Dict[str, ast.Term]):
         return ast.BinExpr(_subst_term(t.left, m), t.op, _subst_term(t.right, m))
     if isinstance(t, ast.Neg):
         return ast.Neg(_subst_term(t.arg, m))
+    if isinstance(t, ast.FunApp):
+        return ast.FunApp(t.name, tuple(_subst_term(a, m) for a in t.args))
     return t
 
 
@@ -120,14 +122,72 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
 
 
 # ---------------------------------------------------------------------------
+# Python functions in specs (the `python:` block)
+# ---------------------------------------------------------------------------
+
+_PYSORTS = {str: "String", int: "Int", float: "Real", bool: "Bool"}
+
+
+def load_pyfuns(code: str, backend: Backend) -> Dict[str, dict]:
+    """Execute the spec's python block and register every function defined
+    in it as an *interpreted* SMT function symbol: uninterpreted to the
+    solver, with its graph supplied lazily by calling the (pure, memoized)
+    Python function once an application's arguments become ground.
+    Signatures come from mandatory type annotations
+    (str -> String, int -> Int, float -> Real, bool -> Bool)."""
+    if not code:
+        return {}
+    import inspect
+    import textwrap
+    ns: Dict[str, object] = {}
+    # dont_inherit: this module's `from __future__ import annotations` must
+    # not leak into the user's code (it would stringize their annotations).
+    exec(compile(textwrap.dedent(code), "<spec-python>", "exec",
+                 dont_inherit=True), ns)
+
+    def sort_of(ann):
+        if isinstance(ann, str):     # stringized annotation, be lenient
+            ann = {"str": str, "int": int, "float": float,
+                   "bool": bool}.get(ann, ann)
+        return _PYSORTS.get(ann)
+
+    out: Dict[str, dict] = {}
+    for name, obj in ns.items():
+        if not inspect.isfunction(obj):
+            continue
+        if obj.__code__.co_filename != "<spec-python>":
+            continue          # imported helper, not defined in the block
+        sig = inspect.signature(obj)
+        arg_sorts = []
+        for p in sig.parameters.values():
+            s = sort_of(p.annotation)
+            if s is None:
+                raise ValueError(
+                    f"python function '{name}': parameter '{p.name}' needs "
+                    f"a type annotation (str, int, float, or bool)")
+            arg_sorts.append(s)
+        ret = sort_of(sig.return_annotation)
+        if ret is None:
+            raise ValueError(
+                f"python function '{name}' needs a return type annotation "
+                f"(-> str, int, float, or bool)")
+        out[name] = {"fdecl": backend.func(name, arg_sorts, ret),
+                     "fn": obj, "args": arg_sorts, "ret": ret}
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Sort inference for variables
 # ---------------------------------------------------------------------------
 
-def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, str]:
+def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
+                    pyfuns: Dict[str, dict] = None) -> Dict[str, str]:
     """Infer each variable's sort from how it is used as a predicate argument
-    (and, as a fallback, from constants it is compared against)."""
+    (and, as a fallback, from constants it is compared against, or from a
+    Python function's signature)."""
     sorts: Dict[str, str] = {}
     ordered_vars: set = set()   # variables occurring in an order relation
+    pyfuns = pyfuns or {}
 
     def note(var: str, sort: str):
         if var in sorts and sorts[var] != sort:
@@ -136,8 +196,19 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
             )
         sorts[var] = sort
 
+    def note_app(name, args):
+        reg = pyfuns.get(name)
+        if reg is None:
+            return
+        for a, s in zip(args, reg["args"]):
+            if isinstance(a, ast.Var):
+                note(a.name, s)
+
     def walk(g: ast.LTL):
         if isinstance(g, ast.Pred):
+            if g.name in pyfuns:      # Boolean Python function used as atom
+                note_app(g.name, g.args)
+                return
             psorts = pred_sorts.get(g.name)
             for j, arg in enumerate(g.args):
                 if isinstance(arg, ast.Var) and psorts is not None and j < len(psorts):
@@ -164,6 +235,16 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]]) -> Dict[str, s
                     coll(e.right)
                 elif isinstance(e, ast.Neg):
                     coll(e.arg)
+                elif isinstance(e, ast.FunApp):
+                    # An application behaves like a constant of its return
+                    # sort; its arguments are typed by the signature.
+                    reg = pyfuns.get(e.name)
+                    if reg is not None:
+                        ks.add(reg["ret"])
+                        note_app(e.name, e.args)
+                    for a in e.args:
+                        if not isinstance(a, ast.Var):
+                            coll(a)
 
             coll(g.left)
             coll(g.right)
@@ -215,6 +296,9 @@ def collect_vars(f: ast.LTL) -> set:
             term(t.right)
         elif isinstance(t, ast.Neg):
             term(t.arg)
+        elif isinstance(t, ast.FunApp):
+            for a in t.args:
+                term(a)
 
     def walk(g):
         if isinstance(g, ast.Pred):
@@ -384,7 +468,8 @@ class FormulaMonitor:
     """Monitors a single property against a stream of events."""
 
     def __init__(self, prop: ast.Property, body: ast.LTL,
-                 pred_sorts: Dict[str, List[str]], backend: Backend):
+                 pred_sorts: Dict[str, List[str]], backend: Backend,
+                 pyfuns: Dict[str, dict] = None):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
         # Anchored: evaluate at position 1 only (trace |= f), instead of the
@@ -392,7 +477,13 @@ class FormulaMonitor:
         self.anchored = prop.anchored
         self.pred_sorts = pred_sorts
         self.backend = backend
-        self.var_sorts = infer_var_sorts(body, pred_sorts)
+        # Interpreted Python functions (the spec's python block): SMT
+        # function symbols whose graphs are supplied lazily; results are
+        # memoized per monitor (functions must be pure).
+        self.pyfuns = pyfuns or {}
+        self.pycache: Dict[tuple, object] = {}
+        self._pydecls = [r["fdecl"] for r in self.pyfuns.values()]
+        self.var_sorts = infer_var_sorts(body, pred_sorts, self.pyfuns)
         # Every variable needs a solver constant; default any uninferred sort to String.
         for v in collect_vars(body):
             self.var_sorts.setdefault(v, "String")
@@ -518,6 +609,20 @@ class FormulaMonitor:
         if isinstance(f, ast.FalseC):
             return self._add("false", [])
         if isinstance(f, ast.Pred):
+            if f.name in self.pyfuns:
+                # A Boolean Python function used as an atom.
+                reg = self.pyfuns[f.name]
+                if reg["ret"] != "Bool":
+                    raise ValueError(
+                        f"python function '{f.name}' returns {reg['ret']}; "
+                        f"only bool functions can be used as atoms")
+                if len(f.args) != len(reg["args"]):
+                    raise ValueError(
+                        f"python function '{f.name}' expects "
+                        f"{len(reg['args'])} arguments, got {len(f.args)}")
+                expr = self.backend.apply(
+                    reg["fdecl"], [self._term_expr(a) for a in f.args])
+                return self._add("const_expr", [], expr)
             return self._add("pred", [], (f.name, f.args))
         if isinstance(f, ast.Compare):
             return self._add("const_expr", [], self._compare_expr(f))
@@ -614,6 +719,18 @@ class FormulaMonitor:
             return b.lit(t.value, t.kind)
         if isinstance(t, ast.Neg):
             return b.neg(self._term_expr(t.arg))
+        if isinstance(t, ast.FunApp):
+            reg = self.pyfuns.get(t.name)
+            if reg is None:
+                raise ValueError(
+                    f"unknown function '{t.name}' (not defined in a "
+                    f"python block)")
+            if len(t.args) != len(reg["args"]):
+                raise ValueError(
+                    f"python function '{t.name}' expects "
+                    f"{len(reg['args'])} arguments, got {len(t.args)}")
+            return b.apply(reg["fdecl"],
+                           [self._term_expr(a) for a in t.args])
         if isinstance(t, ast.BinExpr):
             l = self._term_expr(t.left)
             r = self._term_expr(t.right)
@@ -1415,6 +1532,11 @@ class FormulaMonitor:
         if self.weak:
             return v
         s = self.backend.simplify(v)
+        if self.pyfuns:
+            # Fold applications of Python functions whose arguments have
+            # become ground (event equalities make them so).
+            s = self.backend.simplify(
+                self.backend.eval_funs(s, self.pyfuns, self.pycache))
         if self.strong and self.backend.supports_strong:
             s = self.backend.strong_simplify(s)
         return s
@@ -1479,6 +1601,7 @@ class FormulaMonitor:
         constraint on the parameters itself.  Also narrows the running
         feasible region by it."""
         b = self.backend
+        self._residual_check(f)
         if b.is_true(f) or not b.check_sat(b.not_(f)):
             return True
         if b.is_false(f) or not b.check_sat(f):
@@ -1495,9 +1618,19 @@ class FormulaMonitor:
             self.region = b.simplify(b.and_(self.region, f))
         return f
 
+    def _residual_check(self, f):
+        """A verdict must not depend on an application of a Python function
+        that never became ground: the solver cannot evaluate it."""
+        if self._pydecls and self.backend.mentions(f, self._pydecls):
+            raise ValueError(
+                f"property {self.name}: an application of a python "
+                f"function never became ground -- guard its arguments "
+                f"with an event predicate so the trace supplies them")
+
     def _verdict(self, root_formula) -> bool:
         b = self.backend
         f = b.simplify(root_formula)
+        self._residual_check(f)
         if self.weak:
             # In weak mode the stored/displayed formula is left raw, so the root
             # may still contain quantifiers; eliminate them here (for the verdict
@@ -1521,11 +1654,20 @@ class Monitor:
         }
         self.pred_sorts = pred_sorts
         self.backend = make_backend(solver)
+        # Python functions from the spec's `python:` block, shared by all
+        # properties (interpreted SMT symbols; see load_pyfuns).
+        self.pyfuns = load_pyfuns(spec.python, self.backend)
+        for n in self.pyfuns:
+            if n in pred_sorts or n in macros:
+                raise ValueError(
+                    f"python function '{n}' collides with a declared "
+                    f"predicate or macro of the same name")
         self.formulas: List[FormulaMonitor] = []
         for prop in spec.properties:
             body = expand_macros(prop.body, macros)
             self.formulas.append(
-                FormulaMonitor(prop, body, pred_sorts, self.backend))
+                FormulaMonitor(prop, body, pred_sorts, self.backend,
+                               self.pyfuns))
         # Timed specs read their logs with a timestamp as the last CSV column.
         self.timed = any(fm.timed for fm in self.formulas)
         # With future operators verdicts may be delayed; the caller must run

@@ -10,3 +10,6 @@ __pycache__/
 # Tooling
 .claude/
 .DS_Store
+
+# Files
+notes/papers/

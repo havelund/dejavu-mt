@@ -419,6 +419,36 @@ constraints can diverge, in which case the engine falls back to leaving the
 quantifier in place (a bounded `qe2` attempt) and deciding via the final
 satisfiability check.
 
+### Python functions in specs
+
+A spec may define pure Python functions and call them **inside formulas**
+— no preprocessing phase, the property stays whole:
+
+    python:
+        def size(d: str) -> int:
+            return len(d)
+        def risky(cmd: str) -> bool:
+            return cmd in {"rm", "chmod", "dd"}
+    end
+
+    pred write(f: String, d: String)
+    prop q : Forall f . Forall d . write(f,d) -> size(d) < 100
+    prop r : Forall cmd . run(cmd) -> ! risky(cmd)
+
+Functions need full type annotations (`str/int/float/bool` ↔
+`String/Int/Real/Bool`); a `bool` function can be used directly as an
+atom, others inside relations (`size(d) < 100`, also with arithmetic
+arguments). Imports and helpers inside the block are fine. Functions must
+be **pure** — results are cached.
+
+To the engine a function is an SMT symbol whose value is computed by
+Python **once its arguments become ground** — which the event that binds
+them makes happen. That is also the honest boundary: an application whose
+arguments never become ground (`Forall d . size(d) > 0` with no event
+guard) cannot be decided and raises an error. See `doc/pyfun.md` for how
+it works and how this differs from the two-phase TP-DejaVu/PyDejaVu
+designs and MonPoly's aggregations.
+
 ### Parametric monitoring
 
 An interval bound — upper or lower — of any timed operator, past

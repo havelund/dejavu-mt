@@ -25,6 +25,9 @@ Currently supported (slice 1 -- untimed fragment):
     data bounds:   a bound may also be a QUANTIFIED Int variable
                    (Forall n . a(n) -> F[0,n] b): each event carries its
                    own deadline; verdicts stay Boolean
+    python:        a `python:` ... `end` block defines pure, annotated
+                   functions usable inside formulas (size(d) < 100,
+                   risky(cmd)); see doc/pyfun.md
 
 Not yet supported (planned): recursive rules (where ... :=) and the seen-only
 lowercase exists/forall quantifiers.
@@ -42,6 +45,12 @@ _GRAMMAR = r"""
     ?definition: macrodef
                | eventdef
                | propertydef
+               | pyblock
+
+    // Python functions usable inside formulas: everything between a line
+    // starting `python:` and a line consisting of `end`.  (Limitation: a
+    // line that is exactly `end` cannot occur inside the block.)
+    pyblock: PYBLOCK
 
     macrodef: PRED NAME paren_params? "=" ltl
 
@@ -157,6 +166,7 @@ _GRAMMAR = r"""
     ?product: product "*" atom -> mul
             | atom
     ?atom: NAME             -> var
+         | NAME "(" [sum ("," sum)*] ")" -> funapp
          | INT              -> int_const
          | FLOAT            -> float_const
          | ESCAPED_STRING   -> str_const
@@ -188,6 +198,7 @@ _GRAMMAR = r"""
     // with '*' (would collide with the /* comment opener).
     REGEX_LIT: /\/(?!\*)([^\/\\\n]|\\.)+\//
     SORT: "String" | "Int" | "Real" | "Bool"
+    PYBLOCK.3: /python:[ \t]*\r?\n(.|\n)*?\r?\n[ \t]*end[ \t]*(?=\r?\n|$)/
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
 
@@ -259,6 +270,16 @@ class _ToAst(Transformer):
         if isinstance(x, ast.Const) and x.kind in ("Int", "Real"):
             return ast.Const(-x.value, x.kind)
         return ast.Neg(x)
+
+    def funapp(self, name, *args):
+        return ast.FunApp(str(name), tuple(a for a in args if a is not None))
+
+    def pyblock(self, tok):
+        # Strip the `python:` opener line and the closing `end`.
+        text = str(tok)
+        body = text.split("\n", 1)[1]
+        body = body.rsplit("\n", 1)[0]
+        return ("__python__", body)
 
     # --- leaves ---
     def true_(self):
@@ -449,6 +470,8 @@ class _ToAst(Transformer):
                 spec.macros.append(d)
             elif isinstance(d, ast.Property):
                 spec.properties.append(d)
+            elif isinstance(d, tuple) and d and d[0] == "__python__":
+                spec.python += ("\n" if spec.python else "") + d[1]
         return spec
 
 

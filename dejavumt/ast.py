@@ -59,10 +59,25 @@ class Neg:
         return f"-{self.arg}"
 
 
-# An expression is a variable, a constant, or an arithmetic combination of them.
-# Relation (Compare) operands are expressions; predicate arguments are Terms.
+@dataclass(frozen=True)
+class FunApp:
+    """Application of a Python function declared in the spec's `python:`
+    block, used in term position (`size(d) < 100`).  The engine treats it
+    as an uninterpreted SMT function whose graph is supplied lazily: once
+    the arguments become ground during evaluation, the Python function is
+    called (memoized) and the application folds to its result."""
+    name: str
+    args: tuple  # tuple[Expr, ...]
+
+    def __str__(self) -> str:
+        return f"{self.name}(" + ",".join(str(a) for a in self.args) + ")"
+
+
+# An expression is a variable, a constant, an arithmetic combination of them,
+# or an application of a spec-declared Python function.  Relation (Compare)
+# operands are expressions; predicate arguments are Terms.
 Term = Union[Var, Const]
-Expr = Union[Var, Const, BinExpr, Neg]
+Expr = Union[Var, Const, BinExpr, Neg, FunApp]
 
 
 # ---------------------------------------------------------------------------
@@ -422,6 +437,9 @@ class Spec:
     events: List[EventDecl] = field(default_factory=list)
     macros: List[Macro] = field(default_factory=list)
     properties: List[Property] = field(default_factory=list)
+    # Python source from the spec's `python:` ... `end` block(s),
+    # concatenated: pure, annotated functions usable inside formulas.
+    python: str = ""
 
 
 def _b(x) -> str:
