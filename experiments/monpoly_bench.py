@@ -1,15 +1,24 @@
-"""Performance comparison DejaVuMT vs MonPoly on the shared fragment.
+"""Performance comparison DejaVu vs DejaVuMT vs MonPoly on shared properties.
 
-Both monitors run the same property on the same trace: DejaVuMT in-process
-(Z3 backend, default settings, monitoring loop timed; construction excluded),
-MonPoly as a subprocess in its usual violation mode (-negate; process time
-includes its startup, a few ms).  Violation counts are compared as a sanity
-check.  Expectation up front: MonPoly evaluates finite relations with an
-OCaml relational engine and should win by orders of magnitude; DejaVuMT pays
-per event for symbolic formula manipulation and solver calls.  The point of
-the comparison is to quantify that price, not to contest it.
+All monitors run the same property on the same trace:
+
+- DejaVu (BDD): its generated monitor is compiled once per property (Verify +
+  scalac, excluded from timing) and its self-reported "Elapsed analysis
+  time" is used (JVM startup excluded).  Past-time only: the future property
+  is skipped.
+- DejaVuMT: in-process, Z3 backend, default settings; the monitoring loop is
+  timed (construction excluded).
+- MonPoly: a subprocess in its usual violation mode (-negate); process time
+  includes its startup, a few ms.
+
+Violation counts are compared across all tools as a sanity check.
+Expectation up front: the specialised representations (BDDs, finite
+relations) should win by orders of magnitude; DejaVuMT pays per event for
+symbolic formula manipulation and solver calls.  The point of the comparison
+is to quantify that price, not to contest it.
 
     python experiments/monpoly_bench.py [--sizes 1000,4000,16000] [--values 20]
+                                        [--no-dejavu]
 """
 from __future__ import annotations
 
@@ -90,6 +99,81 @@ def make_trace(kind, n, values):
     return events, times
 
 
+# --- DejaVu (BDD) -------------------------------------------------------------
+# Untyped specs (original DejaVu rejects type annotations); no future property
+# (past-time only).  The timed log filename must contain ".timed." -- that is
+# how DejaVu decides the last column is a timestamp.
+
+DEJAVU_SPECS = {
+    "prop-past": "prop q : Forall f . close(f) -> P open(f)",
+    "timed-past": "prop q : Forall x . rsp(x) -> P[<=10] req(x)",
+    "future": None,
+    "since": "prop q : Forall x . use(x) -> [grant(x), reset(x))",
+}
+DEJAVU_TIMED = {"prop-past": False, "timed-past": True, "future": False,
+                "since": False}
+DEJAVU_JAR = (Path.home()
+              / "Desktop/development/dejavu/out/artifacts/dejavu_jar/dejavu.jar")
+_JAVA_HOME = "/opt/homebrew/opt/openjdk@11/libexec/openjdk.jdk/Contents/Home"
+_DJV_ENV = None
+
+
+def _djv_env():
+    global _DJV_ENV
+    if _DJV_ENV is None:
+        import os
+        _DJV_ENV = dict(os.environ, JAVA_HOME=_JAVA_HOME,
+                        PATH=f"{_JAVA_HOME}/bin:"
+                             f"/opt/homebrew/opt/scala@2.12/bin:"
+                             + os.environ.get("PATH", ""))
+    return _DJV_ENV
+
+
+def dejavu_available():
+    return DEJAVU_JAR.exists() and Path(_JAVA_HOME).exists()
+
+
+def dejavu_compile(spec_text, workdir: Path):
+    """Verify + scalac: generate and compile the monitor once per property."""
+    (workdir / "spec.qtl").write_text(spec_text + "\n")
+    jar = str(DEJAVU_JAR)
+    r = subprocess.run(["java", "-cp", jar, "dejavu.Verify", "spec.qtl"],
+                       cwd=workdir, env=_djv_env(), capture_output=True,
+                       text=True, timeout=120)
+    if "error" in (r.stdout + r.stderr).lower():
+        raise RuntimeError(f"dejavu.Verify: {(r.stdout + r.stderr)[:300]}")
+    subprocess.run(["scalac", "-cp", f".:{jar}", "TraceMonitor.scala"],
+                   cwd=workdir, env=_djv_env(), capture_output=True,
+                   text=True, timeout=300, check=True)
+
+
+def run_dejavu(workdir: Path, events, times, timed, bits=20):
+    """(seconds from DejaVu's own 'Elapsed analysis time', #violations)."""
+    name = "log.timed.csv" if timed else "log.csv"
+    rows = []
+    for ev, ts in zip(events, times):
+        for pname, tuples in ev.items():
+            for tup in tuples:
+                row = [pname] + [str(a) for a in tup]
+                if timed:
+                    row.append(str(ts))
+                rows.append(",".join(row))
+    (workdir / name).write_text("\n".join(rows) + "\n")
+    res = workdir / "dejavu-results"
+    if res.exists():
+        res.unlink()
+    r = subprocess.run(["scala", "-J-Xmx8g", "-cp", f".:{DEJAVU_JAR}",
+                        "TraceMonitor", name, str(bits)],
+                       cwd=workdir, env=_djv_env(), capture_output=True,
+                       text=True, timeout=600)
+    m = re.search(r"Elapsed analysis time:\s*([\d.]+)s", r.stdout)
+    if not m:
+        raise RuntimeError(f"no analysis time in output: {r.stdout[-300:]}")
+    viol = (len([ln for ln in res.read_text().splitlines() if ln.strip()])
+            if res.exists() else 0)
+    return float(m.group(1)), viol
+
+
 # --- runners ------------------------------------------------------------------
 
 def run_dejavumt(spec_text, prop, events, times):
@@ -136,19 +220,39 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sizes", default="1000,4000,16000")
     ap.add_argument("--values", type=int, default=20)
+    ap.add_argument("--no-dejavu", action="store_true")
     args = ap.parse_args()
     sizes = [int(s) for s in args.sizes.split(",")]
+    use_djv = not args.no_dejavu and dejavu_available()
+    if not args.no_dejavu and not use_djv:
+        print("(DejaVu jar/toolchain not found; skipping the DejaVu column)")
 
-    print(f"{'property':<12} {'events':>7} {'DejaVuMT':>10} {'us/ev':>8} "
-          f"{'MonPoly':>9} {'us/ev':>7} {'ratio':>7}  verdicts")
+    print(f"{'property':<12} {'events':>7} {'DejaVu':>9} {'us/ev':>6} "
+          f"{'DejaVuMT':>10} {'us/ev':>7} {'MonPoly':>9} {'us/ev':>6}"
+          f"  verdicts")
     for kind, (spec_text, prop) in SPECS.items():
+        djv_dir = None
+        if use_djv and DEJAVU_SPECS[kind]:
+            djv_dir = Path(tempfile.mkdtemp(prefix=f"djv-{kind}-"))
+            dejavu_compile(DEJAVU_SPECS[kind], djv_dir)
         for n in sizes:
             events, times = make_trace(kind, n, args.values)
+            if djv_dir:
+                dt_dv, v_dv = run_dejavu(djv_dir, events, times,
+                                         DEJAVU_TIMED[kind])
+                dv = f"{dt_dv:>8.3f}s {dt_dv/n*1e6:>5.1f}"
+            else:
+                dt_dv = v_dv = None
+                dv = f"{'-':>9} {'-':>5}"
             dt_us, v_us = run_dejavumt(spec_text, prop, events, times)
             dt_mp, v_mp = run_monpoly(spec_text, prop, events, times)
-            agree = "agree" if v_us == v_mp else f"US {v_us} != MP {v_mp}"
-            print(f"{kind:<12} {n:>7} {dt_us:>9.2f}s {dt_us/n*1e6:>7.0f} "
-                  f"{dt_mp:>8.3f}s {dt_mp/n*1e6:>6.1f} {dt_us/dt_mp:>6.0f}x"
+            counts = {"MT": v_us, "MP": v_mp}
+            if v_dv is not None:
+                counts["DV"] = v_dv
+            agree = ("agree" if len(set(counts.values())) == 1
+                     else " ".join(f"{k}={v}" for k, v in counts.items()))
+            print(f"{kind:<12} {n:>7} {dv} {dt_us:>9.2f}s "
+                  f"{dt_us/n*1e6:>6.0f} {dt_mp:>8.3f}s {dt_mp/n*1e6:>5.1f}"
                   f"  {agree} ({v_us})", flush=True)
 
 
