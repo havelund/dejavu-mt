@@ -206,7 +206,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
     sort        ::= "String" | "Int" | "Real" | "Bool"
 
     macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
-    property    ::= "prop" name ":" formula
+    property    ::= "prop" name [ "anchored" ] ":" formula
 
     formula     ::= "Exists" name "." formula          // quantifiers bind loosest
                   | "Forall" name "." formula
@@ -308,6 +308,19 @@ library API, `Monitor.step()` returns the verdict *for this position* —
 possibly `None` — while `Monitor.resolved` holds every `(position, property,
 holds)` determined by that step, and `Monitor.end()` must be called after the
 last event. See `doc/future.md` for the design.
+
+**Evaluation mode.** By default a property is evaluated at *every* position
+(one verdict per position — DejaVu's and MonPoly's implicit-G mode; MonPoly
+conceptually monitors `□ ∀x̄. φ`). For a top-level future formula that can
+be noisy: with `prop a : F init`, every position after the last `init` is a
+violation. Marking the property **anchored** evaluates it at position 1
+only — the classic `trace |= f` reading, one verdict for the whole trace:
+
+    prop a anchored : F init
+
+Anchored properties are also cheaper (a single parked obligation), and they
+combine with parametric bounds (`prop a anchored : F[<=n] init` yields one
+constraint on `n`).
 
 ### Timed (metric) operators
 

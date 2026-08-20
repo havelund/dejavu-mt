@@ -85,7 +85,9 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         print(f"(note: 'strong' is not supported by {monitor.backend.name}; ignored)")
     print(f"Monitoring {len(monitor.formulas)} property(ies):\n")
     for fm in monitor.formulas:
-        print(f"  {fm.name} : {fm.text}")
+        print(f"  {fm.name} : {fm.text}"
+              + ("   (anchored: judged at position 1 only)"
+                 if fm.anchored else ""))
     print()
 
     if debug:
@@ -156,11 +158,15 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
             return _verdict_tag(v if isinstance(v, bool)
                                 else monitor.backend.to_str(v))
 
+        def cell(fm, pos):
+            if (pos, fm.name) in verdicts_at:
+                return f"{fm.name}: {tag(verdicts_at[(pos, fm.name)])}"
+            if fm.anchored:
+                return f"{fm.name}: -"     # anchored: only position 1 judged
+            return f"{fm.name}: pending"
+
         for pos in range(1, line_nr + 1):
-            tags = "   ".join(
-                f"{fm.name}: {tag(verdicts_at[(pos, fm.name)])}"
-                if (pos, fm.name) in verdicts_at else f"{fm.name}: pending"
-                for fm in monitor.formulas)
+            tags = "   ".join(cell(fm, pos) for fm in monitor.formulas)
             print(f"{pos:>5}  {facts[pos]:<28}  {tags}")
     # Parametric properties: report the feasible region -- the constraint on
     # the parameters under which every position of the trace holds.

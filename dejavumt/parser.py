@@ -8,7 +8,8 @@ Currently supported (slice 1 -- untimed fragment):
 
     declarations:  pred/event/preds/events  name(p1: Sort, ...), ...
     macros:        pred name(a, ...) = <ltl>
-    properties:    prop name : <ltl>
+    properties:    prop name : <ltl>            one verdict per position
+                   prop name anchored : <ltl>   judged at position 1 only
 
     operators:     -> <-> | & ! @ S Z P H [_,_)  Exists/Forall
     future:        X (next), U (until), F (eventually), G (always), with or
@@ -44,7 +45,10 @@ _GRAMMAR = r"""
     eventdef: DECLKW predsig ("," predsig)*
     predsig: NAME paren_typed_params?
 
+    // An `anchored` property is evaluated at position 1 only (trace |= f);
+    // the default is one verdict per position (implicit-G mode).
     propertydef: "prop" NAME ":" ltl
+               | "prop" NAME "anchored" ":" ltl   -> propertydef_anchored
 
     paren_params: "(" [NAME ("," NAME)*] ")"
     paren_typed_params: "(" [typed_param ("," typed_param)*] ")"
@@ -410,6 +414,9 @@ class _ToAst(Transformer):
 
     def propertydef(self, name, body):
         return ast.Property(str(name), body)
+
+    def propertydef_anchored(self, name, body):
+        return ast.Property(str(name), body, anchored=True)
 
     def start(self, *defs):
         spec = ast.Spec()

@@ -405,8 +405,16 @@ class Macro:
 
 @dataclass(frozen=True)
 class Property:
+    """A monitored property.  By default the body is evaluated at EVERY
+    position (DejaVu's and MonPoly's implicit-G mode: one verdict per
+    position, delayed as needed by future operators).  An `anchored`
+    property is instead evaluated at position 1 only -- the classic
+    trace |= f reading -- useful for top-level future formulas like
+    F init, where the per-position stream would flood with tail
+    violations after the last witness."""
     name: str
     body: LTL
+    anchored: bool = False
 
 
 @dataclass

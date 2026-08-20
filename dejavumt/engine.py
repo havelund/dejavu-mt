@@ -351,6 +351,9 @@ class FormulaMonitor:
                  pred_sorts: Dict[str, List[str]], backend: Backend):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
+        # Anchored: evaluate at position 1 only (trace |= f), instead of the
+        # default one-verdict-per-position (implicit-G) mode.
+        self.anchored = prop.anchored
         self.pred_sorts = pred_sorts
         self.backend = backend
         self.var_sorts = infer_var_sorts(body, pred_sorts)
@@ -784,11 +787,16 @@ class FormulaMonitor:
             # whose answer has become final (substituting it into states,
             # tables and obligations), and check the whole notebook -- the new
             # entry included: it resolves at once when the future parts turn
-            # out not to matter.
-            self.pending.append({"pos": self.position, "time": time,
-                                 "vals": list(nowval)})
+            # out not to matter.  An anchored property parks position 1 only:
+            # later positions are not judged (and once position 1 resolves,
+            # the empty notebook keeps the tables cleared).
+            if not self.anchored or self.position == 1:
+                self.pending.append({"pos": self.position, "time": time,
+                                     "vals": list(nowval)})
             self._resolve_bindings()
             resolved = self._check_pending()
+        elif self.anchored and self.position > 1:
+            resolved = []
         else:
             # A parametric verdict (free parameters in the root) is a
             # constraint, not a Boolean; without future operators it is
