@@ -120,7 +120,10 @@ bound) already agree for every parameter value; `@ (F[<=n] p)` still
 resolves at the first witness. A nested symbolic *lower* bound keeps its
 concrete deadline and resolves early through the ordinary machinery.
 Verdicts are exact in all cases (validated by pointwise instantiation
-against concrete-bound runs); only latency is conservative.
+against concrete-bound runs); only latency is conservative — and
+deliberately so: parameter *discovery* is inherently a whole-trace
+question, so its natural mode is offline log analysis, where end-of-trace
+delivery is the norm rather than a defect.
 
 Several *distinct* parameters are fine; verdicts and the region are then
 constraints over all of them.
