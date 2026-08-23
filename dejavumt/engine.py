@@ -128,18 +128,37 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
 _PYSORTS = {str: "String", int: "Int", float: "Real", bool: "Bool"}
 
 
-def load_pyfuns(code: str, backend: Backend) -> Dict[str, dict]:
+def _coerce_val(v, sort):
+    """Coerce a raw event argument (a string, from the CSV log) to the
+    Python type of its declared sort, for state-variable expressions."""
+    if sort == "Int":
+        return int(v)
+    if sort == "Real":
+        return float(v)
+    if sort == "Bool":
+        return v if isinstance(v, bool) else str(v).lower() == "true"
+    return v if not isinstance(v, str) else v
+
+
+def load_pyfuns(code: str, backend: Backend):
+    registry, _ns = load_pyblock(code, backend)
+    return registry
+
+
+def load_pyblock(code: str, backend: Backend):
     """Execute the spec's python block and register every function defined
     in it as an *interpreted* SMT function symbol: uninterpreted to the
     solver, with its graph supplied lazily by calling the (pure, memoized)
     Python function once an application's arguments become ground.
     Signatures come from mandatory type annotations
-    (str -> String, int -> Int, float -> Real, bool -> Bool)."""
-    if not code:
-        return {}
+    (str -> String, int -> Int, float -> Real, bool -> Bool).  Returns
+    (registry, namespace); the namespace is also the evaluation scope of
+    state-variable expressions."""
     import inspect
     import textwrap
     ns: Dict[str, object] = {}
+    if not code:
+        return {}, ns
     # dont_inherit: this module's `from __future__ import annotations` must
     # not leak into the user's code (it would stringize their annotations).
     exec(compile(textwrap.dedent(code), "<spec-python>", "exec",
@@ -173,21 +192,100 @@ def load_pyfuns(code: str, backend: Backend) -> Dict[str, dict]:
                 f"(-> str, int, float, or bool)")
         out[name] = {"fdecl": backend.func(name, arg_sorts, ret),
                      "fn": obj, "args": arg_sorts, "ret": ret}
-    return out
+    return out, ns
 
 
 # ---------------------------------------------------------------------------
 # Sort inference for variables
 # ---------------------------------------------------------------------------
 
+def _walk_formula(f, enter):
+    """Generic traversal calling enter(node) on every subformula."""
+    enter(f)
+    if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next,
+                      ast.TimedOnce, ast.TimedHist,
+                      ast.TimedEventually, ast.TimedAlways)):
+        _walk_formula(f.arg, enter)
+    elif isinstance(f, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                        ast.TimedSince, ast.Zince, ast.TimedZince,
+                        ast.TimedUntil, ast.Interval)):
+        _walk_formula(f.left, enter)
+        _walk_formula(f.right, enter)
+    elif isinstance(f, (ast.Exists, ast.Forall)):
+        _walk_formula(f.arg, enter)
+
+
+def _check_rules(main: ast.LTL, rules: Dict[str, ast.Rule]):
+    """Well-formedness of rule calls, mirroring DejaVu: arguments are
+    variables; arities match; inside a rule body every rule call sits below
+    an @ (so recursion is a pure recurrence); rule bodies are past-time."""
+
+    def check_calls(g, in_body, below_prev):
+        if isinstance(g, ast.Pred) and g.name in rules:
+            r = rules[g.name]
+            if len(g.args) != len(r.params):
+                raise ValueError(
+                    f"rule '{g.name}' has {len(r.params)} parameter(s), "
+                    f"called with {len(g.args)} argument(s)")
+            for a in g.args:
+                if not isinstance(a, ast.Var):
+                    raise ValueError(
+                        f"rule call {g}: arguments must be variables")
+            if in_body and not below_prev:
+                raise ValueError(
+                    f"rule call {g} inside a rule body must be below the "
+                    f"@ operator")
+        if isinstance(g, ast.Prev):
+            check_calls(g.arg, in_body, True)
+        elif isinstance(g, (ast.Not, ast.Once, ast.Hist, ast.Next,
+                            ast.TimedOnce, ast.TimedHist,
+                            ast.TimedEventually, ast.TimedAlways)):
+            check_calls(g.arg, in_body, below_prev)
+        elif isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                            ast.TimedSince, ast.Zince, ast.TimedZince,
+                            ast.TimedUntil, ast.Interval)):
+            check_calls(g.left, in_body, below_prev)
+            check_calls(g.right, in_body, below_prev)
+        elif isinstance(g, (ast.Exists, ast.Forall)):
+            check_calls(g.arg, in_body, below_prev)
+
+    check_calls(main, False, False)
+    for r in rules.values():
+        def no_future(g):
+            if isinstance(g, (ast.Next, ast.TimedUntil,
+                              ast.TimedEventually, ast.TimedAlways)):
+                raise ValueError(
+                    f"rule '{r.name}': future operators are not supported "
+                    f"in rule bodies")
+        _walk_formula(r.body, no_future)
+        check_calls(r.body, True, False)
+
+
+def _rule_calls(f, rules):
+    """All (name, argnames) rule calls in a formula."""
+    out = []
+
+    def enter(g):
+        if isinstance(g, ast.Pred) and g.name in rules:
+            out.append((g.name,
+                        tuple(a.name for a in g.args
+                              if isinstance(a, ast.Var))))
+
+    _walk_formula(f, enter)
+    return out
+
+
 def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
-                    pyfuns: Dict[str, dict] = None) -> Dict[str, str]:
+                    pyfuns: Dict[str, dict] = None,
+                    state_sorts: Dict[str, str] = None) -> Dict[str, str]:
     """Infer each variable's sort from how it is used as a predicate argument
     (and, as a fallback, from constants it is compared against, or from a
-    Python function's signature)."""
+    Python function's signature).  A state variable behaves like a constant
+    of its declared sort."""
     sorts: Dict[str, str] = {}
     ordered_vars: set = set()   # variables occurring in an order relation
     pyfuns = pyfuns or {}
+    state_sorts = state_sorts or {}
 
     def note(var: str, sort: str):
         if var in sorts and sorts[var] != sort:
@@ -227,7 +325,10 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
 
             def coll(e):
                 if isinstance(e, ast.Var):
-                    vs.add(e.name)
+                    if e.name in state_sorts:
+                        ks.add(state_sorts[e.name])
+                    else:
+                        vs.add(e.name)
                 elif isinstance(e, ast.Const):
                     ks.add(e.kind)
                 elif isinstance(e, ast.BinExpr):
@@ -469,7 +570,9 @@ class FormulaMonitor:
 
     def __init__(self, prop: ast.Property, body: ast.LTL,
                  pred_sorts: Dict[str, List[str]], backend: Backend,
-                 pyfuns: Dict[str, dict] = None):
+                 pyfuns: Dict[str, dict] = None, rules=(),
+                 statevals: Dict[str, object] = None,
+                 state_sorts: Dict[str, str] = None):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
         # Anchored: evaluate at position 1 only (trace |= f), instead of the
@@ -483,11 +586,42 @@ class FormulaMonitor:
         self.pyfuns = pyfuns or {}
         self.pycache: Dict[tuple, object] = {}
         self._pydecls = [r["fdecl"] for r in self.pyfuns.values()]
-        self.var_sorts = infer_var_sorts(body, pred_sorts, self.pyfuns)
-        # Every variable needs a solver constant; default any uninferred sort to String.
-        for v in collect_vars(body):
+        # State variables: shared, mutable dict of ground values owned by
+        # the Monitor (updated there before each step); read here as
+        # per-position literals.
+        self.statevals = statevals if statevals is not None else {}
+        self.state_sorts = state_sorts or {}
+        # Recursive rules (the property's where-clause): each rule's
+        # extension is recomputed per position; recursion only under @.
+        self.rules: Dict[str, ast.Rule] = {}
+        for r in rules:
+            if (r.name in self.rules or r.name in pred_sorts
+                    or r.name in self.pyfuns or r.name in self.state_sorts):
+                raise ValueError(
+                    f"rule '{r.name}' collides with another rule, a "
+                    f"predicate, a python function, or a state variable")
+            if len(set(r.params)) != len(r.params):
+                raise ValueError(
+                    f"rule '{r.name}': duplicate parameters")
+            fv = free_vars(r.body) - set(self.state_sorts)
+            if fv != set(r.params):
+                raise ValueError(
+                    f"rule '{r.name}': free variables {sorted(fv)} must "
+                    f"be exactly the parameters {list(r.params)}")
+            self.rules[r.name] = r
+        if self.rules:
+            _check_rules(body, self.rules)
+        self.var_sorts = self._infer_sorts(body)
+        # Every variable needs a solver constant; default any uninferred sort
+        # to String.  State variables are values, not variables: excluded.
+        allvars = set(collect_vars(body))
+        for r in self.rules.values():
+            allvars |= collect_vars(r.body)
+        allvars -= set(self.state_sorts)
+        for v in allvars:
             self.var_sorts.setdefault(v, "String")
-        self.consts = {v: backend.const(v, s) for v, s in self.var_sorts.items()}
+        self.consts = {v: backend.const(v, self.var_sorts[v])
+                       for v in allvars}
         # Parametric monitoring: symbolic interval bounds are Int constants
         # the engine simply never eliminates, so verdicts become constraints
         # on them (e.g. "holds iff n >= 7") instead of Booleans.
@@ -512,7 +646,32 @@ class FormulaMonitor:
         # position holds.  Only shrinks.
         self.region = backend.true() if self.params else None
         self.nodes: List[_Node] = []
+        # Rule bodies compile FIRST (so a main-formula call finds its target
+        # already computed within the step); recursion among bodies goes
+        # through @, which reads the previous step's values, so body order
+        # is irrelevant.
+        self.ruleroot: Dict[str, int] = {}
+        self._rule_ranges = []
+        for r in self.rules.values():
+            rstart = len(self.nodes)
+            self.ruleroot[r.name] = self._compile(r.body)
+            self._rule_ranges.append((rstart, len(self.nodes)))
         self.root = self._compile(body)
+        # Nodes below an @ inside a rule body are deferred to the second
+        # evaluation pass (see step): a recursive call there may read its
+        # rule root's current value, which pass one computes.
+        self._deferred = set()
+
+        def _desc(i):
+            for c in self.nodes[i].children:
+                self._deferred.add(c)
+                _desc(c)
+
+        for rs, re_ in self._rule_ranges:
+            for i in range(rs, re_):
+                if self.nodes[i].kind == "prev":
+                    _desc(i)
+        self._deferred_order = sorted(self._deferred)
         n = len(self.nodes)
         # `pre`/`now` hold each node's stored formula (its state).  For every
         # untimed node the state is also the node's value; a timed ("tsince")
@@ -583,7 +742,7 @@ class FormulaMonitor:
         # A data-dependent bound is one of the node's variables too: a deep
         # node's placeholder must take it as an argument, or the quantifier
         # binding it could not bind through the placeholder.
-        fv = sorted(set(free_vars(f))
+        fv = sorted((set(free_vars(f)) - set(self.state_sorts))
                     | {bnd for bnd in (low, high)
                        if isinstance(bnd, str) and bnd not in self.params})
         return {"low": low, "high": high, "clock": clock,
@@ -609,6 +768,20 @@ class FormulaMonitor:
         if isinstance(f, ast.FalseC):
             return self._add("false", [])
         if isinstance(f, ast.Pred):
+            if f.name in self.rules:
+                # A rule call: value = the rule body's value with the
+                # parameters renamed to the call's arguments.
+                return self._add("rulecall", [],
+                                 (f.name,
+                                  tuple(a.name for a in f.args)))
+            if f.name in self.state_sorts and not f.args:
+                # A Bool state variable used as an atom.
+                if self.state_sorts[f.name] != "Bool":
+                    raise ValueError(
+                        f"state '{f.name}' has sort "
+                        f"{self.state_sorts[f.name]}; only Bool states can "
+                        f"be used as atoms")
+                return self._add("dyn", [], f)
             if f.name in self.pyfuns:
                 # A Boolean Python function used as an atom.
                 reg = self.pyfuns[f.name]
@@ -620,13 +793,19 @@ class FormulaMonitor:
                     raise ValueError(
                         f"python function '{f.name}' expects "
                         f"{len(reg['args'])} arguments, got {len(f.args)}")
+                if self._mentions_state(f):
+                    return self._add("dyn", [], f)
                 expr = self.backend.apply(
                     reg["fdecl"], [self._term_expr(a) for a in f.args])
                 return self._add("const_expr", [], expr)
             return self._add("pred", [], (f.name, f.args))
         if isinstance(f, ast.Compare):
+            if self._mentions_state(f):
+                return self._add("dyn", [], f)
             return self._add("const_expr", [], self._compare_expr(f))
         if isinstance(f, ast.Match):
+            if self._mentions_state(f):
+                return self._add("dyn", [], f)
             return self._add("const_expr", [], self._match_expr(f))
         if isinstance(f, ast.Not):
             return self._add("not", [self._compile(f.arg)])
@@ -707,9 +886,73 @@ class FormulaMonitor:
 
     # --- term / relation helpers ---
 
+    def _infer_sorts(self, body):
+        """Sort inference over the main body and every rule body, with
+        rule-call argument sorts propagated from the parameters."""
+        sorts = infer_var_sorts(body, self.pred_sorts, self.pyfuns,
+                                self.state_sorts)
+
+        def merge(d):
+            for k, v in d.items():
+                if k in sorts and sorts[k] != v:
+                    raise ValueError(
+                        f"variable {k} used at sorts {sorts[k]} and {v}")
+                sorts[k] = v
+
+        for r in self.rules.values():
+            merge(infer_var_sorts(r.body, self.pred_sorts, self.pyfuns,
+                                  self.state_sorts))
+        for g in [body] + [r.body for r in self.rules.values()]:
+            for name, args in _rule_calls(g, self.rules):
+                for a, p in zip(args, self.rules[name].params):
+                    if p in sorts:
+                        merge({a: sorts[p]})
+        return sorts
+
+    def _mentions_state(self, x) -> bool:
+        """Does a term/atom mention a state variable?"""
+        if isinstance(x, ast.Var):
+            return x.name in self.state_sorts
+        if isinstance(x, ast.Pred):
+            return (x.name in self.state_sorts
+                    or any(self._mentions_state(a) for a in x.args))
+        if isinstance(x, ast.Compare):
+            return (self._mentions_state(x.left)
+                    or self._mentions_state(x.right))
+        if isinstance(x, ast.Match):
+            return self._mentions_state(x.subject)
+        if isinstance(x, ast.BinExpr):
+            return (self._mentions_state(x.left)
+                    or self._mentions_state(x.right))
+        if isinstance(x, ast.Neg):
+            return self._mentions_state(x.arg)
+        if isinstance(x, ast.FunApp):
+            return any(self._mentions_state(a) for a in x.args)
+        return False
+
+    def _dyn_expr(self, f):
+        """Per-event value of an atom mentioning state variables (their
+        current ground values are injected as literals)."""
+        b = self.backend
+        if isinstance(f, ast.Pred):
+            if not f.args and f.name in self.state_sorts:
+                return b.lit(self.statevals[f.name], "Bool")
+            reg = self.pyfuns[f.name]     # Bool python function atom
+            return b.apply(reg["fdecl"],
+                           [self._term_expr(a) for a in f.args])
+        if isinstance(f, ast.Compare):
+            return self._compare_expr(f)
+        if isinstance(f, ast.Match):
+            return self._match_expr(f)
+        raise TypeError(f"cannot evaluate dynamic atom {f}")
+
     def _term_expr(self, t):
         b = self.backend
         if isinstance(t, ast.Var):
+            if t.name in self.state_sorts:
+                # A state variable reads as its current ground value.
+                return b.lit(self.statevals[t.name],
+                             self.state_sorts[t.name])
             if t.name not in self.consts:
                 # Variable with no inferable sort: default to String.
                 self.consts[t.name] = b.const(t.name, "String")
@@ -852,8 +1095,14 @@ class FormulaMonitor:
         preval = self.preval
         # Enclosing nodes read a child through its exported value (nowval),
         # never its stored state directly; the two differ only at timed nodes.
+        # Evaluation is two-pass when rules are present: nodes below an @
+        # inside a rule body are deferred to a second pass, so that a
+        # recursive rule call there can read the rule root's value computed
+        # in the first (its own now-value is only read NEXT step, through
+        # the @'s preval).
         nowval = [None] * len(self.nodes)
-        for i, node in enumerate(self.nodes):
+
+        def compute(i, node):
             k = node.kind
             ch = node.children
             if k == "true":
@@ -862,6 +1111,18 @@ class FormulaMonitor:
                 v = b.false()
             elif k == "const_expr":
                 v = node.data
+            elif k == "dyn":
+                # An atom mentioning state variables: rebuilt per event with
+                # the current (ground) values as literals.
+                v = self._dyn_expr(node.data)
+            elif k == "rulecall":
+                name, argnames = node.data
+                v = nowval[self.ruleroot[name]]
+                params = self.rules[name].params
+                pairs = [(self.consts[p], self.consts[a])
+                         for p, a in zip(params, argnames) if p != a]
+                if pairs:
+                    v = b.subst_consts(v, pairs)
             elif k == "pred":
                 v = self._pred_expr(node.data[0], node.data[1], event)
             elif k == "not":
@@ -889,7 +1150,7 @@ class FormulaMonitor:
                 s = b.or_(b.not_(nowval[ch[0]]), pre[i])
                 now[i] = s if self.weak else self._normalize(s)
                 nowval[i] = self._normalize(b.not_(now[i]))
-                continue
+                return
             elif k == "zince":
                 # phi Z psi: psi held strictly in the past (read at pre),
                 # phi ever since through now.
@@ -898,18 +1159,18 @@ class FormulaMonitor:
                 now[i] = self._tsince_state(node, nowval[ch[0]], nowval[ch[1]],
                                             pre[i])
                 nowval[i] = self._tsince_value(node, now[i])
-                continue
+                return
             elif k == "tzince":
                 now[i] = self._tzince_state(node, nowval[ch[0]],
                                             preval[ch[1]], pre[i])
                 nowval[i] = self._tsince_value(node, now[i])
-                continue
+                return
             elif k == "tonce":
                 # P[a,b] phi: stamped since-recurrence with phi = true.
                 now[i] = self._tsince_state(node, b.true(), nowval[ch[0]],
                                             pre[i])
                 nowval[i] = self._tsince_value(node, now[i])
-                continue
+                return
             elif k == "thist":
                 # H[a,b] phi: records of phi's failures; value = negated
                 # projection.
@@ -917,7 +1178,7 @@ class FormulaMonitor:
                                             b.not_(nowval[ch[0]]), pre[i])
                 nowval[i] = self._normalize(
                     b.not_(self._tsince_value(node, now[i])))
-                continue
+                return
             elif k in FUTURE_KINDS:
                 # The node records what this event observed.  A *shallow* node
                 # then exports its query's value over the table so far -- a
@@ -936,7 +1197,7 @@ class FormulaMonitor:
                 else:
                     nowval[i] = self._fval(i, self.position, clockval)
                 now[i] = self.ftab[i][0]      # for debug rendering
-                continue
+                return
             elif k == "exists":
                 v = self._eliminate(b.exists(self.consts[node.data], nowval[ch[0]]))
             elif k == "forall":
@@ -945,6 +1206,13 @@ class FormulaMonitor:
                 raise RuntimeError(f"unknown node kind {k}")
             now[i] = self._normalize(v)
             nowval[i] = now[i]
+
+        for i, node in enumerate(self.nodes):
+            if i in self._deferred:
+                continue
+            compute(i, node)
+        for i in self._deferred_order:
+            compute(i, self.nodes[i])
         self.pre = now
         self.preval = nowval
         if self.future:
@@ -1655,19 +1923,49 @@ class Monitor:
         self.pred_sorts = pred_sorts
         self.backend = make_backend(solver)
         # Python functions from the spec's `python:` block, shared by all
-        # properties (interpreted SMT symbols; see load_pyfuns).
-        self.pyfuns = load_pyfuns(spec.python, self.backend)
+        # properties (interpreted SMT symbols; see load_pyblock).  The
+        # block's namespace is also the scope of state-variable expressions.
+        self.pyfuns, self._pyns = load_pyblock(spec.python, self.backend)
         for n in self.pyfuns:
             if n in pred_sorts or n in macros:
                 raise ValueError(
                     f"python function '{n}' collides with a declared "
                     f"predicate or macro of the same name")
+        # State variables: ground Python values updated per matching event
+        # BEFORE the properties evaluate the event, read in formulas as
+        # per-position literals.
+        self.states: Dict[str, object] = {}
+        self.state_sorts: Dict[str, str] = {}
+        self._stateclauses = []
+        for sv in spec.states:
+            if (sv.name in pred_sorts or sv.name in macros
+                    or sv.name in self.pyfuns or sv.name in self.state_sorts):
+                raise ValueError(
+                    f"state variable '{sv.name}' collides with a declared "
+                    f"predicate, macro, python function, or state")
+            self.state_sorts[sv.name] = sv.sort
+            try:
+                self.states[sv.name] = eval(
+                    compile(sv.init, "<state-init>", "eval"), self._pyns, {})
+            except Exception as exc:
+                raise ValueError(
+                    f"state '{sv.name}': initial expression "
+                    f"{{{sv.init}}} failed: {exc}") from exc
+            self._stateclauses.append(
+                (sv.name, [(pname, params,
+                            compile(expr, f"<state-{sv.name}>", "eval"))
+                           for pname, params, expr in sv.clauses]))
         self.formulas: List[FormulaMonitor] = []
         for prop in spec.properties:
             body = expand_macros(prop.body, macros)
+            rules = tuple(ast.Rule(r.name, r.params,
+                                   expand_macros(r.body, macros))
+                          for r in prop.rules)
             self.formulas.append(
                 FormulaMonitor(prop, body, pred_sorts, self.backend,
-                               self.pyfuns))
+                               self.pyfuns, rules=rules,
+                               statevals=self.states,
+                               state_sorts=self.state_sorts))
         # Timed specs read their logs with a timestamp as the last CSV column.
         self.timed = any(fm.timed for fm in self.formulas)
         # With future operators verdicts may be delayed; the caller must run
@@ -1685,6 +1983,25 @@ class Monitor:
         earlier one, are collected in `self.resolved` as (position, property,
         holds) triples."""
         out, self.resolved = {}, []
+        # State variables update first: the properties see the values
+        # INCLUDING this event's effect (matching the rule reading, whose
+        # body pairs the event with the @-previous value).  Multiple
+        # matching facts fold left-to-right.
+        for name, clauses in self._stateclauses:
+            for pname, params, code in clauses:
+                psorts = self.pred_sorts.get(pname)
+                for tup in event.get(pname, []):
+                    if len(tup) != len(params):
+                        continue
+                    env = dict(self.states)
+                    for j, (p, v) in enumerate(zip(params, tup)):
+                        s = psorts[j] if psorts and j < len(psorts) else None
+                        env[p] = _coerce_val(v, s)
+                    try:
+                        self.states[name] = eval(code, self._pyns, env)
+                    except Exception as exc:
+                        raise ValueError(
+                            f"state '{name}': on {pname}{tup}: {exc}") from exc
         for fm in self.formulas:
             res = fm.step(event, time)
             for pos, holds in res:

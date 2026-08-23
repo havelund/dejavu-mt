@@ -28,6 +28,10 @@ Currently supported (slice 1 -- untimed fragment):
     python:        a `python:` ... `end` block defines pure, annotated
                    functions usable inside formulas (size(d) < 100,
                    risky(cmd)); see doc/pyfun.md
+    rules:         prop p : ... where r(x) := body, ... -- recursive
+                   predicates recomputed per position (recursion under @)
+    state:         state x: Sort := {init} on p(a,b): {expr} -- a ground
+                   Python value updated per event, read as a term
 
 Not yet supported (planned): recursive rules (where ... :=) and the seen-only
 lowercase exists/forall quantifiers.
@@ -46,6 +50,13 @@ _GRAMMAR = r"""
                | eventdef
                | propertydef
                | pyblock
+               | statedef
+
+    // Extended-state-machine variable: a ground Python value updated per
+    // matching event; {..} holds a Python expression (state names and the
+    // clause's event parameters in scope).
+    statedef: "state" NAME ":" SORT ":=" PYEXPR onclause*
+    onclause: "on" NAME "(" [NAME ("," NAME)*] ")" ":" PYEXPR
 
     // Python functions usable inside formulas: everything between a line
     // starting `python:` and a line consisting of `end`.  (Limitation: a
@@ -58,9 +69,12 @@ _GRAMMAR = r"""
     predsig: NAME paren_typed_params?
 
     // An `anchored` property is evaluated at position 1 only (trace |= f);
-    // the default is one verdict per position (implicit-G mode).
-    propertydef: "prop" NAME ":" ltl
-               | "prop" NAME "anchored" ":" ltl   -> propertydef_anchored
+    // the default is one verdict per position (implicit-G mode).  The
+    // optional where-clause attaches recursive rules (DejaVu style).
+    propertydef: "prop" NAME ":" ltl wherepart?
+               | "prop" NAME "anchored" ":" ltl wherepart? -> propertydef_anchored
+    wherepart: "where" ruledef ("," ruledef)*
+    ruledef: NAME paren_params? ":=" ltl
 
     paren_params: "(" [NAME ("," NAME)*] ")"
     paren_typed_params: "(" [typed_param ("," typed_param)*] ")"
@@ -199,6 +213,9 @@ _GRAMMAR = r"""
     REGEX_LIT: /\/(?!\*)([^\/\\\n]|\\.)+\//
     SORT: "String" | "Int" | "Real" | "Bool"
     PYBLOCK.3: /python:[ \t]*\r?\n(.|\n)*?\r?\n[ \t]*end[ \t]*(?=\r?\n|$)/
+    // A braced Python expression (one level of nested braces allowed, for
+    // dict/set literals).
+    PYEXPR: /\{([^{}]|\{[^{}]*\})*\}/
     PRED: "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
 
@@ -218,7 +235,7 @@ _GRAMMAR = r"""
     _F: /F(?![A-Za-z0-9_])/
     _G: /G(?![A-Za-z0-9_])/
 
-    NAME: /(?!(Exists|Forall|true|false|contains|matches)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(Exists|Forall|true|false|contains|matches|where)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
     %import common.ESCAPED_STRING
     %import common.INT
@@ -455,11 +472,34 @@ class _ToAst(Transformer):
             params, body = None, params
         return ast.Macro(str(name), tuple(params) if params else (), body)
 
-    def propertydef(self, name, body):
-        return ast.Property(str(name), body)
+    def propertydef(self, name, body, rules=None):
+        return ast.Property(str(name), body, rules=tuple(rules or ()))
 
-    def propertydef_anchored(self, name, body):
-        return ast.Property(str(name), body, anchored=True)
+    def propertydef_anchored(self, name, body, rules=None):
+        return ast.Property(str(name), body, anchored=True,
+                            rules=tuple(rules or ()))
+
+    def wherepart(self, *rules):
+        return list(rules)
+
+    def ruledef(self, name, params=None, body=None):
+        if body is None:            # no parameter list: (name, body)
+            params, body = None, params
+        return ast.Rule(str(name), tuple(params or ()), body)
+
+    # --- state variables ---
+    @staticmethod
+    def _pyexpr(tok):
+        return str(tok)[1:-1].strip()   # strip the outer braces
+
+    def onclause(self, pred, *rest):
+        *params, expr = rest
+        return (str(pred), tuple(str(p) for p in params if p is not None),
+                self._pyexpr(expr))
+
+    def statedef(self, name, sort, init, *clauses):
+        return ast.StateVar(str(name), str(sort), self._pyexpr(init),
+                            tuple(clauses))
 
     def start(self, *defs):
         spec = ast.Spec()
@@ -470,6 +510,8 @@ class _ToAst(Transformer):
                 spec.macros.append(d)
             elif isinstance(d, ast.Property):
                 spec.properties.append(d)
+            elif isinstance(d, ast.StateVar):
+                spec.states.append(d)
             elif isinstance(d, tuple) and d and d[0] == "__python__":
                 spec.python += ("\n" if spec.python else "") + d[1]
         return spec

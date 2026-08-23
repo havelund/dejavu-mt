@@ -75,6 +75,10 @@ class Backend:
         arguments have become ground (see Z3Backend.eval_funs)."""
         return t
 
+    def subst_consts(self, t, pairs):
+        """Simultaneously substitute constants: pairs = [(from, to), ...]."""
+        ...
+
     def substitute_fun(self, t, f, params, body):
         """Replace every application f(a1..an) in t by body[params := a1..an],
         correctly under binders.  `params` are the constants body is written
@@ -364,6 +368,9 @@ class Z3Backend(Backend):
         vbody = z3.substitute(
             body, *[(p, z3.Var(i, p.sort())) for i, p in enumerate(params)])
         return z3.substitute_funs(t, (f, vbody))
+
+    def subst_consts(self, t, pairs):
+        return self.z3.substitute(t, *pairs)
 
     def mentions(self, t, fs):
         z3 = self.z3
@@ -765,6 +772,9 @@ class Cvc5Backend(Backend):
                 return True
             stack.extend(e[i] for i in range(e.getNumChildren()))
         return False
+
+    def subst_consts(self, t, pairs):
+        return t.substitute([p[0] for p in pairs], [p[1] for p in pairs])
 
     def prune_expired(self, t, tc, deadline):
         K = self.Kind

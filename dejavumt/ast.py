@@ -419,6 +419,32 @@ class Macro:
 
 
 @dataclass(frozen=True)
+class Rule:
+    """A recursive rule  r(x,..) := body  attached to a property (DejaVu's
+    `where` rules).  Its extension is recomputed at every position, like an
+    event's; recursion (any rule call inside a rule body) is allowed only
+    under @ -- a pure recurrence over the previous position."""
+    name: str
+    params: tuple  # tuple[str, ...]
+    body: LTL
+
+
+@dataclass(frozen=True)
+class StateVar:
+    """An extended-state-machine variable:
+        state total: Int := {0}
+            on write(f, d): {total + len(d)}
+    The value is a ground Python value, updated per matching event by the
+    braced Python expression (previous state values and the event's
+    arguments in scope), and readable in formulas as a term.  Semantically
+    the functional fragment of a rule."""
+    name: str
+    sort: str          # "String" | "Int" | "Real" | "Bool"
+    init: str          # python expression source
+    clauses: tuple     # tuple[(predname, params tuple, expr source), ...]
+
+
+@dataclass(frozen=True)
 class Property:
     """A monitored property.  By default the body is evaluated at EVERY
     position (DejaVu's and MonPoly's implicit-G mode: one verdict per
@@ -430,6 +456,7 @@ class Property:
     name: str
     body: LTL
     anchored: bool = False
+    rules: tuple = ()   # tuple[Rule, ...] from the property's where-clause
 
 
 @dataclass
@@ -440,6 +467,8 @@ class Spec:
     # Python source from the spec's `python:` ... `end` block(s),
     # concatenated: pure, annotated functions usable inside formulas.
     python: str = ""
+    # Extended-state-machine variables (state ... := {..} on ...: {..}).
+    states: List[StateVar] = field(default_factory=list)
 
 
 def _b(x) -> str:
