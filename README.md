@@ -553,13 +553,22 @@ DejaVu distribution (333 pairs) through both the original BDD-based DejaVu
 (`experiments/ab_report.md`), after fixing the quantifier-scope bug in DejaVu
 and the bugs listed below in DejaVuMT:
 
-- **206 comparable pairs, 206 identical verdicts, 0 mismatches** — 193 at
-  1000-event prefixes, plus the 13 slowest (quantifier-heavy) pairs at
-  300-event prefixes. This includes every comparable **timed** pair,
-  covering all metric operator forms (`S[<=n]`, `S[>n]`, `P`/`H` variants),
-  with DejaVu's recorded JUnit expectations as independent ground truth.
-- 127 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
-  quantifiers, 59 recursive rules, and one empty spec file.
+- **275 comparable pairs, 275 identical verdicts, 0 mismatches** — the 206
+  rule-free pairs (193 at 1000-event prefixes, the 13 slowest
+  quantifier-heavy pairs at 300), plus the **69 rule pairs** (states,
+  taskspawning, formalisation benchmarks, sttt_rules; 55 at 1000-event
+  prefixes, the transitive-closure taskspawning specs at 150, where the
+  per-event relational join stays tractable — one such pair times out at
+  1000 events: a performance boundary, not a disagreement). Includes every
+  comparable **timed** pair, covering all metric operator forms, with
+  DejaVu's recorded JUnit expectations as independent ground truth.
+- 68 pairs: outside DejaVuMT's current fragment — 66 lowercase seen-only
+  quantifiers (the last DejaVu-parity gap) and one empty spec file — plus
+  the intentionally ill-formed wellformedness-test specs.
+
+Note for reruns: pass `--dejavu-cp` pointing at the repaired DejaVu build
+(the shipped jar still carries the 2021 quantifier-scope bug), and cap the
+transitive-closure rule pairs with a small `--max-events`.
 
 The **future fragment** has no DejaVu counterpart to compare against; it is
 validated differentially against a brute-force reference instead
@@ -600,15 +609,19 @@ Implemented: the first-order fragment — propositional connectives,
 `@ S Z P H` and intervals, quantifiers (top-level and nested), macros, typed
 relations with arithmetic (`+ - *`), the timed operators
 `S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
-sugar, the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`, and
+sugar, the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`,
 parametric bounds on every timed operator (`F[<=n]` with `n` symbolic —
-verdicts become constraints on `n`);
+verdicts become constraints on `n`), data-dependent bounds
+(`Forall n . a(n) -> F[0,n] b`), string matching (`contains`, `matches`
+with capture holes), Python functions inside formulas (the `python:`
+block), recursive rules (`where r(x) := ...`), state variables
+(`state x: Int := {0} on ...`), and anchored properties;
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader
 emits one fact per line.
 
-Not yet implemented: recursive rules (`where ... :=`) and the seen-only
+Not yet implemented: the seen-only
 lowercase `exists`/`forall`. Future operators may occur anywhere — under
 negation, below past-time operators (`P (F[<=2] p)`), and nested inside each
 other (`F[<=5] (p & F[<=3] q)`). Growth from

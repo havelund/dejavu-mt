@@ -26,6 +26,17 @@ A flat disjunction is the least compact possible representation of a big
 set.  Subformulas whose values balance out (matched open/close) stay small;
 the cost is concentrated exactly where a large set stays live.
 
+A second concrete witness (2026-08-23, from validating recursive rules
+against the DejaVu suite): the transitive-closure rule
+`spawned(x,y) := @spawned(x,y) | spawn(x,y) | Exists z . (@spawned(x,z) &
+spawn(z,y))` — the extension is a growing *binary relation* with a
+relational join (the `Exists z`) per event.  DejaVu's BDDs handle its
+10k-event logs in milliseconds; the formula representation needs the log
+capped at ~150 events.  Verdicts agree wherever both run; the gap is purely
+the representation, and this spec is the acid test for the hybrid design
+below (a join over an explicit relation is O(|S|), and exactly what
+relational monitors do).
+
 ## Candidate encodings
 
 1. **Interval/range compression.**  Mine the disjunction for arithmetic

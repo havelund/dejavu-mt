@@ -80,4 +80,7 @@ space is a triangle:
 
 Stateful functions (accumulating across calls) are deliberately out:
 call order/count during symbolic evaluation is an implementation detail,
-and memoization assumes purity. Aggregation is the principled successor.
+and memoization assumes purity. For running summaries, use **state
+variables** and **recursive rules** (`doc/rules.md`) — the declarative
+route to counting and sums; MonPoly-style aggregation over satisfying
+assignments remains tied to the relational-state work.
