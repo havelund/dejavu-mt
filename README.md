@@ -198,7 +198,12 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
 ### Grammar
 
     spec        ::= definition*
-    definition  ::= declaration | macro | property
+    definition  ::= declaration | macro | property | pythonblock | statedef
+
+    pythonblock ::= "python:" ... "end"        // Python functions for formulas
+    statedef    ::= "state" name ":" sort ":=" pyexpr
+                    ("on" name "(" [ name ("," name)* ] ")" ":" pyexpr)*
+    pyexpr      ::= "{" python-expression "}"
 
     declaration ::= ("pred" | "event" | "preds" | "events") predsig ("," predsig)*
     predsig     ::= name [ "(" [ typedparam ("," typedparam)* ] ")" ]
@@ -207,6 +212,8 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
     macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
     property    ::= "prop" name [ "anchored" ] ":" formula
+                    [ "where" rule ("," rule)* ]
+    rule        ::= name [ "(" [ name ("," name)* ] ")" ] ":=" formula
 
     formula     ::= "Exists" name "." formula          // quantifiers bind loosest
                   | "Forall" name "." formula
@@ -233,13 +240,16 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
     match       ::= term "matches" string      // pattern with {var} holes
 
-    timebound   ::= "[" int "," int "]"                 // between a and b time units ago
-                  | "[" int "," "*" "]"                 // at least a time units ago
-                  | "[" ("<=" | "<" | ">=" | ">") int "]"   // sugar (see below)
+    timebound   ::= "[" bound "," (bound | "*") "]"     // between a and b time units
+                  | "[" ("<=" | "<") int "]" | "[" ("<=") name "]"   // sugar
+                  | "[" (">=" | ">") int "]" | "[" (">=") name "]"
+    bound       ::= int | name        // a name = symbolic parameter, or a
+                                      // quantified Int variable (data bound)
 
     expr        ::= expr "+" product | expr "-" product | product   // arithmetic
     product     ::= product "*" atom | atom
     atom        ::= name | int | float | string | "-" atom | "(" expr ")"
+                  | name "(" [ expr ("," expr)* ] ")"   // python function call
     term        ::= name | int | float | string        // predicate arguments
 
     // Comments are // to end of line, or /* ... */. Strings use "double quotes".
