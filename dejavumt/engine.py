@@ -619,6 +619,10 @@ class FormulaMonitor:
         self.state_sorts = state_sorts or {}
         # Enum constructors: literals, resolved before variables.
         self.enum_cons = enum_cons or {}
+        # Violation witnesses: position -> {var: value}, the falsifying
+        # assignment of the property's leading Forall-prefix, extracted
+        # from a solver model when a verdict comes out False.
+        self.witnesses: Dict[int, dict] = {}
         # Recursive rules (the property's where-clause): each rule's
         # extension is recomputed per position; recursion only under @.
         self.rules: Dict[str, ast.Rule] = {}
@@ -1278,9 +1282,11 @@ class FormulaMonitor:
             # constraint, not a Boolean; without future operators it is
             # nevertheless final right here.
             v = nowval[self.root]
-            resolved = [(self.position,
-                         self._pverdict(b.simplify(v)) if self.params
-                         else self._verdict(v))]
+            verdict = (self._pverdict(b.simplify(v)) if self.params
+                       else self._verdict(v))
+            if verdict is False and not self.params:
+                self._note_witness(self.position, nowval)
+            resolved = [(self.position, verdict)]
         self._prev_time = time
         self.now = [b.false()] * len(self.nodes)
         self._steps += 1
@@ -1667,12 +1673,18 @@ class FormulaMonitor:
                 return self._pverdict(lo)
             return None
         if all_exact:
-            return self._verdict(b.simplify(self._eliminate(root_lo)))
+            verdict = self._verdict(b.simplify(self._eliminate(root_lo)))
+            if verdict is False:
+                self._note_witness(ob["pos"], lo_vals)
+            return verdict
         if mixed:
             return None
         if self._verdict(b.simplify(self._eliminate(root_lo))):
             return True
         if not self._verdict(b.simplify(self._eliminate(root_hi))):
+            # The upper bracket is already false: any assignment falsifying
+            # it genuinely violates.
+            self._note_witness(ob["pos"], hi_vals)
             return False
         return None
 
@@ -1927,6 +1939,34 @@ class FormulaMonitor:
         else:
             self.region = b.simplify(b.and_(self.region, f))
         return f
+
+    def _witness(self, vals):
+        """Falsifying assignment for the property's leading Forall-prefix,
+        from a node-value array: a model of the negated prefix-child.  None
+        when the root is not Forall-led, the child still mentions
+        placeholders, or the solver yields no model."""
+        b = self.backend
+        i = self.root
+        consts = []
+        while self.nodes[i].kind == "forall":
+            consts.append(self.consts[self.nodes[i].data])
+            i = self.nodes[i].children[0]
+        if not consts or vals[i] is None:
+            return None
+        body = vals[i]
+        if self._pydecls and b.mentions(body, self._pydecls):
+            return None
+        if self.qbind and b.mentions(body, [qb["fdecl"] for qb in self.qbind]):
+            return None
+        try:
+            return b.model_values(b.not_(body), consts)
+        except Exception:
+            return None
+
+    def _note_witness(self, pos, vals):
+        w = self._witness(vals)
+        if w:
+            self.witnesses[pos] = w
 
     def _residual_check(self, f):
         """A verdict must not depend on an application of a Python function

@@ -108,6 +108,13 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
     line_nr = 0
     facts = {}            # position -> displayed event
     verdicts_at = {}      # (position, property) -> holds
+    fms = {fm.name: fm for fm in monitor.formulas}
+
+    def _wit(name, pos):
+        w = fms[name].witnesses.get(pos)
+        if not w:
+            return ""
+        return "  [" + ", ".join(f"{k}={v}" for k, v in w.items()) + "]"
     for item in read_events(logfile, timed=monitor.timed):
         event, ts = item if monitor.timed else (item, None)
         line_nr += 1
@@ -134,7 +141,7 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
                 if not debug and not trace:
                     late = "" if pos == line_nr else f" (determined at event {line_nr})"
                     print(f"*** Violation of {name} at event {pos}: "
-                          f"{facts[pos]}{late}")
+                          f"{facts[pos]}{late}{_wit(name, pos)}")
             elif holds is not True and not debug and not trace:
                 print(f"--- {name} at event {pos}: {facts[pos]} holds iff "
                       f"{monitor.backend.to_str(holds)}")
@@ -146,7 +153,8 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
             violations += 1
             if not debug and not trace:
                 print(f"*** Violation of {name} at event {pos}: "
-                      f"{facts[pos]} (determined at end of trace)")
+                      f"{facts[pos]} (determined at end of trace)"
+                      f"{_wit(name, pos)}")
         elif holds is not True and not debug and not trace:
             print(f"--- {name} at event {pos}: {facts[pos]} holds iff "
                   f"{monitor.backend.to_str(holds)} (determined at end of trace)")

@@ -5,11 +5,12 @@ Working list; keep entries short, link designs where they exist.
 
 ## Next up
 
-- [ ] **Violation witnesses.** On a False verdict, extract the falsifying
-      assignment from the solver model and report it with the violation
-      ("violated at event 42 with f=f2").  Automatic explanations for every
-      property — no user-written messages (contrast PyContract's f-string
-      errors); listed in the paper outlook as "explanations via models".
+- [x] **Violation witnesses** (2026-08-30): falsifying assignment of the
+      leading Forall-prefix from a solver model, shown in CLI violations
+      (`[f=b, d=boom]`) and exposed as `FormulaMonitor.witnesses`.  Works
+      for immediate, delayed (future), and rule-based violations; skipped
+      gracefully for non-Forall roots, parametric verdicts, and values
+      still behind placeholders.
 - [ ] **JSONL log input.** `{"name": "Acquire", "thread": "t1", "lock": 3}`
       — fields matched to declared parameter names; multiple facts per
       event.  Makes real (Europa-Clipper-style) logs first-class.

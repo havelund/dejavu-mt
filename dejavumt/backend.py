@@ -115,6 +115,11 @@ class Backend:
     def is_false(self, t) -> bool: ...
     def check_sat(self, t) -> bool: ...
 
+    def model_values(self, formula, consts):
+        """A satisfying assignment of `formula` restricted to `consts`, as
+        {name: python value}; None if unsatisfiable/unknown."""
+        return None
+
     # rendering
     def to_str(self, t) -> str: ...
 
@@ -521,6 +526,36 @@ class Z3Backend(Backend):
         self._solver.pop()
         return res == self.z3.sat
 
+    def model_values(self, formula, consts):
+        z3 = self.z3
+        s = z3.Solver()
+        s.set("timeout", 3000)
+        s.add(formula)
+        if s.check() != z3.sat:
+            return None
+        m = s.model()
+        out = {}
+        for c in consts:
+            v = m.eval(c, model_completion=True)
+            out[str(c)] = self._model_pyval(v)
+        return out
+
+    def _model_pyval(self, v):
+        z3 = self.z3
+        if z3.is_string_value(v):
+            return v.as_string()
+        if z3.is_int_value(v):
+            return v.as_long()
+        if z3.is_bv_value(v):
+            return v.as_long()
+        if z3.is_rational_value(v):
+            return v.numerator_as_long() / v.denominator_as_long()
+        if z3.is_true(v):
+            return True
+        if z3.is_false(v):
+            return False
+        return str(v)          # enum constructors and anything else
+
     def to_str(self, t):
         return _z3_to_str(self.z3, t)
 
@@ -833,6 +868,8 @@ class Cvc5Backend(Backend):
             return num / den
         if e.isBooleanValue():
             return e.getBooleanValue()
+        if e.isBitVectorValue():
+            return int(e.getBitVectorValue(), 2)
         return None
 
     def eval_funs(self, t, registry, cache):
@@ -1001,6 +1038,19 @@ class Cvc5Backend(Backend):
         s = self._mk_solver()
         s.assertFormula(t)
         return s.checkSat().isSat()
+
+    def model_values(self, formula, consts):
+        s = self._mk_solver()
+        s.setOption("produce-models", "true")
+        s.assertFormula(formula)
+        if not s.checkSat().isSat():
+            return None
+        out = {}
+        for c in consts:
+            v = s.getValue(c)
+            got = self._litval(v)
+            out[str(c)] = got if got is not None else str(v)
+        return out
 
     def to_str(self, t):
         return _cvc5_to_str(self.Kind, t)

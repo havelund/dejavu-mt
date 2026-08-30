@@ -339,6 +339,15 @@ becomes false, an unrefuted `G` true). Bounded intervals bound the delay.
     req,c,10      pending
     other,x,20    deadline 15 has passed -> position 4 VIOLATED, reported here
 
+**Violations come with witnesses.** When a `Forall`-led property fails,
+the falsifying values of the quantified variables are extracted from a
+solver model and shown with the violation — automatically, for every
+property, no message templates needed:
+
+    *** Violation of q at event 3: write(b,boom)  [f=b, d=boom]
+
+(In the API: `FormulaMonitor.witnesses` maps positions to `{var: value}`.)
+
 The `trace` table is therefore printed once the trace has been read, with
 every position's verdict filled in (`pending` if it never resolved), and
 `debug` lists under each tree the positions still awaiting a verdict. In the
