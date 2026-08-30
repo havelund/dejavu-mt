@@ -6,7 +6,7 @@ arithmetic and cross-time comparisons.
 Not covered (genuine aggregation -- running sums/counts over the trace,
 e.g. TP-DejaVu Example 2's total bytes, PyDejaVu Example 3's per-file
 available space): counting is not first-order definable; see
-doc/pyfun.md's triangle and OPTIMIZATION.md.
+doc/pyfun.md's triangle and TODO.md's Optimization notes.
 """
 from dejavumt import parse_spec, Monitor
 
