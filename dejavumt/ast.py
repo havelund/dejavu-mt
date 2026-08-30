@@ -377,22 +377,28 @@ class Interval(LTL):
 
 @dataclass(frozen=True)
 class Exists(LTL):
-    """Exists x . phi  -- ranges over the full (possibly infinite) domain."""
+    """Exists x . phi  -- ranges over the full (possibly infinite) domain.
+    `sort` is an optional authoritative annotation (Exists x: Mode . phi)."""
     var: str
     arg: LTL
+    sort: str = None
 
     def __str__(self) -> str:
-        return f"∃ {self.var} . {_b(self.arg)}"
+        s = f": {self.sort}" if self.sort else ""
+        return f"∃ {self.var}{s} . {_b(self.arg)}"
 
 
 @dataclass(frozen=True)
 class Forall(LTL):
-    """Forall x . phi  -- ranges over the full (possibly infinite) domain."""
+    """Forall x . phi  -- ranges over the full (possibly infinite) domain.
+    `sort` is an optional authoritative annotation (Forall x: Mode . phi)."""
     var: str
     arg: LTL
+    sort: str = None
 
     def __str__(self) -> str:
-        return f"∀ {self.var} . {_b(self.arg)}"
+        s = f": {self.sort}" if self.sort else ""
+        return f"∀ {self.var}{s} . {_b(self.arg)}"
 
 
 # ---------------------------------------------------------------------------

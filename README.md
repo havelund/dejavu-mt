@@ -214,7 +214,10 @@ A variable's type is inferred from how it is used: the predicate positions it
 appears in, numeric constants it is related to, and — matching DejaVu, which
 compares order relations numerically — a variable used in `< <= > >=` with no
 other type information defaults to `Int` (declare it `String` explicitly if you
-want lexicographic comparison). Types are what enable *theory* reasoning:
+want lexicographic comparison). A quantified variable may also carry an
+explicit annotation — `Forall m: Mode . ...` — which is authoritative, like
+a predicate declaration; useful where inference has nothing to go on (e.g.
+a variable used only in variable-variable equalities). Types are what enable *theory* reasoning:
 numeric order, lexicographic order, and arithmetic on the numeric sorts. This
 is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
@@ -240,8 +243,8 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                     [ "where" rule ("," rule)* ]
     rule        ::= name [ "(" [ name ("," name)* ] ")" ] ":=" formula
 
-    formula     ::= "Exists" name "." formula          // quantifiers bind loosest
-                  | "Forall" name "." formula
+    formula     ::= "Exists" name [":" sort] "." formula   // quantifiers bind loosest
+                  | "Forall" name [":" sort] "." formula
                   | formula "->" formula | formula "<->" formula
                   | formula "|"  formula
                   | formula "&"  formula

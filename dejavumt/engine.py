@@ -95,7 +95,7 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
     if isinstance(f, (ast.Exists, ast.Forall)):
         # Do not substitute the bound variable itself.
         inner = {k: v for k, v in m.items() if k != f.var}
-        return type(f)(f.var, _subst(f.arg, inner))
+        return type(f)(f.var, _subst(f.arg, inner), f.sort)
     raise TypeError(f"cannot substitute in {type(f).__name__}")
 
 
@@ -123,7 +123,7 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
                       ast.Zince, ast.Interval)):
         return type(f)(expand_macros(f.left, macros), expand_macros(f.right, macros))
     if isinstance(f, (ast.Exists, ast.Forall)):
-        return type(f)(f.var, expand_macros(f.arg, macros))
+        return type(f)(f.var, expand_macros(f.arg, macros), f.sort)
     raise TypeError(f"cannot expand {type(f).__name__}")
 
 
@@ -392,6 +392,10 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
             walk(g.left)
             walk(g.right)
         elif isinstance(g, (ast.Exists, ast.Forall)):
+            if g.sort is not None:
+                # Explicit annotation: authoritative, like a predicate
+                # parameter declaration.
+                note(g.var, g.sort)
             walk(g.arg)
 
     walk(f)
@@ -1980,6 +1984,18 @@ class Monitor:
                     raise ValueError(
                         f"predicate {e.name}: unknown sort '{p.sort}' "
                         f"(builtin, BV8/16/32/64, or a declared enum)")
+
+        def check_qsorts(g):
+            if (isinstance(g, (ast.Exists, ast.Forall))
+                    and g.sort is not None and g.sort not in valid_sorts):
+                raise ValueError(
+                    f"quantifier '{g.var}: {g.sort}': unknown sort "
+                    f"(builtin, BV8/16/32/64, or a declared enum)")
+
+        for prop in spec.properties:
+            _walk_formula(prop.body, check_qsorts)
+            for r in prop.rules:
+                _walk_formula(r.body, check_qsorts)
         # Python functions from the spec's `python:` block, shared by all
         # properties (interpreted SMT symbols; see load_pyblock).  The
         # block's namespace is also the scope of state-variable expressions.

@@ -82,6 +82,33 @@ def test_enum_cvc5():
     assert got == [True, False]
 
 
+def test_quantifier_sort_annotation():
+    """Var-var equality does not propagate sorts; an annotation does.
+    'Every mode equals some reached value' -- coverage via equality."""
+    spec = """
+    enum Mode = OFF | STANDBY | ACTIVE
+    pred reached(r: Mode)
+    prop cov : eof -> Forall m: Mode . Exists r . (P reached(r)) & r = m
+    """
+    events = [{"reached": [("OFF",)]}, {"reached": [("STANDBY",)]},
+              {"eof": [()]},
+              {"reached": [("ACTIVE",)]}, {"eof": [()]}]
+    got = replay(spec, events, prop="cov")
+    assert got == [True, True, False, True, True]
+
+
+def test_quantifier_annotation_conflict():
+    with pytest.raises(ValueError, match="used at sorts"):
+        Monitor(parse_spec("enum Gear = P1 | P2\npred set2(m: Gear)\n"
+                           "prop p : Forall m: Int . set2(m)"))
+
+
+def test_quantifier_annotation_unknown_sort():
+    with pytest.raises(ValueError, match="unknown sort"):
+        Monitor(parse_spec("pred p(x: String)\n"
+                           "prop q : Forall x: Goo . p(x)"))
+
+
 BV_SPEC = """
 pred stat(w: BV16)
 prop err : Forall w . stat(w) -> band(w, 0x40) = 0

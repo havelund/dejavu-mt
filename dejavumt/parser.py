@@ -143,8 +143,10 @@ _GRAMMAR = r"""
            | _G uleafq                      -> always
            | leaf
 
-    quant: "Exists" NAME "." ltl            -> exists
-         | "Forall" NAME "." ltl            -> forall
+    // Quantified variables may carry an optional sort annotation
+    // (authoritative, like predicate parameter declarations).
+    quant: "Exists" NAME (":" (SORT | NAME))? "." ltl  -> exists
+         | "Forall" NAME (":" (SORT | NAME))? "." ltl  -> forall
 
     ?leaf: "true"                          -> true_
          | "false"                         -> false_
@@ -360,11 +362,15 @@ class _ToAst(Transformer):
     def interval(self, a, b):
         return ast.Interval(a, b)
 
-    def exists(self, var, f):
-        return ast.Exists(str(var), f)
+    def exists(self, var, sort, f=None):
+        if f is None:
+            sort, f = None, sort
+        return ast.Exists(str(var), f, str(sort) if sort else None)
 
-    def forall(self, var, f):
-        return ast.Forall(str(var), f)
+    def forall(self, var, sort, f=None):
+        if f is None:
+            sort, f = None, sort
+        return ast.Forall(str(var), f, str(sort) if sort else None)
 
     def parens(self, f):
         return f
