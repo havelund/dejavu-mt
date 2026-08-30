@@ -30,6 +30,23 @@ Working list; keep entries short, link designs where they exist.
       monitors as query engines, generalizing parametric monitoring's
       constraint verdicts.  Covers MAX/MIN-style aggregations (order-
       definable); SUM/CNT stay with the hybrid above.
+- [ ] **Producing data during monitoring via Python actions**
+      (PyContract-inspired: monitors as data producers, not just verdict
+      emitters).  Deliberately *side-effecting* Python — distinct from the
+      pure interpreted functions — fired by the engine at defined points.
+      Two candidate attachment sites:
+      * **actions on rules**: when a rule's extension becomes non-empty
+        (or changes) at a position, call a Python function with the
+        matching values — `r(x) := body do {report(x)}`;
+      * **actions on properties**: on a verdict (or specifically a
+        violation), call Python with the position and — once the
+        witnesses feature exists — the falsifying assignment:
+        `prop p : ... on violation {log_incident(pos, f)}`.
+      Design questions: firing semantics with delayed verdicts (fire at
+      emission, in position order?); extracting ground values from a
+      symbolic extension (needs the witness machinery — do witnesses
+      first); ordering/purity contract (actions may not feed back into
+      the spec's state except via declared state variables).
 - [ ] **Performance kernel** (only when the ideas stop moving): the
       node-list evaluator as a Rust/C++ core against the Z3 C API, Python
       kept as frontend.  Recovers the ~50–100 µs/event interpreter floor;
