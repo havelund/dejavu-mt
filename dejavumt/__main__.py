@@ -12,7 +12,7 @@ import sys
 
 from .parser import parse_file
 from .engine import Monitor
-from .log import read_events
+from .log import read_events, read_jsonl
 
 
 BANNER = r"""
@@ -115,7 +115,12 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         if not w:
             return ""
         return "  [" + ", ".join(f"{k}={v}" for k, v in w.items()) + "]"
-    for item in read_events(logfile, timed=monitor.timed):
+    if logfile.endswith((".jsonl", ".ndjson", ".json")):
+        sig = {e.name: [p.name for p in e.params] for e in spec.events}
+        stream = read_jsonl(logfile, timed=monitor.timed, signature=sig)
+    else:
+        stream = read_events(logfile, timed=monitor.timed)
+    for item in stream:
         event, ts = item if monitor.timed else (item, None)
         line_nr += 1
         facts[line_nr] = _fact(event) + (f" @ {ts}" if monitor.timed else "")

@@ -11,9 +11,11 @@ Working list; keep entries short, link designs where they exist.
       for immediate, delayed (future), and rule-based violations; skipped
       gracefully for non-Forall roots, parametric verdicts, and values
       still behind placeholders.
-- [ ] **JSONL log input.** `{"name": "Acquire", "thread": "t1", "lock": 3}`
-      — fields matched to declared parameter names; multiple facts per
-      event.  Makes real (Europa-Clipper-style) logs first-class.
+- [x] **JSONL log input** (2026-08-30): `.jsonl/.ndjson/.json` logs, one
+      object per line, fields matched by name to declared parameters,
+      `"time"` field for timed specs; native JSON numbers/booleans.
+      (Multiple facts per event: the engine supports it, the readers still
+      emit one fact per line — extend if a real log needs it.)
 
 ## Larger projects
 

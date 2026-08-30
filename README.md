@@ -180,8 +180,18 @@ is a set of ground **facts** — predicate instances such as `open("a","read")`.
 An event may contain several facts, including several of the *same* predicate
 (e.g. both `p(1)` and `p(2)` at one step). A **property** is a closed formula;
 after each event the monitor reports whether the property *holds* or is
-*violated* at that point in the trace. In the CSV log format one line is one
-fact (`open,a,read`), so each line is a one-fact event.
+*violated* at that point in the trace. Two log formats are read, chosen by
+file extension:
+
+- **CSV** (default): one line is one fact with positional arguments —
+  `open,a,read` — and, for timed specs, the timestamp as the last column.
+- **JSONL** (`.jsonl`/`.ndjson`/`.json`): one JSON object per line, fields
+  matched **by name** to the predicate's declared parameters (order
+  irrelevant, extra fields ignored, missing declared fields an error);
+  JSON numbers/booleans flow into typed parameters directly, and for
+  timed specs the integer field `"time"` is the timestamp:
+
+      {"name": "open", "f": "data.txt", "m": "w", "time": 3}
 
 ### Types
 
