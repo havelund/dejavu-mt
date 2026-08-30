@@ -169,6 +169,15 @@ def run():
             fm.strong = True
         if req.get("gc"):
             fm.gc_period = 50
+    fms = {fm.name: fm for fm in monitor.formulas}
+
+    def jverdict(h):
+        # JSON-safe verdict: bool/None pass; a parametric constraint
+        # becomes its rendered string.
+        if h is True or h is False or h is None:
+            return h
+        return monitor.backend.to_str(h)
+
     events_out = []
     violations = []
     truncated = None
@@ -195,25 +204,36 @@ def run():
             # Verdicts resolved by this event, for this position or (with
             # future operators) an earlier one.
             for pos, name, holds in monitor.resolved:
-                events_out[pos - 1]["verdicts"][name] = holds
-                if not holds:
+                events_out[pos - 1]["verdicts"][name] = jverdict(holds)
+                if holds is False:
                     violations.append({"event": pos, "prop": name,
-                                       "at": nr})
+                                       "at": nr,
+                                       "witness":
+                                           fms[name].witnesses.get(pos)})
         for pos, name, holds in monitor.end():
-            events_out[pos - 1]["verdicts"][name] = holds
-            if not holds:
-                violations.append({"event": pos, "prop": name, "at": None})
+            events_out[pos - 1]["verdicts"][name] = jverdict(holds)
+            if holds is False:
+                violations.append({"event": pos, "prop": name, "at": None,
+                                   "witness": fms[name].witnesses.get(pos)})
     except Exception as e:
         return jsonify({"error": f"at event {len(events_out) + 1}: "
                                  f"{type(e).__name__}: {e}"})
+    def jsafe(v):
+        return v if isinstance(v, (bool, int, float, str)) else str(v)
+
     return jsonify({
-        "properties": [{"name": fm.name, "text": fm.text}
+        "properties": [{"name": fm.name, "text": fm.text,
+                        "anchored": fm.anchored}
                        for fm in monitor.formulas],
         "solver": monitor.backend.name,
         "timed": monitor.timed,
         "future": monitor.future,
         "events": events_out,
         "violations": violations,
+        # Parametric feasible regions and final state-variable values.
+        "regions": {fm.name: monitor.backend.to_str(fm.region)
+                    for fm in monitor.formulas if fm.params},
+        "states": {k: jsafe(v) for k, v in monitor.states.items()},
         "truncated": truncated,
     })
 

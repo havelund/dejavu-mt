@@ -59,7 +59,7 @@ GC_PERIOD = 50  # default period for the `gc` flag
 
 def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         strong: bool = False, weak: bool = False, solver: str = "z3",
-        gc: bool = False) -> int:
+        gc: bool = False, json_out: bool = False) -> int:
     spec = parse_file(specfile)
     monitor = Monitor(spec, solver=solver)
     if weak:
@@ -187,6 +187,53 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         if fm.params:
             print(f"\nParametric verdict for {fm.name}: holds iff "
                   f"{monitor.backend.to_str(fm.region)}")
+    # Anchored properties: one verdict for the whole trace.
+    for fm in monitor.formulas:
+        if fm.anchored:
+            v = verdicts_at.get((1, fm.name))
+            if v is True:
+                tag = "holds"
+            elif v is False:
+                tag = "VIOLATED" + _wit(fm.name, 1)
+            elif v is None:
+                tag = "pending"
+            else:
+                tag = f"holds iff {monitor.backend.to_str(v)}"
+            print(f"\nAnchored verdict for {fm.name}: {tag}")
+    if json_out:
+        import json as _json
+
+        def jv(h):
+            return (h if isinstance(h, (bool, type(None)))
+                    else monitor.backend.to_str(h))
+
+        def jsafe(v):
+            return v if isinstance(v, (bool, int, float, str)) else str(v)
+
+        results = {
+            "spec": specfile, "log": logfile,
+            "solver": monitor.backend.name, "timed": monitor.timed,
+            "events": line_nr,
+            "properties": {
+                fm.name: {
+                    "text": fm.text,
+                    "anchored": fm.anchored,
+                    "verdicts": [jv(verdicts_at.get((i + 1, fm.name)))
+                                 for i in range(line_nr)],
+                    "violations": [
+                        {"pos": p, "event": facts[p],
+                         "witness": fm.witnesses.get(p)}
+                        for (p, n2), h in sorted(verdicts_at.items())
+                        if n2 == fm.name and h is False],
+                    "region": (monitor.backend.to_str(fm.region)
+                               if fm.params else None),
+                } for fm in monitor.formulas},
+            "states": {k: jsafe(v) for k, v in monitor.states.items()},
+        }
+        out_path = logfile + ".results.json"
+        with open(out_path, "w") as f:
+            _json.dump(results, f, indent=1)
+        print(f"\nResults written to {out_path}")
     print(f"\nProcessed {line_nr} events, {violations} violation(s).")
     return 1 if violations else 0
 
@@ -194,17 +241,18 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
 def main() -> None:
     flags = {"debug", "--debug", "trace", "--trace",
              "strong", "--strong", "weak", "--weak", "z3", "--z3",
-             "cvc5", "--cvc5", "gc", "--gc"}
+             "cvc5", "--cvc5", "gc", "--gc", "json", "--json"}
     args = [a for a in sys.argv[1:] if a not in flags]
     chosen = {a.lstrip("-") for a in sys.argv[1:] if a in flags}
     if len(args) != 2:
         print("usage: python -m dejavumt <specfile> <logfile> "
-              "[trace] [debug] [strong|weak] [z3|cvc5] [gc]")
+              "[trace] [debug] [strong|weak] [z3|cvc5] [gc] [json]")
         sys.exit(2)
     solver = "cvc5" if "cvc5" in chosen else "z3"
     sys.exit(run(args[0], args[1], debug="debug" in chosen,
                  trace="trace" in chosen, strong="strong" in chosen,
-                 weak="weak" in chosen, solver=solver, gc="gc" in chosen))
+                 weak="weak" in chosen, solver=solver, gc="gc" in chosen,
+                 json_out="json" in chosen))
 
 
 if __name__ == "__main__":

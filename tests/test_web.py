@@ -85,3 +85,23 @@ def test_save_roundtrip(client, tmp_path):
                            ).status_code == 400
     finally:
         web._ROOT = old
+
+
+def test_parametric_and_states_run(client):
+    """Parametric constraint verdicts serialize (no bool() on a Z3 term),
+    regions and states are exposed, violations carry witnesses."""
+    res = run(client, spec="""
+state total: Int := {0}
+    on w(f, d): {total + len(d)}
+pred open(f: String)
+pred w(f: String, d: String)
+prop q : Forall f . Forall d . w(f,d) -> P open(f)
+prop pm : Forall f . Forall d . w(f,d) -> P[<=n] open(f)
+""", log="open,a,0\nw,a,xy,3\nw,b,boom,9\n")
+    assert "error" not in res
+    assert res["regions"]["pm"]           # some constraint string
+    assert res["states"]["total"] == 6
+    v = [x for x in res["violations"] if x["prop"] == "q"][0]
+    assert v["witness"] == {"f": "b", "d": "boom"}
+    # position 2's pm verdict is a constraint string
+    assert isinstance(res["events"][1]["verdicts"]["pm"], str)

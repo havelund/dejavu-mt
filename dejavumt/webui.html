@@ -362,7 +362,22 @@ function render(res) {
                 `<button class="mini" id="collapseall">collapse all</button>` : '') +
     `</div>`;
   h += '<div class="props">' + res.properties.map(p =>
-        `${esc(p.name)} : ${esc(p.text)}`).join('<br>') + '</div>';
+        `${esc(p.name)} : ${esc(p.text)}` +
+        (p.anchored ? ' <span class="pend">(anchored)</span>' : ''))
+        .join('<br>') + '</div>';
+  const regions = res.regions || {}, states = res.states || {};
+  for (const [n, r] of Object.entries(regions))
+    h += `<div class="props">parametric ${esc(n)}: holds iff ${esc(r)}</div>`;
+  if (Object.keys(states).length)
+    h += '<div class="props">states: ' + Object.entries(states)
+         .map(([k, v]) => `${esc(k)} = ${esc(String(v))}`).join(', ') +
+         '</div>';
+  const witAt = {};
+  for (const v of res.violations)
+    if (v.witness) witAt[v.event + '|' + v.prop] =
+      Object.entries(v.witness).map(([k, x]) => `${k}=${x}`).join(', ');
+  const anchoredP = {};
+  for (const p of res.properties) anchoredP[p.name] = p.anchored;
   const props = res.properties.map(p => p.name);
   h += '<table class="trace"><tr><th>#</th><th>event</th>' +
        (res.timed ? '<th>time</th>' : '') +
@@ -375,11 +390,21 @@ function render(res) {
          `${ev.trees ? ' title="click to toggle formula trees"' : ''}>` +
          `<td>${ev.nr}</td><td>${esc(ev.fact)}</td>` +
          (res.timed ? `<td>${ev.ts}</td>` : '') +
-         props.map(p => ev.verdicts[p] === null
-             ? '<td class="pend">pending</td>'
-             : ev.verdicts[p]
-             ? '<td class="holds">holds</td>'
-             : '<td class="viol">VIOLATED</td>').join('') + '</tr>';
+         props.map(p => {
+           const v = ev.verdicts[p];
+           if (v === null)
+             return anchoredP[p] && ev.nr > 1
+               ? '<td class="pend">-</td>'
+               : '<td class="pend">pending</td>';
+           if (v === true) return '<td class="holds">holds</td>';
+           if (v === false) {
+             const w = witAt[ev.nr + '|' + p];
+             return `<td class="viol"${w ? ` title="${esc(w)}"` : ''}>` +
+                    'VIOLATED</td>';
+           }
+           return `<td class="pend" title="parametric constraint">` +
+                  `${esc(v)}</td>`;
+         }).join('') + '</tr>';
     if (ev.trees) {
       h += `<tr class="treerow${anyViol ? '' : ' hidden'}" data-nr="${ev.nr}">` +
            `<td></td><td colspan="${props.length + (res.timed ? 2 : 1)}">`;

@@ -61,11 +61,16 @@ increment of the relational-state hybrid under Larger projects.)
 
 ## Small / when touched anyway
 
-- [ ] Anchored + trace-table polish: `-` cells documented; consider a
-      summary line per anchored property in CLI output.
+- [x] Anchored + trace-table polish (2026-08-30): `-` cells documented;
+      `Anchored verdict for ...` summary line in CLI output.
 - [x] `{_}` anonymous hole / unanchored `has` sugar for string patterns
       (2026-08-30).
-- [ ] Web UI: expose parametric verdicts/region and state variables.
+- [x] Web UI (2026-08-30): parametric constraint verdicts render (and no
+      longer crash serialization), regions and final states shown,
+      violation cells carry witness tooltips, anchored `-` cells.
+- [x] JSON results recording (2026-08-30): `json` CLI flag writes
+      `<log>.results.json` — verdicts (incl. parametric constraints),
+      violations with witnesses, regions, final states.
 
 ## Parked (research-grade, revisit deliberately)
 

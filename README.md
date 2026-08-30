@@ -29,7 +29,7 @@ not found: `ModuleNotFoundError: No module named 'lark'`):
 
 then run:
 
-    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak] [z3|cvc5] [gc]
+    python -m dejavumt <specfile.qtl> <logfile.csv> [trace] [debug] [strong|weak] [z3|cvc5] [gc] [json]
 
 Example:
 
@@ -102,6 +102,16 @@ It is verdict-preserving. On churn workloads it keeps the representation bounded
 nodes without `gc` and stays at a constant handful with it). It does not help
 when the growth is genuinely-live data (many distinct values live at once), which
 has no dead terms to reclaim. Currently Z3-only (it uses Z3's `ctx-simplify`).
+
+### JSON results
+
+The `json` flag writes a machine-readable record of the run to
+`<logfile>.results.json`: per property its text, anchored flag, the
+verdict at every position (`true`/`false`/`null`, or a constraint string
+for parametric properties), the violations with their **witnesses**, and
+the parametric **region**; plus the final **state-variable** values:
+
+    python -m dejavumt spec.qtl log.csv json
 
 ### Solver backend
 
@@ -379,7 +389,9 @@ only — the classic `trace |= f` reading, one verdict for the whole trace:
 
 Anchored properties are also cheaper (a single parked obligation), and they
 combine with parametric bounds (`prop a anchored : F[<=n] init` yields one
-constraint on `n`).
+constraint on `n`). In trace mode their unjudged positions show `-`, and
+the CLI prints one `Anchored verdict for ...` summary line per anchored
+property at the end.
 
 ### Timed (metric) operators
 
