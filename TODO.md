@@ -52,6 +52,13 @@ Working list; keep entries short, link designs where they exist.
       kept as frontend.  Recovers the ~50–100 µs/event interpreter floor;
       see the Optimization section below.
 
+## To investigate
+
+- [ ] **SALT / PSL**: look at these specification languages for
+      inspiration — higher-level temporal idioms (scopes like
+      before/after/between, regular-expression layers, syntactic sugar
+      over LTL) that could inform surface syntax additions.
+
 ## Small / when touched anyway
 
 - [ ] Anchored + trace-table polish: `-` cells documented; consider a
