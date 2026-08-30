@@ -192,3 +192,54 @@ def test_gaps_on_cvc5():
     events = [{"armed": [("klaus",)]}, {"log": [("hi user klaus",)]},
               {"log": [("hi user doron",)]}]
     assert violations(spec, events, solver="cvc5") == [3]
+
+
+def test_anonymous_hole():
+    """{_} matches a segment and binds nothing."""
+    from dejavumt import parse_spec, Monitor
+    spec = parse_spec('''
+    pred msg(m: String)
+    prop q : Forall m . msg(m) -> Forall ip .
+        (m matches "user {_} from {ip}") -> ip = "10.0.0.1"
+    ''')
+    mon = Monitor(spec)
+    assert mon.step({"msg": [("user bob from 10.0.0.1",)]}) == {"q": True}
+    assert mon.step({"msg": [("user eve from 6.6.6.6",)]}) == {"q": False}
+
+
+def test_has_sugar():
+    """m has "p"  ==  m matches "...p..."."""
+    from dejavumt import parse_spec, Monitor
+    spec = parse_spec('''
+    pred log(m: String)
+    prop q : Forall m . log(m) -> ! (m has "ERROR")
+    ''')
+    mon = Monitor(spec)
+    assert mon.step({"log": [("all fine",)]}) == {"q": True}
+    assert mon.step({"log": [("xx ERROR yy",)]}) == {"q": False}
+
+
+def test_has_with_capture():
+    from dejavumt import parse_spec, Monitor
+    spec = parse_spec('''
+    pred login(m: String)
+    pred logout(u: String)
+    prop q : Forall m . Forall u .
+        (login(m) & (m has "user {u:[a-z]+} logged")) -> F logout(u)
+    ''')
+    mon = Monitor(spec)
+    mon.step({"login": [("today user bob logged in",)]})
+    mon.step({"logout": [("bob",)]})
+    out = mon.end()
+    assert all(h for _, _, h in out) or out == []
+
+
+def test_has_regex_flavour():
+    from dejavumt import parse_spec, Monitor
+    spec = parse_spec('''
+    pred log(m: String)
+    prop q : Forall m . log(m) -> ! (m has /fail(ed|ure)/)
+    ''')
+    mon = Monitor(spec)
+    assert mon.step({"log": [("ok",)]}) == {"q": True}
+    assert mon.step({"log": [("xx failure yy",)]}) == {"q": False}

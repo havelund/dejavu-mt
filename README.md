@@ -278,7 +278,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
                   | "(" formula ")"
     relop       ::= "=" | "<" | "<=" | ">" | ">=" | "contains"
 
-    match       ::= term "matches" string      // pattern with {var} holes
+    match       ::= term ("matches" | "has") (string | regex)  // {var} holes, {_} anonymous
 
     timebound   ::= "[" bound "," (bound | "*") "]"     // between a and b time units
                   | "[" ("<=" | "<") int "]" | "[" ("<=") name "]"   // sugar
@@ -446,7 +446,8 @@ Two relations over `String` terms:
 
 `matches` tests a term against a pattern of literal text and **holes**
 `{var}`; a hole names a data variable and captures a substring, optionally
-constrained by a regular expression: `{n:[0-9]+}` (subset: literals, `.`,
+constrained by a regular expression: `{n:[0-9]+}`. `{_}` is an anonymous
+hole (matches, binds nothing) (subset: literals, `.`,
 classes, `* + ?`, `|`, grouping). A capture is a *constraint*, not an
 extraction — the pattern means `m = "user " ++ u` — so the hole variable is
 an ordinary quantified variable and flows anywhere data flows, e.g.
@@ -460,6 +461,8 @@ holes plus `...` **gaps** (match anything, bind nothing) and `{:RE}`
 
     m matches "...user {u:[a-z]+}..."       -- unanchored capture, no
                                                pre/post variables needed
+    m has "user {u:[a-z]+}"                 -- sugar for the same (`has`
+                                               wraps the pattern in gaps)
 
 **Slashed** patterns are a full regex with embedded holes:
 

@@ -67,9 +67,11 @@ def parse_pattern(text: str):
             if lit:
                 segs.append(("lit", "".join(lit)))
                 lit = []
-            if name == "" and colon:
-                # {:REGEX} -- anonymous constrained gap
-                segs.append(("gap", parse_regex(constraint)))
+            if (name == "" and colon) or name == "_":
+                # {:REGEX} / {_:REGEX} -- anonymous constrained gap;
+                # {_} -- anonymous hole (matches anything, binds nothing)
+                segs.append(("gap",
+                             parse_regex(constraint) if constraint else None))
             else:
                 if not name.isidentifier():
                     raise PatternError(f"bad hole name {name!r} in {text!r}")
@@ -218,6 +220,14 @@ def parse_regex_pattern(text: str):
                 raise PatternError(f"unclosed hole in pattern: {text!r}")
             inner = text[i + 1:j]
             name, _, constraint = inner.partition(":")
+            if name == "_":
+                # {_} -- anonymous hole: matches anything, binds nothing.
+                flush()
+                segs.append(("gap",
+                             parse_regex(constraint) if constraint
+                             else None))
+                i = j + 1
+                continue
             if not name.isidentifier():
                 raise PatternError(f"bad hole name {name!r} in {text!r}")
             flush()

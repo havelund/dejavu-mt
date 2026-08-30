@@ -63,8 +63,8 @@ increment of the relational-state hybrid under Larger projects.)
 
 - [ ] Anchored + trace-table polish: `-` cells documented; consider a
       summary line per anchored property in CLI output.
-- [ ] `{_}` anonymous hole / unanchored `has` sugar for string patterns
-      (offered once, never requested).
+- [x] `{_}` anonymous hole / unanchored `has` sugar for string patterns
+      (2026-08-30).
 - [ ] Web UI: expose parametric verdicts/region and state variables.
 
 ## Parked (research-grade, revisit deliberately)

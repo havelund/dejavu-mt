@@ -163,6 +163,8 @@ _GRAMMAR = r"""
          | sum OPER sum                     -> compare
          | atom MATCHES ESCAPED_STRING     -> matches_
          | atom MATCHES REGEX_LIT          -> matches_re
+         | atom HAS ESCAPED_STRING         -> has_
+         | atom HAS REGEX_LIT              -> has_re
          | sum CONTAINS sum                 -> compare
          | NAME paren_args?                -> pred
          | "!" leaf                        -> not_
@@ -232,6 +234,8 @@ _GRAMMAR = r"""
     //   m matches "id {n:[0-9]+}"   hole constrained by a regex subset
     // Semantics is a constraint (all decompositions), see dejavumt/pattern.py.
     MATCHES.2: /matches(?![A-Za-z0-9_])/
+    // `has` is the unanchored form:  m has "p"  ==  m matches "...p...".
+    HAS.2: /has(?![A-Za-z0-9_])/
     // Slashed pattern: full regex with embedded {holes}.  May not start
     // with '*' (would collide with the /* comment opener).
     REGEX_LIT: /\/(?!\*)([^\/\\\n]|\\.)+\//
@@ -260,7 +264,7 @@ _GRAMMAR = r"""
     _F: /F(?![A-Za-z0-9_])/
     _G: /G(?![A-Za-z0-9_])/
 
-    NAME: /(?!(Exists|Forall|true|false|contains|matches|where)\b)[a-zA-Z_][a-zA-Z0-9_]*/
+    NAME: /(?!(Exists|Forall|true|false|contains|matches|has|where)\b)[a-zA-Z_][a-zA-Z0-9_]*/
 
     %import common.ESCAPED_STRING
     %import common.INT
@@ -350,6 +354,29 @@ class _ToAst(Transformer):
         text = str(pat)[1:-1]
         return ast.Match(subject, tuple(parse_regex_pattern(text)), text,
                          regex=True)
+
+    @staticmethod
+    def _unanchor(segs):
+        """Wrap segments in gaps at both ends (skipping ends that are
+        already unconstrained gaps)."""
+        segs = list(segs)
+        if not segs or segs[0] != ("gap", None):
+            segs.insert(0, ("gap", None))
+        if segs[-1] != ("gap", None):
+            segs.append(("gap", None))
+        return tuple(segs)
+
+    def has_(self, subject, _kw, pat):
+        from .pattern import parse_pattern
+        text = str(pat)[1:-1]
+        return ast.Match(subject, self._unanchor(parse_pattern(text)),
+                         f"...{text}...")
+
+    def has_re(self, subject, _kw, pat):
+        from .pattern import parse_regex_pattern
+        text = str(pat)[1:-1]
+        return ast.Match(subject, self._unanchor(parse_regex_pattern(text)),
+                         f".*{text}.*", regex=True)
 
     def pred(self, name, args=None):
         return ast.Pred(str(name), tuple(args) if args else ())
