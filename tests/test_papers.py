@@ -128,6 +128,70 @@ def test_tpdejavu_experimental_properties():
         [True, True, True, True, False]
 
 
+def test_tutorial_filesystem_all_five_requirements():
+    """The RV-2025 tutorial's running example: five requirements chosen to
+    stress increasing expressiveness.  All five in one DejaVuMT spec:
+    R_folder, R_write (past QTL), R_total (state variable), R_size
+    (per-file quota via Python dict + state projection), R_close (future
+    operator -- beyond DejaVu/TP-DejaVu/PyDejaVu, which are past-only)."""
+    spec = """
+    python:
+        space = {}
+        def alloc(f: str, s: int) -> int:
+            space[f] = s
+            return 0
+        def use(f: str, n: int) -> int:
+            space[f] = space.get(f, 0) - n
+            return space[f]
+    end
+
+    state total: Int := {0}
+        on write(f, d): {total + len(d)}
+    state quota: Int := {0}
+        on open(F, f, m, s): {alloc(f, s) if m == "w" else quota}
+        on write(f, d): {use(f, len(d))}
+
+    pred create(F: String)
+    pred delete(F: String)
+    pred open(F: String, f: String, m: String, s: Int)
+    pred close(f: String)
+    pred write(f: String, d: String)
+
+    prop rfolder : Forall F . Forall f . Forall m . Forall s .
+        open(F,f,m,s) -> ((! delete(F)) S create(F))
+    prop rwrite : Forall f . Forall d . write(f,d) ->
+        (Exists F . Exists s .
+            (((! close(f)) S open(F, f, "w", s)) &
+             ((! delete(F)) S create(F))))
+    prop rtotal : total <= 20
+    prop rsize : quota >= 0
+    prop rclose : Forall f .
+        (Exists F . Exists m . Exists s . open(F,f,m,s)) -> F close(f)
+    """
+    events = [{"create": [("tmp",)]},
+              {"open": [("tmp", "f1", "w", 10)]},
+              {"write": [("f1", "abc")]},          # total 3, f1 quota 7
+              {"write": [("f1", "abcdefgh")]},     # total 11, f1 quota -1
+              {"close": [("f1",)]},
+              {"write": [("f2", "x")]},            # f2 never opened
+              {"open": [("tmp", "f2", "w", 5)]}]   # never closed
+    m = Monitor(parse_spec(spec))
+    got = {p.name: {} for p in parse_spec(spec).properties}
+    for ev in events:
+        m.step(ev)
+        for pos, name, holds in m.resolved:
+            got[name][pos] = holds
+    for pos, name, holds in m.end():
+        got[name][pos] = holds
+    n = len(events)
+    as_list = lambda name: [got[name].get(i + 1) for i in range(n)]
+    assert as_list("rfolder") == [True] * 7
+    assert as_list("rwrite") == [True, True, True, True, True, False, True]
+    assert as_list("rtotal") == [True] * 7
+    assert as_list("rsize") == [True, True, True, False, False, False, True]
+    assert as_list("rclose") == [True, True, True, True, True, True, False]
+
+
 def test_air_conditioner_bounds():
     """TP-DejaVu Example 3: out-of-bounds set commands are ignored; an
     in-bounds one requires the AC on (and not off since).  The bound
