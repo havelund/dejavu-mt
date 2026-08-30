@@ -29,7 +29,13 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 from . import ast
-from .backend import Backend, make_backend
+from .backend import Backend, make_backend, BV_SORTS
+
+# Builtin bit-vector operations, usable in term position by name (infix
+# &/| would collide with the Boolean connectives).
+BVFUNS = {"band": "bvand", "bor": "bvor", "bxor": "bvxor",
+          "bnot": "bvnot", "shl": "shl", "lshr": "lshr"}
+BVARITY = {"band": 2, "bor": 2, "bxor": 2, "bnot": 1, "shl": 2, "lshr": 2}
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +137,8 @@ _PYSORTS = {str: "String", int: "Int", float: "Real", bool: "Bool"}
 def _coerce_val(v, sort):
     """Coerce a raw event argument (a string, from the CSV log) to the
     Python type of its declared sort, for state-variable expressions."""
+    if sort in BV_SORTS:
+        return int(str(v), 0)
     if sort == "Int":
         return int(v)
     if sort == "Real":
@@ -277,15 +285,22 @@ def _rule_calls(f, rules):
 
 def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
                     pyfuns: Dict[str, dict] = None,
-                    state_sorts: Dict[str, str] = None) -> Dict[str, str]:
+                    state_sorts: Dict[str, str] = None,
+                    enum_cons: Dict[str, str] = None) -> Dict[str, str]:
     """Infer each variable's sort from how it is used as a predicate argument
     (and, as a fallback, from constants it is compared against, or from a
     Python function's signature).  A state variable behaves like a constant
-    of its declared sort."""
+    of its declared sort; an enum constructor like a constant of its enum.
+    Constant-based inference is DEFERRED (applied only to otherwise-unsorted
+    variables), so an Int literal next to a declared bit-vector or enum
+    variable does not conflict."""
     sorts: Dict[str, str] = {}
     ordered_vars: set = set()   # variables occurring in an order relation
+    pending: list = []          # deferred (var, sort) suggestions
     pyfuns = pyfuns or {}
     state_sorts = state_sorts or {}
+    enum_cons = enum_cons or {}
+    enum_sorts = set(enum_cons.values())
 
     def note(var: str, sort: str):
         if var in sorts and sorts[var] != sort:
@@ -327,6 +342,8 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
                 if isinstance(e, ast.Var):
                     if e.name in state_sorts:
                         ks.add(state_sorts[e.name])
+                    elif e.name in enum_cons:
+                        ks.add(enum_cons[e.name])
                     else:
                         vs.add(e.name)
                 elif isinstance(e, ast.Const):
@@ -349,11 +366,12 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
 
             coll(g.left)
             coll(g.right)
-            numeric = {k for k in ks if k in ("Int", "Real")}
+            numeric = {k for k in ks if k in ("Int", "Real")
+                       or k in enum_sorts}
             if len(numeric) == 1:
                 s = next(iter(numeric))
                 for v in vs:
-                    note(v, s)
+                    pending.append((v, s))
             elif g.op == "contains":
                 # `contains` is a string substring test; both operands are
                 # String. Type its bare variables so they never default to Int.
@@ -377,6 +395,9 @@ def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
             walk(g.arg)
 
     walk(f)
+    # Deferred constant-based suggestions: only for otherwise-unsorted vars.
+    for v, s in pending:
+        sorts.setdefault(v, s)
     # Variables used in order relations but never otherwise typed default to
     # Int, matching DejaVu's numeric comparison semantics for < <= > >=.
     for v in ordered_vars:
@@ -572,7 +593,8 @@ class FormulaMonitor:
                  pred_sorts: Dict[str, List[str]], backend: Backend,
                  pyfuns: Dict[str, dict] = None, rules=(),
                  statevals: Dict[str, object] = None,
-                 state_sorts: Dict[str, str] = None):
+                 state_sorts: Dict[str, str] = None,
+                 enum_cons: Dict[str, str] = None):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
         # Anchored: evaluate at position 1 only (trace |= f), instead of the
@@ -591,6 +613,8 @@ class FormulaMonitor:
         # per-position literals.
         self.statevals = statevals if statevals is not None else {}
         self.state_sorts = state_sorts or {}
+        # Enum constructors: literals, resolved before variables.
+        self.enum_cons = enum_cons or {}
         # Recursive rules (the property's where-clause): each rule's
         # extension is recomputed per position; recursion only under @.
         self.rules: Dict[str, ast.Rule] = {}
@@ -618,6 +642,7 @@ class FormulaMonitor:
         for r in self.rules.values():
             allvars |= collect_vars(r.body)
         allvars -= set(self.state_sorts)
+        allvars -= set(self.enum_cons)
         for v in allvars:
             self.var_sorts.setdefault(v, "String")
         self.consts = {v: backend.const(v, self.var_sorts[v])
@@ -878,10 +903,13 @@ class FormulaMonitor:
                              self._fdata(f.low, f.high, f, witness=True))
         if isinstance(f, ast.Interval):
             return self._add("interval", [self._compile(f.left), self._compile(f.right)])
-        if isinstance(f, ast.Exists):
-            return self._add("exists", [self._compile(f.arg)], f.var)
-        if isinstance(f, ast.Forall):
-            return self._add("forall", [self._compile(f.arg)], f.var)
+        if isinstance(f, (ast.Exists, ast.Forall)):
+            if f.var in self.enum_cons:
+                raise ValueError(
+                    f"quantified variable '{f.var}' shadows an enum "
+                    f"constructor")
+            kind = "exists" if isinstance(f, ast.Exists) else "forall"
+            return self._add(kind, [self._compile(f.arg)], f.var)
         raise TypeError(f"cannot compile {type(f).__name__}")
 
     # --- term / relation helpers ---
@@ -890,7 +918,7 @@ class FormulaMonitor:
         """Sort inference over the main body and every rule body, with
         rule-call argument sorts propagated from the parameters."""
         sorts = infer_var_sorts(body, self.pred_sorts, self.pyfuns,
-                                self.state_sorts)
+                                self.state_sorts, self.enum_cons)
 
         def merge(d):
             for k, v in d.items():
@@ -901,7 +929,7 @@ class FormulaMonitor:
 
         for r in self.rules.values():
             merge(infer_var_sorts(r.body, self.pred_sorts, self.pyfuns,
-                                  self.state_sorts))
+                                  self.state_sorts, self.enum_cons))
         for g in [body] + [r.body for r in self.rules.values()]:
             for name, args in _rule_calls(g, self.rules):
                 for a, p in zip(args, self.rules[name].params):
@@ -953,6 +981,9 @@ class FormulaMonitor:
                 # A state variable reads as its current ground value.
                 return b.lit(self.statevals[t.name],
                              self.state_sorts[t.name])
+            if t.name in self.enum_cons:
+                # An enum constructor is a literal of its sort.
+                return b.lit(t.name, self.enum_cons[t.name])
             if t.name not in self.consts:
                 # Variable with no inferable sort: default to String.
                 self.consts[t.name] = b.const(t.name, "String")
@@ -963,6 +994,13 @@ class FormulaMonitor:
         if isinstance(t, ast.Neg):
             return b.neg(self._term_expr(t.arg))
         if isinstance(t, ast.FunApp):
+            if t.name in BVFUNS:
+                if len(t.args) != BVARITY[t.name]:
+                    raise ValueError(
+                        f"{t.name} expects {BVARITY[t.name]} argument(s), "
+                        f"got {len(t.args)}")
+                args = [self._term_expr(a) for a in t.args]
+                return getattr(b, BVFUNS[t.name])(*args)
             reg = self.pyfuns.get(t.name)
             if reg is None:
                 raise ValueError(
@@ -1922,15 +1960,35 @@ class Monitor:
         }
         self.pred_sorts = pred_sorts
         self.backend = make_backend(solver)
+        # Enumeration sorts: declared on the backend; constructor names
+        # become literals, and must be globally unique.
+        self.enum_cons: Dict[str, str] = {}   # constructor -> sort name
+        for e in spec.enums:
+            self.backend.declare_enum(e.name, e.constructors)
+            for c in e.constructors:
+                if c in self.enum_cons or c in pred_sorts:
+                    raise ValueError(
+                        f"enum constructor '{c}' collides with another "
+                        f"constructor or predicate")
+                self.enum_cons[c] = e.name
+        # Every declared parameter sort must exist.
+        valid_sorts = ({"String", "Int", "Real", "Bool"} | set(BV_SORTS)
+                       | {e.name for e in spec.enums})
+        for e in spec.events:
+            for p in e.params:
+                if p.sort not in valid_sorts:
+                    raise ValueError(
+                        f"predicate {e.name}: unknown sort '{p.sort}' "
+                        f"(builtin, BV8/16/32/64, or a declared enum)")
         # Python functions from the spec's `python:` block, shared by all
         # properties (interpreted SMT symbols; see load_pyblock).  The
         # block's namespace is also the scope of state-variable expressions.
         self.pyfuns, self._pyns = load_pyblock(spec.python, self.backend)
         for n in self.pyfuns:
-            if n in pred_sorts or n in macros:
+            if n in pred_sorts or n in macros or n in BVFUNS:
                 raise ValueError(
                     f"python function '{n}' collides with a declared "
-                    f"predicate or macro of the same name")
+                    f"predicate, macro, or builtin bit-vector operation")
         # State variables: ground Python values updated per matching event
         # BEFORE the properties evaluate the event, read in formulas as
         # per-position literals.
@@ -1965,7 +2023,8 @@ class Monitor:
                 FormulaMonitor(prop, body, pred_sorts, self.backend,
                                self.pyfuns, rules=rules,
                                statevals=self.states,
-                               state_sorts=self.state_sorts))
+                               state_sorts=self.state_sorts,
+                               enum_cons=self.enum_cons))
         # Timed specs read their logs with a timestamp as the last CSV column.
         self.timed = any(fm.timed for fm in self.formulas)
         # With future operators verdicts may be delayed; the caller must run

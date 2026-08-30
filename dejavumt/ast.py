@@ -406,6 +406,14 @@ class Param:
 
 
 @dataclass(frozen=True)
+class EnumDef:
+    """A finite enumeration sort: enum Mode = OFF | STANDBY | ACTIVE.
+    Constructor names are literals of the sort in formulas and logs."""
+    name: str
+    constructors: tuple  # tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class EventDecl:
     name: str
     params: tuple  # tuple[Param, ...]
@@ -469,6 +477,8 @@ class Spec:
     python: str = ""
     # Extended-state-machine variables (state ... := {..} on ...: {..}).
     states: List[StateVar] = field(default_factory=list)
+    # Enumeration sorts (enum Mode = OFF | STANDBY | ACTIVE).
+    enums: List[EnumDef] = field(default_factory=list)
 
 
 def _b(x) -> str:

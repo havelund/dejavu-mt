@@ -186,7 +186,30 @@ fact (`open,a,read`), so each line is a one-fact event.
 ### Types
 
 Every predicate parameter has a type (sort), defaulting to `String` if the
-annotation is omitted; the supported sorts are `String`, `Int`, `Real`, `Bool`.
+annotation is omitted; the supported sorts are `String`, `Int`, `Real`,
+`Bool`, the bit-vector sorts `BV8`/`BV16`/`BV32`/`BV64`, and declared
+**enumerations**:
+
+    enum Mode = OFF | STANDBY | ACTIVE
+    pred set(m: Mode)
+
+    prop safe    : Forall m . fire(m) -> m = ACTIVE
+    prop covered : eof -> Forall m . P set(m)   -- every mode exercised
+
+Constructor names are literals in formulas, and log values are validated
+against them (a misspelled `ACTVE` in the log is rejected at read time).
+Quantifiers over an enum range over exactly its constructors — which makes
+**coverage properties** like `covered` expressible (over an infinite sort
+they are trivially false).
+
+**Bit-vectors** carry an unsigned reading with wraparound `+ - *`, unsigned
+`< <= > >=`, hex literals, and the named operations `band bor bxor bnot
+shl lshr` (infix `&`/`|` would collide with the connectives):
+
+    pred stat(w: BV16)
+    prop err  : Forall w . stat(w) -> band(w, 0x40) = 0
+    prop inc  : Forall c . Forall c0 .
+        (frame(c) & @ frame(c0)) -> c = c0 + 1     -- modulo 2^16
 A variable's type is inferred from how it is used: the predicate positions it
 appears in, numeric constants it is related to, and — matching DejaVu, which
 compares order relations numerically — a variable used in `< <= > >=` with no
@@ -201,6 +224,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
     definition  ::= declaration | macro | property | pythonblock | statedef
 
     pythonblock ::= "python:" ... "end"        // Python functions for formulas
+    enumdef     ::= "enum" name "=" name ("|" name)*
     statedef    ::= "state" name ":" sort ":=" pyexpr
                     ("on" name "(" [ name ("," name)* ] ")" ":" pyexpr)*
     pyexpr      ::= "{" python-expression "}"
@@ -209,6 +233,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
     predsig     ::= name [ "(" [ typedparam ("," typedparam)* ] ")" ]
     typedparam  ::= name [ ":" sort ]
     sort        ::= "String" | "Int" | "Real" | "Bool"
+                  | "BV8" | "BV16" | "BV32" | "BV64" | enum-name
 
     macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
     property    ::= "prop" name [ "anchored" ] ":" formula
@@ -625,7 +650,8 @@ verdicts become constraints on `n`), data-dependent bounds
 (`Forall n . a(n) -> F[0,n] b`), string matching (`contains`, `matches`
 with capture holes), Python functions inside formulas (the `python:`
 block), recursive rules (`where r(x) := ...`), state variables
-(`state x: Int := {0} on ...`), and anchored properties;
+(`state x: Int := {0} on ...`), anchored properties, enumeration sorts,
+and bit-vectors;
 pluggable Z3/CVC5 backends; and periodic garbage collection of dead
 value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader

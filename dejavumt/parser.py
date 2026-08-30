@@ -30,6 +30,10 @@ Currently supported (slice 1 -- untimed fragment):
                    risky(cmd)); see doc/pyfun.md
     rules:         prop p : ... where r(x) := body, ... -- recursive
                    predicates recomputed per position (recursion under @)
+    enums:         enum Mode = OFF | STANDBY | ACTIVE -- finite sorts;
+                   constructors are literals, log values validated
+    bit-vectors:   BV8/BV16/BV32/BV64 sorts; band/bor/bxor/bnot/shl/lshr,
+                   wraparound + - *, unsigned comparisons, 0x literals
     state:         state x: Sort := {init} on p(a,b): {expr} -- a ground
                    Python value updated per event, read as a term
 
@@ -51,6 +55,10 @@ _GRAMMAR = r"""
                | propertydef
                | pyblock
                | statedef
+               | enumdef
+
+    // A finite enumeration sort; constructor names are literals of it.
+    enumdef: "enum" NAME "=" NAME ("|" NAME)*
 
     // Extended-state-machine variable: a ground Python value updated per
     // matching event; {..} holds a Python expression (state names and the
@@ -78,7 +86,10 @@ _GRAMMAR = r"""
 
     paren_params: "(" [NAME ("," NAME)*] ")"
     paren_typed_params: "(" [typed_param ("," typed_param)*] ")"
-    typed_param: NAME (":" SORT)?
+    // A parameter's sort is a builtin (SORT), a bit-vector width
+    // (BV8/BV16/BV32/BV64), or a declared enum -- the latter two are NAMEs,
+    // validated by the engine.
+    typed_param: NAME (":" (SORT | NAME))?
 
     // --- formulas, loosest binding first ---
     // A quantifier scopes over everything to its right (wide scope), as in
@@ -181,6 +192,7 @@ _GRAMMAR = r"""
             | atom
     ?atom: NAME             -> var
          | NAME "(" [sum ("," sum)*] ")" -> funapp
+         | HEX              -> hex_const
          | INT              -> int_const
          | FLOAT            -> float_const
          | ESCAPED_STRING   -> str_const
@@ -212,6 +224,7 @@ _GRAMMAR = r"""
     // with '*' (would collide with the /* comment opener).
     REGEX_LIT: /\/(?!\*)([^\/\\\n]|\\.)+\//
     SORT: "String" | "Int" | "Real" | "Bool"
+    HEX.3: /0[xX][0-9a-fA-F]+/
     PYBLOCK.3: /python:[ \t]*\r?\n(.|\n)*?\r?\n[ \t]*end[ \t]*(?=\r?\n|$)/
     // A braced Python expression (one level of nested braces allowed, for
     // dict/set literals).
@@ -262,6 +275,13 @@ class _ToAst(Transformer):
 
     def int_const(self, tok):
         return ast.Const(int(tok), "Int")
+
+    def hex_const(self, tok):
+        # Int-kinded; adapted to a bit-vector width by context.
+        return ast.Const(int(str(tok), 16), "Int")
+
+    def enumdef(self, name, *cons):
+        return ast.EnumDef(str(name), tuple(str(c) for c in cons))
 
     def float_const(self, tok):
         return ast.Const(float(tok), "Real")
@@ -512,6 +532,8 @@ class _ToAst(Transformer):
                 spec.properties.append(d)
             elif isinstance(d, ast.StateVar):
                 spec.states.append(d)
+            elif isinstance(d, ast.EnumDef):
+                spec.enums.append(d)
             elif isinstance(d, tuple) and d and d[0] == "__python__":
                 spec.python += ("\n" if spec.python else "") + d[1]
         return spec

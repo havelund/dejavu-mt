@@ -20,6 +20,10 @@ from fractions import Fraction
 # Interface
 # ---------------------------------------------------------------------------
 
+# Fixed-width bit-vector sorts (unsigned reading; +,-,* wrap around).
+BV_SORTS = {"BV8": 8, "BV16": 16, "BV32": 32, "BV64": 64}
+
+
 class Backend:
     """Interface a solver must provide.  Term objects are opaque to the engine."""
 
@@ -64,6 +68,8 @@ class Backend:
     def strong_simplify(self, t): return self.simplify(t)
     def gc_simplify(self, t): return self.simplify(t)   # dead-term reclamation
     def qelim(self, q): ...
+
+    def declare_enum(self, name, constructors): ...
 
     # uninterpreted functions (future-operator placeholders; interpreted
     # Python functions from the spec's python block)
@@ -124,6 +130,7 @@ class Z3Backend(Backend):
     def __init__(self):
         import z3
         self.z3 = z3
+        self.enums = {}   # name -> (sort, {constructor: const})
         self._solver = z3.Solver()
         # qe2 can DIVERGE (not fail) on existentials over string
         # concatenations -- word equations, regex membership.  TryFor turns
@@ -134,8 +141,34 @@ class Z3Backend(Backend):
         self._ctx = z3.Tactic("ctx-solver-simplify")
         self._gc = z3.Tactic("ctx-simplify")  # cheap contextual dead-term pruning
 
+    # Z3's global context refuses to redeclare an enumeration sort, so the
+    # declared sorts are cached process-wide and shared across monitors.
+    _enum_cache = {}
+
+    def declare_enum(self, name, constructors):
+        """Register a finite enumeration sort; its constructor names become
+        literals of that sort."""
+        z3 = self.z3
+        key = (name, tuple(constructors))
+        cached = Z3Backend._enum_cache.get(name)
+        if cached is not None:
+            if cached[0] != key[1]:
+                raise ValueError(
+                    f"enum '{name}' already declared in this process with "
+                    f"different constructors {list(cached[0])}")
+            sort, consts = cached[1]
+        else:
+            sort, cs = z3.EnumSort(name, list(constructors))
+            consts = dict(zip(constructors, cs))
+            Z3Backend._enum_cache[name] = (key[1], (sort, consts))
+        self.enums[name] = (sort, consts)
+
     def _sort(self, sort_name: str):
         z3 = self.z3
+        if sort_name in self.enums:
+            return self.enums[sort_name][0]
+        if sort_name in BV_SORTS:
+            return z3.BitVecSort(BV_SORTS[sort_name])
         return {"String": z3.StringSort(), "Int": z3.IntSort(),
                 "Real": z3.RealSort(), "Bool": z3.BoolSort()}[sort_name]
 
@@ -144,6 +177,15 @@ class Z3Backend(Backend):
 
     def lit(self, value, sort_name):
         z3 = self.z3
+        if sort_name in self.enums:
+            consts = self.enums[sort_name][1]
+            if str(value) not in consts:
+                raise ValueError(
+                    f"'{value}' is not a {sort_name} "
+                    f"(one of {', '.join(consts)})")
+            return consts[str(value)]
+        if sort_name in BV_SORTS:
+            return z3.BitVecVal(int(str(value), 0), BV_SORTS[sort_name])
         if sort_name == "String":
             return z3.StringVal(str(value))
         if sort_name == "Int":
@@ -163,18 +205,75 @@ class Z3Backend(Backend):
     def implies(self, a, b): return self.z3.Implies(a, b)
     def iff(self, a, b): return a == b
 
-    def eq(self, a, b): return a == b
-    def lt(self, a, b): return a < b
-    def le(self, a, b): return a <= b
-    def gt(self, a, b): return a > b
-    def ge(self, a, b): return a >= b
+    def _adapt2(self, a, b):
+        """Align an Int literal with a bit-vector operand (the mask/counter
+        idiom: w = 0x40, x + 1 over BV)."""
+        z3 = self.z3
+        if z3.is_bv(a) and z3.is_int_value(b):
+            return a, z3.BitVecVal(b.as_long(), a.size())
+        if z3.is_bv(b) and z3.is_int_value(a):
+            return z3.BitVecVal(a.as_long(), b.size()), b
+        return a, b
+
+    def eq(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a == b
+
+    # Comparisons on bit-vectors are UNSIGNED (the status-word reading).
+    def lt(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.z3.ULT(a, b) if self.z3.is_bv(a) else a < b
+
+    def le(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.z3.ULE(a, b) if self.z3.is_bv(a) else a <= b
+
+    def gt(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.z3.UGT(a, b) if self.z3.is_bv(a) else a > b
+
+    def ge(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.z3.UGE(a, b) if self.z3.is_bv(a) else a >= b
 
     def contains(self, a, b): return self.z3.Contains(a, b)
 
-    def add(self, a, b): return a + b
-    def sub(self, a, b): return a - b
-    def mul(self, a, b): return a * b
+    # +,-,* are native wraparound on bit-vectors.
+    def add(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a + b
+
+    def sub(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a - b
+
+    def mul(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a * b
+
     def neg(self, a):    return -a
+
+    def bvand(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a & b
+
+    def bvor(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a | b
+
+    def bvxor(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a ^ b
+
+    def bvnot(self, a): return ~a
+
+    def shl(self, a, b):
+        a, b = self._adapt2(a, b)
+        return a << b
+
+    def lshr(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.z3.LShR(a, b)
 
     def exists(self, const, body): return self.z3.Exists([const], body)
     def forall(self, const, body): return self.z3.ForAll([const], body)
@@ -499,6 +598,7 @@ class Cvc5Backend(Backend):
         self.cvc5 = cvc5
         self.Kind = Kind
         self.tm = cvc5.TermManager()
+        self.enums = {}   # name -> (sort, {constructor: term})
         _cvc5_keepalive.append(self.tm)
         self._simp = self._mk_solver()
 
@@ -509,8 +609,24 @@ class Cvc5Backend(Backend):
         _cvc5_keepalive.append(s)
         return s
 
+    def declare_enum(self, name, constructors):
+        tm = self.tm
+        decl = tm.mkDatatypeDecl(name)
+        for c in constructors:
+            decl.addConstructor(tm.mkDatatypeConstructorDecl(c))
+        sort = tm.mkDatatypeSort(decl)
+        dt = sort.getDatatype()
+        consts = {c: tm.mkTerm(self.Kind.APPLY_CONSTRUCTOR,
+                               dt.getConstructor(c).getTerm())
+                  for c in constructors}
+        self.enums[name] = (sort, consts)
+
     def _sort(self, sort_name):
         tm = self.tm
+        if sort_name in self.enums:
+            return self.enums[sort_name][0]
+        if sort_name in BV_SORTS:
+            return tm.mkBitVectorSort(BV_SORTS[sort_name])
         return {"String": tm.getStringSort(), "Int": tm.getIntegerSort(),
                 "Real": tm.getRealSort(), "Bool": tm.getBooleanSort()}[sort_name]
 
@@ -519,6 +635,15 @@ class Cvc5Backend(Backend):
 
     def lit(self, value, sort_name):
         tm = self.tm
+        if sort_name in self.enums:
+            consts = self.enums[sort_name][1]
+            if str(value) not in consts:
+                raise ValueError(
+                    f"'{value}' is not a {sort_name} "
+                    f"(one of {', '.join(consts)})")
+            return consts[str(value)]
+        if sort_name in BV_SORTS:
+            return tm.mkBitVector(BV_SORTS[sort_name], int(str(value), 0))
         if sort_name == "String":
             return tm.mkString(str(value))
         if sort_name == "Int":
@@ -547,17 +672,84 @@ class Cvc5Backend(Backend):
     def implies(self, a, b): return self.tm.mkTerm(self.Kind.IMPLIES, a, b)
     def iff(self, a, b): return self.tm.mkTerm(self.Kind.EQUAL, a, b)
 
-    def eq(self, a, b): return self.tm.mkTerm(self.Kind.EQUAL, a, b)
-    def lt(self, a, b): return self.tm.mkTerm(self.Kind.LT, a, b)
-    def le(self, a, b): return self.tm.mkTerm(self.Kind.LEQ, a, b)
-    def gt(self, a, b): return self.tm.mkTerm(self.Kind.GT, a, b)
-    def ge(self, a, b): return self.tm.mkTerm(self.Kind.GEQ, a, b)
+    def _adapt2(self, a, b):
+        # Align an Int literal with a bit-vector operand.
+        tm = self.tm
+        if a.getSort().isBitVector() and b.isIntegerValue():
+            return a, tm.mkBitVector(a.getSort().getBitVectorSize(),
+                                     b.getIntegerValue())
+        if b.getSort().isBitVector() and a.isIntegerValue():
+            return tm.mkBitVector(b.getSort().getBitVectorSize(),
+                                  a.getIntegerValue()), b
+        return a, b
+
+    def _isbv(self, a):
+        return a.getSort().isBitVector()
+
+    def eq(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.EQUAL, a, b)
+
+    # Comparisons on bit-vectors are UNSIGNED.
+    def lt(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_ULT if self._isbv(a) else self.Kind.LT
+        return self.tm.mkTerm(k, a, b)
+
+    def le(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_ULE if self._isbv(a) else self.Kind.LEQ
+        return self.tm.mkTerm(k, a, b)
+
+    def gt(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_UGT if self._isbv(a) else self.Kind.GT
+        return self.tm.mkTerm(k, a, b)
+
+    def ge(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_UGE if self._isbv(a) else self.Kind.GEQ
+        return self.tm.mkTerm(k, a, b)
 
     def contains(self, a, b): return self.tm.mkTerm(self.Kind.STRING_CONTAINS, a, b)
 
-    def add(self, a, b): return self.tm.mkTerm(self.Kind.ADD, a, b)
-    def sub(self, a, b): return self.tm.mkTerm(self.Kind.SUB, a, b)
-    def mul(self, a, b): return self.tm.mkTerm(self.Kind.MULT, a, b)
+    def add(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_ADD if self._isbv(a) else self.Kind.ADD
+        return self.tm.mkTerm(k, a, b)
+
+    def sub(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_SUB if self._isbv(a) else self.Kind.SUB
+        return self.tm.mkTerm(k, a, b)
+
+    def mul(self, a, b):
+        a, b = self._adapt2(a, b)
+        k = self.Kind.BITVECTOR_MULT if self._isbv(a) else self.Kind.MULT
+        return self.tm.mkTerm(k, a, b)
+
+    def bvand(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.BITVECTOR_AND, a, b)
+
+    def bvor(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.BITVECTOR_OR, a, b)
+
+    def bvxor(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.BITVECTOR_XOR, a, b)
+
+    def bvnot(self, a):
+        return self.tm.mkTerm(self.Kind.BITVECTOR_NOT, a)
+
+    def shl(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.BITVECTOR_SHL, a, b)
+
+    def lshr(self, a, b):
+        a, b = self._adapt2(a, b)
+        return self.tm.mkTerm(self.Kind.BITVECTOR_LSHR, a, b)
     def neg(self, a):    return self.tm.mkTerm(self.Kind.NEG, a)
 
     def _quant(self, kind, const, body):
