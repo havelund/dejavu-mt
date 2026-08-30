@@ -630,6 +630,12 @@ class FormulaMonitor:
         self._pyns = pyns if pyns is not None else {}
         self._viol_action = (compile(prop.action, "<on-violation>", "eval")
                              if prop.action else None)
+        self._sat_action = (compile(prop.sat_action, "<on-satisfaction>",
+                                    "eval")
+                            if prop.sat_action else None)
+        # Satisfaction witnesses (leading Exists-prefix), noted only when
+        # an on-satisfaction action wants them.
+        self.sat_witnesses: Dict[int, dict] = {}
         self._rule_actions = {r.name: compile(r.action, f"<do-{r.name}>",
                                               "eval")
                               for r in rules if r.action}
@@ -1316,6 +1322,8 @@ class FormulaMonitor:
                        else self._verdict(v))
             if verdict is False and not self.params:
                 self._note_witness(self.position, nowval)
+            elif verdict is True and self._sat_action:
+                self._note_sat_witness(self.position, nowval)
             resolved = [(self.position, verdict)]
         self._prev_time = time
         self.now = [b.false()] * len(self.nodes)
@@ -1707,10 +1715,16 @@ class FormulaMonitor:
             verdict = self._verdict(b.simplify(self._eliminate(root_lo)))
             if verdict is False:
                 self._note_witness(ob["pos"], lo_vals)
+            elif verdict is True and self._sat_action:
+                self._note_sat_witness(ob["pos"], lo_vals)
             return verdict
         if mixed:
             return None
         if self._verdict(b.simplify(self._eliminate(root_lo))):
+            # The lower bracket is already true: any assignment satisfying
+            # it genuinely satisfies.
+            if self._sat_action:
+                self._note_sat_witness(ob["pos"], lo_vals)
             return True
         if not self._verdict(b.simplify(self._eliminate(root_hi))):
             # The upper bracket is already false: any assignment falsifying
@@ -1973,22 +1987,50 @@ class FormulaMonitor:
         return f
 
     def _fire_violation_actions(self, resolved):
-        """Run the property's `on violation` action once per emitted False
-        verdict, in emission order, with `pos` and the witness values
-        bound."""
-        if not self._viol_action:
+        """Run the property's `on violation` / `on satisfaction` actions
+        once per emitted verdict, in emission order, with `pos` and the
+        (falsifying / satisfying) witness values bound."""
+        if not self._viol_action and not self._sat_action:
             return
         for pos, v in resolved:
-            if v is not False:
+            if v is False and self._viol_action:
+                code, kind = self._viol_action, "on-violation"
+                env = dict(self.witnesses.get(pos) or {})
+            elif v is True and self._sat_action:
+                code, kind = self._sat_action, "on-satisfaction"
+                env = dict(self.sat_witnesses.get(pos) or {})
+            else:
                 continue
-            env = dict(self.witnesses.get(pos) or {})
             env["pos"] = pos
             try:
-                eval(self._viol_action, self._pyns, env)
+                eval(code, self._pyns, env)
             except Exception as exc:
                 raise ValueError(
-                    f"property '{self.name}' on-violation action failed "
+                    f"property '{self.name}' {kind} action failed "
                     f"for position {pos}: {exc}") from exc
+
+    def _note_sat_witness(self, pos, vals):
+        """Satisfying assignment for a leading Exists-prefix (the positive
+        mirror of _witness)."""
+        b = self.backend
+        i = self.root
+        consts = []
+        while self.nodes[i].kind == "exists":
+            consts.append(self.consts[self.nodes[i].data])
+            i = self.nodes[i].children[0]
+        if not consts or vals[i] is None:
+            return
+        body = vals[i]
+        if self._pydecls and b.mentions(body, self._pydecls):
+            return
+        if self.qbind and b.mentions(body, [qb["fdecl"] for qb in self.qbind]):
+            return
+        try:
+            w = b.model_values(body, consts)
+        except Exception:
+            return
+        if w:
+            self.sat_witnesses[pos] = w
 
     def _witness(self, vals):
         """Falsifying assignment for the property's leading Forall-prefix,

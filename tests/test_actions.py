@@ -92,6 +92,49 @@ def test_action_with_where_clause_order():
     assert m._pyns["bad"] == [7]
 
 
+def test_satisfaction_action_with_exists_witness():
+    """on satisfaction: fired per True verdict; for an Exists-led property
+    the satisfying values are bound."""
+    m = run("""
+    python:
+        found = []
+    end
+    pred p(x: String)
+    pred check()
+    prop any : check -> (Exists y . P p(y))
+    prop got : Exists y . p(y) on satisfaction {found.append((pos, y))}
+    """, [{"p": [("a",)]}, {"q": [()]}, {"p": [("b",)]}])
+    assert m._pyns["found"] == [(1, "a"), (3, "b")]
+
+
+def test_satisfaction_action_delayed():
+    """Delayed True verdict (future op): fired at emission, satisfying
+    Exists witness bound."""
+    m = run("""
+    python:
+        acked = []
+    end
+    pred req(x: String)
+    pred ack(x: String)
+    prop q : Exists x . req(x) & F ack(x)
+        on satisfaction {acked.append((pos, x))}
+    """, [{"req": [("a",)]}, {"ack": [("a",)]}])
+    assert m._pyns["acked"] == [(1, "a")]
+
+
+def test_both_actions_on_one_property():
+    m = run("""
+    python:
+        log = []
+    end
+    pred p(n: Int)
+    prop q : Forall n . p(n) -> n < 10
+        on violation {log.append(("bad", pos))}
+        on satisfaction {log.append(("ok", pos))}
+    """, [{"p": [(3,)]}, {"p": [(42,)]}, {"p": [(5,)]}])
+    assert m._pyns["log"] == [("ok", 1), ("bad", 2), ("ok", 3)]
+
+
 def test_action_error_reported():
     with pytest.raises(ValueError, match="on-violation action failed"):
         run("""

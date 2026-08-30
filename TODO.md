@@ -23,8 +23,10 @@ Working list; keep entries short, link designs where they exist.
       exact for functional rules); `prop p : φ on violation {expr}` fires
       per emitted violation with `pos` + witness values.  Actions run in
       the python block's namespace; delayed verdicts fire at emission
-      (end of trace included).  Open refinement: enumerating multi-valued
-      extensions (currently one representative model).
+      (end of trace included).  `on satisfaction {expr}` added too, with
+      satisfying Exists-prefix witnesses (mirror of violation witnesses).
+      Open refinement: enumerating multi-valued extensions (currently one
+      representative model).
 - [ ] **Slicing** (per-key dispatch of state) — PyContract's `key()`
       mechanism; here it is the natural first increment of the
       relational-state hybrid below, not a separate feature.

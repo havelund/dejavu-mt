@@ -250,7 +250,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
     macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
     property    ::= "prop" name [ "anchored" ] ":" formula
-                    [ "on" "violation" pyexpr ]
+                    [ ("on" "violation" pyexpr) | ("on" "satisfaction" pyexpr) ]
                     [ "where" rule ("," rule)* ]
     rule        ::= name [ "(" [ name ("," name)* ] ")" ] ":=" formula
                     [ "do" pyexpr ]
@@ -532,9 +532,11 @@ event) unless a past operator remembers it. See `doc/rules.md`.
 
 **Python actions** turn monitors into data producers: `do {expr}` on a
 rule fires when its extension is non-empty and changed (parameters bound
-to a satisfying assignment, plus `pos`), and `on violation {expr}` on a
-property fires per emitted violation with `pos` and the witness values
-bound — both evaluated in the `python:` block's namespace:
+to a satisfying assignment, plus `pos`); `on violation {expr}` and
+`on satisfaction {expr}` on a property fire per emitted verdict with
+`pos` and the witness values bound (falsifying values of a Forall-prefix,
+satisfying values of an Exists-prefix) — all evaluated in the `python:`
+block's namespace:
 
     prop q : Forall f . Forall d . write(f,d) -> P open(f)
         on violation {incidents.append((pos, f))}

@@ -31,7 +31,7 @@ Currently supported (slice 1 -- untimed fragment):
     rules:         prop p : ... where r(x) := body, ... -- recursive
                    predicates recomputed per position (recursion under @)
     actions:       rule `do {expr}` (extension non-empty & changed; params
-                   bound) and property `on violation {expr}` (pos +
+                   bound) and property `on violation`/`on satisfaction` {expr} (pos +
                    witness values bound) -- side-effecting Python
     enums:         enum Mode = OFF | STANDBY | ACTIVE -- finite sorts;
                    constructors are literals, log values validated
@@ -40,8 +40,8 @@ Currently supported (slice 1 -- untimed fragment):
     state:         state x: Sort := {init} on p(a,b): {expr} -- a ground
                    Python value updated per event, read as a term
 
-Not yet supported (planned): recursive rules (where ... :=) and the seen-only
-lowercase exists/forall quantifiers.
+DejaVu's seen-only lowercase exists/forall are deliberately not supported
+(occurrence-guarded equivalence -- see README Status).
 """
 from __future__ import annotations
 
@@ -86,9 +86,10 @@ _GRAMMAR = r"""
     // per emitted violation, with pos and witness values bound), and
     // `do {expr}` on a rule (fired when its extension is non-empty and
     // changed, with the parameters bound).
-    propertydef: "prop" NAME ":" ltl violaction? wherepart?
-               | "prop" NAME "anchored" ":" ltl violaction? wherepart? -> propertydef_anchored
-    violaction: "on" "violation" PYEXPR
+    propertydef: "prop" NAME ":" ltl propaction* wherepart?
+               | "prop" NAME "anchored" ":" ltl propaction* wherepart? -> propertydef_anchored
+    ?propaction: "on" "violation" PYEXPR      -> violaction
+               | "on" "satisfaction" PYEXPR   -> sataction
     wherepart: "where" ruledef ("," ruledef)*
     ruledef: NAME paren_params? ":=" ltl ruleaction?
     ruleaction: "do" PYEXPR
@@ -509,25 +510,31 @@ class _ToAst(Transformer):
 
     @staticmethod
     def _prop_extras(rest):
-        action, rules = None, ()
+        action, sat_action, rules = None, None, ()
         for r in rest:
             if isinstance(r, tuple) and r and r[0] == "__onviol__":
                 action = r[1]
+            elif isinstance(r, tuple) and r and r[0] == "__onsat__":
+                sat_action = r[1]
             elif isinstance(r, list):
                 rules = tuple(r)
-        return action, rules
+        return action, sat_action, rules
 
     def propertydef(self, name, body, *rest):
-        action, rules = self._prop_extras(rest)
-        return ast.Property(str(name), body, rules=rules, action=action)
+        action, sat_action, rules = self._prop_extras(rest)
+        return ast.Property(str(name), body, rules=rules, action=action,
+                            sat_action=sat_action)
 
     def propertydef_anchored(self, name, body, *rest):
-        action, rules = self._prop_extras(rest)
+        action, sat_action, rules = self._prop_extras(rest)
         return ast.Property(str(name), body, anchored=True, rules=rules,
-                            action=action)
+                            action=action, sat_action=sat_action)
 
     def violaction(self, expr):
         return ("__onviol__", self._pyexpr(expr))
+
+    def sataction(self, expr):
+        return ("__onsat__", self._pyexpr(expr))
 
     def ruleaction(self, expr):
         return ("__do__", self._pyexpr(expr))

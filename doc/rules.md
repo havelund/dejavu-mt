@@ -64,9 +64,11 @@ the `python:` block's namespace:
   equivalence check), with the parameters bound to a satisfying
   assignment — exact for functional rules (the moving singleton), a
   representative for multi-valued ones — plus `pos`.
-- **`on violation {expr}` on a property** fires once per emitted False
-  verdict, in emission order (delayed verdicts fire at emission, end of
-  trace included), with `pos` and the violation's witness values bound.
+- **`on violation {expr}` / `on satisfaction {expr}` on a property** fire
+  once per emitted verdict, in emission order (delayed verdicts fire at
+  emission, end of trace included), with `pos` and the witness values
+  bound: falsifying values of a leading Forall-prefix for violations,
+  satisfying values of a leading Exists-prefix for satisfactions.
 
 Contract: actions may not feed back into the spec's state except through
 declared state variables; exceptions in actions abort monitoring with the

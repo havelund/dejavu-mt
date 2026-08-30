@@ -475,9 +475,11 @@ class Property:
     body: LTL
     anchored: bool = False
     rules: tuple = ()   # tuple[Rule, ...] from the property's where-clause
-    # Optional Python expression fired on each emitted violation, with
-    # `pos` and the witness values bound (prop p : phi on violation {expr}).
+    # Optional Python expressions fired on each emitted violation /
+    # satisfaction, with `pos` and the witness values bound
+    # (prop p : phi on violation {expr} / on satisfaction {expr}).
     action: str = None
+    sat_action: str = None
 
 
 @dataclass
