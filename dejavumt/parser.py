@@ -30,6 +30,9 @@ Currently supported (slice 1 -- untimed fragment):
                    risky(cmd)); see doc/pyfun.md
     rules:         prop p : ... where r(x) := body, ... -- recursive
                    predicates recomputed per position (recursion under @)
+    actions:       rule `do {expr}` (extension non-empty & changed; params
+                   bound) and property `on violation {expr}` (pos +
+                   witness values bound) -- side-effecting Python
     enums:         enum Mode = OFF | STANDBY | ACTIVE -- finite sorts;
                    constructors are literals, log values validated
     bit-vectors:   BV8/BV16/BV32/BV64 sorts; band/bor/bxor/bnot/shl/lshr,
@@ -79,10 +82,16 @@ _GRAMMAR = r"""
     // An `anchored` property is evaluated at position 1 only (trace |= f);
     // the default is one verdict per position (implicit-G mode).  The
     // optional where-clause attaches recursive rules (DejaVu style).
-    propertydef: "prop" NAME ":" ltl wherepart?
-               | "prop" NAME "anchored" ":" ltl wherepart? -> propertydef_anchored
+    // Optional Python ACTIONS: `on violation {expr}` on a property (fired
+    // per emitted violation, with pos and witness values bound), and
+    // `do {expr}` on a rule (fired when its extension is non-empty and
+    // changed, with the parameters bound).
+    propertydef: "prop" NAME ":" ltl violaction? wherepart?
+               | "prop" NAME "anchored" ":" ltl violaction? wherepart? -> propertydef_anchored
+    violaction: "on" "violation" PYEXPR
     wherepart: "where" ruledef ("," ruledef)*
-    ruledef: NAME paren_params? ":=" ltl
+    ruledef: NAME paren_params? ":=" ltl ruleaction?
+    ruleaction: "do" PYEXPR
 
     paren_params: "(" [NAME ("," NAME)*] ")"
     paren_typed_params: "(" [typed_param ("," typed_param)*] ")"
@@ -498,20 +507,47 @@ class _ToAst(Transformer):
             params, body = None, params
         return ast.Macro(str(name), tuple(params) if params else (), body)
 
-    def propertydef(self, name, body, rules=None):
-        return ast.Property(str(name), body, rules=tuple(rules or ()))
+    @staticmethod
+    def _prop_extras(rest):
+        action, rules = None, ()
+        for r in rest:
+            if isinstance(r, tuple) and r and r[0] == "__onviol__":
+                action = r[1]
+            elif isinstance(r, list):
+                rules = tuple(r)
+        return action, rules
 
-    def propertydef_anchored(self, name, body, rules=None):
-        return ast.Property(str(name), body, anchored=True,
-                            rules=tuple(rules or ()))
+    def propertydef(self, name, body, *rest):
+        action, rules = self._prop_extras(rest)
+        return ast.Property(str(name), body, rules=rules, action=action)
+
+    def propertydef_anchored(self, name, body, *rest):
+        action, rules = self._prop_extras(rest)
+        return ast.Property(str(name), body, anchored=True, rules=rules,
+                            action=action)
+
+    def violaction(self, expr):
+        return ("__onviol__", self._pyexpr(expr))
+
+    def ruleaction(self, expr):
+        return ("__do__", self._pyexpr(expr))
 
     def wherepart(self, *rules):
         return list(rules)
 
-    def ruledef(self, name, params=None, body=None):
-        if body is None:            # no parameter list: (name, body)
-            params, body = None, params
-        return ast.Rule(str(name), tuple(params or ()), body)
+    def ruledef(self, name, *rest):
+        action = None
+        parts = []
+        for r in rest:
+            if isinstance(r, tuple) and r and r[0] == "__do__":
+                action = r[1]
+            else:
+                parts.append(r)
+        if len(parts) == 2:
+            params, body = parts
+        else:
+            params, body = None, parts[0]
+        return ast.Rule(str(name), tuple(params or ()), body, action)
 
     # --- state variables ---
     @staticmethod

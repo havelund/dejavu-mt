@@ -17,22 +17,14 @@ Working list; keep entries short, link designs where they exist.
       `"time"` field for timed specs; native JSON numbers/booleans.
       (Multiple facts per event: the engine supports it, the readers still
       emit one fact per line — extend if a real log needs it.)
-- [ ] **Producing data during monitoring via Python actions** —
-      monitors as data producers, not just verdict emitters.  Deliberately
-      *side-effecting* Python — distinct from the pure interpreted
-      functions — fired by the engine at defined points.  Two candidate
-      attachment sites:
-      * **actions on rules**: when a rule's extension becomes non-empty
-        (or changes) at a position, call a Python function with the
-        matching values — `r(x) := body do {report(x)}`;
-      * **actions on properties**: on a verdict (or specifically a
-        violation), call Python with the position and the witness values:
-        `prop p : ... on violation {log_incident(pos, f)}`.
-      Design questions: firing semantics with delayed verdicts (fire at
-      emission, in position order?); extracting ground values from a
-      symbolic extension (the witness machinery, now available);
-      ordering/purity contract (actions may not feed back into the
-      spec's state except via declared state variables).
+- [x] **Producing data during monitoring via Python actions**
+      (2026-08-30): `r(x) := body do {expr}` fires when the extension is
+      non-empty and changed (params bound to a satisfying assignment —
+      exact for functional rules); `prop p : φ on violation {expr}` fires
+      per emitted violation with `pos` + witness values.  Actions run in
+      the python block's namespace; delayed verdicts fire at emission
+      (end of trace included).  Open refinement: enumerating multi-valued
+      extensions (currently one representative model).
 - [ ] **Slicing** (per-key dispatch of state) — PyContract's `key()`
       mechanism; here it is the natural first increment of the
       relational-state hybrid below, not a separate feature.

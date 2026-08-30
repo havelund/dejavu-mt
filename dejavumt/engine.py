@@ -598,7 +598,8 @@ class FormulaMonitor:
                  pyfuns: Dict[str, dict] = None, rules=(),
                  statevals: Dict[str, object] = None,
                  state_sorts: Dict[str, str] = None,
-                 enum_cons: Dict[str, str] = None):
+                 enum_cons: Dict[str, str] = None,
+                 pyns: Dict[str, object] = None):
         self.name = prop.name
         self.text = str(prop.body)  # source form of the property, for display
         # Anchored: evaluate at position 1 only (trace |= f), instead of the
@@ -623,6 +624,15 @@ class FormulaMonitor:
         # assignment of the property's leading Forall-prefix, extracted
         # from a solver model when a verdict comes out False.
         self.witnesses: Dict[int, dict] = {}
+        # Side-effecting Python actions (evaluated in the python block's
+        # namespace): per-rule `do {expr}` and the property's
+        # `on violation {expr}`.
+        self._pyns = pyns if pyns is not None else {}
+        self._viol_action = (compile(prop.action, "<on-violation>", "eval")
+                             if prop.action else None)
+        self._rule_actions = {r.name: compile(r.action, f"<do-{r.name}>",
+                                              "eval")
+                              for r in rules if r.action}
         # Recursive rules (the property's where-clause): each rule's
         # extension is recomputed per position; recursion only under @.
         self.rules: Dict[str, ast.Rule] = {}
@@ -1259,6 +1269,26 @@ class FormulaMonitor:
             compute(i, node)
         for i in self._deferred_order:
             compute(i, self.nodes[i])
+        # Rule actions: fire when the rule's extension is non-empty and
+        # changed from the previous position, with a satisfying assignment
+        # of its parameters bound (exact for functional rules).
+        for rname, code in self._rule_actions.items():
+            root = self.ruleroot[rname]
+            ext = nowval[root]
+            if b.is_false(ext) or not b.check_sat(ext):
+                continue
+            prev = preval[root]
+            if prev is not None and not b.check_sat(b.not_(b.iff(ext, prev))):
+                continue                      # unchanged extension
+            consts = [self.consts[p] for p in self.rules[rname].params]
+            env = dict(b.model_values(ext, consts) or {})
+            env["pos"] = self.position
+            try:
+                eval(code, self._pyns, env)
+            except Exception as exc:
+                raise ValueError(
+                    f"rule '{rname}' action failed at position "
+                    f"{self.position}: {exc}") from exc
         self.pre = now
         self.preval = nowval
         if self.future:
@@ -1292,6 +1322,7 @@ class FormulaMonitor:
         self._steps += 1
         if self.gc_period and self._steps % self.gc_period == 0:
             self._collect_garbage()
+        self._fire_violation_actions(resolved)
         return resolved
 
     # --- future operators: obligations and their resolution ---
@@ -1747,6 +1778,7 @@ class FormulaMonitor:
         self._resolve_bindings(force=True)
         out = self._check_pending(force=True)
         self.pending = []
+        self._fire_violation_actions(out)
         return out
 
     # --- timed since: stored state vs exported value ---
@@ -1940,6 +1972,24 @@ class FormulaMonitor:
             self.region = b.simplify(b.and_(self.region, f))
         return f
 
+    def _fire_violation_actions(self, resolved):
+        """Run the property's `on violation` action once per emitted False
+        verdict, in emission order, with `pos` and the witness values
+        bound."""
+        if not self._viol_action:
+            return
+        for pos, v in resolved:
+            if v is not False:
+                continue
+            env = dict(self.witnesses.get(pos) or {})
+            env["pos"] = pos
+            try:
+                eval(self._viol_action, self._pyns, env)
+            except Exception as exc:
+                raise ValueError(
+                    f"property '{self.name}' on-violation action failed "
+                    f"for position {pos}: {exc}") from exc
+
     def _witness(self, vals):
         """Falsifying assignment for the property's leading Forall-prefix,
         from a node-value array: a model of the negated prefix-child.  None
@@ -2073,14 +2123,15 @@ class Monitor:
         for prop in spec.properties:
             body = expand_macros(prop.body, macros)
             rules = tuple(ast.Rule(r.name, r.params,
-                                   expand_macros(r.body, macros))
+                                   expand_macros(r.body, macros), r.action)
                           for r in prop.rules)
             self.formulas.append(
                 FormulaMonitor(prop, body, pred_sorts, self.backend,
                                self.pyfuns, rules=rules,
                                statevals=self.states,
                                state_sorts=self.state_sorts,
-                               enum_cons=self.enum_cons))
+                               enum_cons=self.enum_cons,
+                               pyns=self._pyns))
         # Timed specs read their logs with a timestamp as the last CSV column.
         self.timed = any(fm.timed for fm in self.formulas)
         # With future operators verdicts may be delayed; the caller must run

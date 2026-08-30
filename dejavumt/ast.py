@@ -437,10 +437,14 @@ class Rule:
     """A recursive rule  r(x,..) := body  attached to a property (DejaVu's
     `where` rules).  Its extension is recomputed at every position, like an
     event's; recursion (any rule call inside a rule body) is allowed only
-    under @ -- a pure recurrence over the previous position."""
+    under @ -- a pure recurrence over the previous position.  `action` is
+    an optional side-effecting Python expression (r(x) := body do {expr}),
+    fired when the extension is non-empty and changed from the previous
+    position, with the parameters bound to a satisfying assignment."""
     name: str
     params: tuple  # tuple[str, ...]
     body: LTL
+    action: str = None
 
 
 @dataclass(frozen=True)
@@ -471,6 +475,9 @@ class Property:
     body: LTL
     anchored: bool = False
     rules: tuple = ()   # tuple[Rule, ...] from the property's where-clause
+    # Optional Python expression fired on each emitted violation, with
+    # `pos` and the witness values bound (prop p : phi on violation {expr}).
+    action: str = None
 
 
 @dataclass

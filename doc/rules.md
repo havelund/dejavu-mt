@@ -45,6 +45,33 @@ The extension of `count` is a moving singleton — the engine's state for it
 is literally the formula `n = 7`. A running sum in constant space; DejaVu's
 equality-only rules cannot do this.
 
+## Python actions: producing data during monitoring
+
+Monitors can *produce* data, not only verdicts (PyContract-inspired).
+Two attachment sites, both running deliberately side-effecting Python in
+the `python:` block's namespace:
+
+    prop c : true
+      where count(n) := ((! @ true) & n = 1)
+                      | (Exists m . (@ count(m)) & n = m + 1)
+                      do {counts.append(n)}
+
+    prop q : Forall f . Forall d . write(f,d) -> P open(f)
+        on violation {incidents.append((pos, f))}
+
+- **`do {expr}` on a rule** fires at every position where the rule's
+  extension is non-empty **and changed** from the previous position (one
+  equivalence check), with the parameters bound to a satisfying
+  assignment — exact for functional rules (the moving singleton), a
+  representative for multi-valued ones — plus `pos`.
+- **`on violation {expr}` on a property** fires once per emitted False
+  verdict, in emission order (delayed verdicts fire at emission, end of
+  trace included), with `pos` and the violation's witness values bound.
+
+Contract: actions may not feed back into the spec's state except through
+declared state variables; exceptions in actions abort monitoring with the
+rule/property named.
+
 ## State variables
 
 The assignment idiom `x := x + 1 on ...` is the *functional* fragment of a
