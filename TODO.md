@@ -3,19 +3,39 @@
 Working list; keep entries short, link designs where they exist.
 (Feature history lives in git; decisions-with-rationale at the bottom.)
 
-## Next up
+## Inspired by PyContract (notes/papers/rv-pycontract-2022.pdf)
 
 - [x] **Violation witnesses** (2026-08-30): falsifying assignment of the
       leading Forall-prefix from a solver model, shown in CLI violations
       (`[f=b, d=boom]`) and exposed as `FormulaMonitor.witnesses`.  Works
       for immediate, delayed (future), and rule-based violations; skipped
       gracefully for non-Forall roots, parametric verdicts, and values
-      still behind placeholders.
+      still behind placeholders.  (PyContract analogue: f-string error
+      messages — here automatic, from the solver model.)
 - [x] **JSONL log input** (2026-08-30): `.jsonl/.ndjson/.json` logs, one
       object per line, fields matched by name to declared parameters,
       `"time"` field for timed specs; native JSON numbers/booleans.
       (Multiple facts per event: the engine supports it, the readers still
       emit one fact per line — extend if a real log needs it.)
+- [ ] **Producing data during monitoring via Python actions** —
+      monitors as data producers, not just verdict emitters.  Deliberately
+      *side-effecting* Python — distinct from the pure interpreted
+      functions — fired by the engine at defined points.  Two candidate
+      attachment sites:
+      * **actions on rules**: when a rule's extension becomes non-empty
+        (or changes) at a position, call a Python function with the
+        matching values — `r(x) := body do {report(x)}`;
+      * **actions on properties**: on a verdict (or specifically a
+        violation), call Python with the position and the witness values:
+        `prop p : ... on violation {log_incident(pos, f)}`.
+      Design questions: firing semantics with delayed verdicts (fire at
+      emission, in position order?); extracting ground values from a
+      symbolic extension (the witness machinery, now available);
+      ordering/purity contract (actions may not feed back into the
+      spec's state except via declared state variables).
+- [ ] **Slicing** (per-key dispatch of state) — PyContract's `key()`
+      mechanism; here it is the natural first increment of the
+      relational-state hybrid below, not a separate feature.
 
 ## Larger projects
 
@@ -33,23 +53,6 @@ Working list; keep entries short, link designs where they exist.
       monitors as query engines, generalizing parametric monitoring's
       constraint verdicts.  Covers MAX/MIN-style aggregations (order-
       definable); SUM/CNT stay with the hybrid above.
-- [ ] **Producing data during monitoring via Python actions**
-      (PyContract-inspired: monitors as data producers, not just verdict
-      emitters).  Deliberately *side-effecting* Python — distinct from the
-      pure interpreted functions — fired by the engine at defined points.
-      Two candidate attachment sites:
-      * **actions on rules**: when a rule's extension becomes non-empty
-        (or changes) at a position, call a Python function with the
-        matching values — `r(x) := body do {report(x)}`;
-      * **actions on properties**: on a verdict (or specifically a
-        violation), call Python with the position and — once the
-        witnesses feature exists — the falsifying assignment:
-        `prop p : ... on violation {log_incident(pos, f)}`.
-      Design questions: firing semantics with delayed verdicts (fire at
-      emission, in position order?); extracting ground values from a
-      symbolic extension (needs the witness machinery — do witnesses
-      first); ordering/purity contract (actions may not feed back into
-      the spec's state except via declared state variables).
 - [ ] **Performance kernel** (only when the ideas stop moving): the
       node-list evaluator as a Rust/C++ core against the Z3 C API, Python
       kept as frontend.  Recovers the ~50–100 µs/event interpreter floor;
