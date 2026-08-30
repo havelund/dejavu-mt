@@ -631,8 +631,14 @@ value-terms (`gc`). The engine also accepts events containing multiple facts
 (including multiple instances of the same predicate), though the CSV reader
 emits one fact per line.
 
-Not yet implemented: the seen-only
-lowercase `exists`/`forall`. Future operators may occur anywhere — under
+Deliberately not implemented: DejaVu's seen-only lowercase
+`exists`/`forall`. Its universe is derived from the quantified variable's
+occurrence positions in the formula, so every lowercase formula is
+equivalent to an uppercase one with an explicit `P`-guard built from atoms
+the formula already contains — the feature adds brevity, not
+expressiveness (its second role in DejaVu, licensing BDD garbage
+collection, does not apply here). Write the guard, or name the universe
+with a rule (`resource(r) := ...`). Future operators may occur anywhere — under
 negation, below past-time operators (`P (F[<=2] p)`), and nested inside each
 other (`F[<=5] (p & F[<=3] q)`). Growth from
 genuinely-live data (many distinct values live at once) is not yet bounded —
