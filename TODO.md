@@ -27,9 +27,8 @@ Working list; keep entries short, link designs where they exist.
       satisfying Exists-prefix witnesses (mirror of violation witnesses).
       Open refinement: enumerating multi-valued extensions (currently one
       representative model).
-- [ ] **Slicing** (per-key dispatch of state) — PyContract's `key()`
-      mechanism; here it is the natural first increment of the
-      relational-state hybrid below, not a separate feature.
+(PyContract's slicing mechanism is not a separate item: it is the first
+increment of the relational-state hybrid under Larger projects.)
 
 ## Larger projects
 
@@ -38,9 +37,10 @@ Working list; keep entries short, link designs where they exist.
       live-set growth to genuinely symbolic state; ground-relational
       subformulas get set/dict storage.  Two concrete witnesses recorded
       (access log; transitive-closure rule from the DejaVu suite).
-      PyContract-style *slicing* (per-key dispatch) is the natural first
-      increment.  Would also unlock MonPoly-style aggregations
-      (SUM/AVG/CNT over satisfying assignments).
+      First increment: PyContract-style *slicing* — per-key dispatch of
+      state for quantified variables that are event-keyed, so an event
+      touches only its own slice.  Would also unlock MonPoly-style
+      aggregations (SUM/AVG/CNT over satisfying assignments).
 - [ ] **Query-mode properties.** A property with declared free variables
       reports, per position, the constraint describing their valid values
       ("m = 12": the running max; "f = a | f = b": the open files) —
