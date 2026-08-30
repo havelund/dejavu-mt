@@ -633,12 +633,12 @@ emits one fact per line.
 
 Deliberately not implemented: DejaVu's seen-only lowercase
 `exists`/`forall`. Its universe is derived from the quantified variable's
-occurrence positions in the formula, so every lowercase formula is
-equivalent to an uppercase one with an explicit `P`-guard built from atoms
-the formula already contains — the feature adds brevity, not
-expressiveness (its second role in DejaVu, licensing BDD garbage
-collection, does not apply here). Write the guard, or name the universe
-with a rule (`resource(r) := ...`). Future operators may occur anywhere — under
+occurrence positions in the formula, so every meaningful lowercase formula
+already contains its own guard as an atom — the uppercase version is the
+same formula. The feature adds neither expressiveness nor, in practice,
+brevity; its real function in DejaVu is the `bounded` annotation licensing
+BDD garbage collection, which has no counterpart here. Name a universe
+explicitly with a rule (`resource(r) := ...`) when one is wanted. Future operators may occur anywhere — under
 negation, below past-time operators (`P (F[<=2] p)`), and nested inside each
 other (`F[<=5] (p & F[<=3] q)`). Growth from
 genuinely-live data (many distinct values live at once) is not yet bounded —
