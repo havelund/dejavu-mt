@@ -73,7 +73,7 @@ space is a triangle:
   values, fully general, composes with the symbolic engine;
 - **aggregation** — declarative operators, feasible exactly where a
   subformula's assignment set is finitely enumerable (the relational-safe
-  fragment of `OPTIMIZATION.md`); a natural companion of the hybrid
+  fragment of `TODO.md` (Optimization notes)); a natural companion of the hybrid
   relational-state work, future;
 - **operational summaries** (TP-DejaVu / PyDejaVu pre-phase) — rejected
   here: hides the property.
