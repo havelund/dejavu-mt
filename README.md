@@ -716,22 +716,25 @@ parser.
 
 ## Status
 
-Implemented: the first-order fragment — propositional connectives,
-`@ S Z P H` and intervals, quantifiers (top-level and nested), macros, typed
-relations with arithmetic (`+ - *`), the timed operators
-`S[a,b]`/`S[a,*]`/`Z[..]`/`P[..]`/`H[..]` with the `[<=n] [<n] [>=n] [>n]`
-sugar, the bounded future operators `X`/`U[..]`/`F[..]`/`G[..]`,
-parametric bounds on every timed operator (`F[<=n]` with `n` symbolic —
-verdicts become constraints on `n`), data-dependent bounds
-(`Forall n . a(n) -> F[0,n] b`), string matching (`contains`, `matches`
-with capture holes), Python functions inside formulas (the `python:`
-block), recursive rules (`where r(x) := ...`), state variables
-(`state x: Int := {0} on ...`), anchored properties, enumeration sorts,
-and bit-vectors;
-pluggable Z3/CVC5 backends; and periodic garbage collection of dead
-value-terms (`gc`). The engine also accepts events containing multiple facts
-(including multiple instances of the same predicate), though the CSV reader
-emits one fact per line.
+Implemented — the logic: the first-order fragment (connectives,
+`@ S Z P H` and intervals, full-domain typed quantifiers with optional
+sort annotations, macros), typed relations with arithmetic, the timed
+operators with the `[<=n] [<n] [>=n] [>n]` sugar, the bounded future
+operators `X`/`U[..]`/`F[..]`/`G[..]` (nestable anywhere — under
+negation, below past operators, inside each other), parametric bounds on
+every timed operator (verdicts become constraints on `n`), data-dependent
+bounds (`Forall n . a(n) -> F[0,n] b`), string matching (`contains`,
+`matches`/`has` with capture holes), enumeration sorts, bit-vectors,
+recursive rules, sequence patterns (`{e1; e2[*]; e3} |-> phi`), state
+variables, Python functions inside formulas, Python actions
+(`do`/`on violation`/`on satisfaction`), and anchored properties.
+
+Implemented — the tooling: pluggable Z3/CVC5 backends; violation (and
+satisfaction) witnesses from solver models; CSV and JSONL logs; JSON
+results recording (`json` flag); the web UI; periodic garbage collection
+of dead value-terms (`gc`). The engine accepts events containing multiple
+facts (including several of one predicate), though the log readers emit
+one fact per line.
 
 Deliberately not implemented: DejaVu's seen-only lowercase
 `exists`/`forall`. Its universe is derived from the quantified variable's
@@ -740,9 +743,11 @@ already contains its own guard as an atom — the uppercase version is the
 same formula. The feature adds neither expressiveness nor, in practice,
 brevity; its real function in DejaVu is the `bounded` annotation licensing
 BDD garbage collection, which has no counterpart here. Name a universe
-explicitly with a rule (`resource(r) := ...`) when one is wanted. Future operators may occur anywhere — under
-negation, below past-time operators (`P (F[<=2] p)`), and nested inside each
-other (`F[<=5] (p & F[<=3] q)`). Growth from
-genuinely-live data (many distinct values live at once) is not yet bounded —
-`gc` reclaims dead terms but not a large live set, which would need a more
-compact set encoding.
+explicitly with a rule (`resource(r) := ...`) when one is wanted.
+Likewise not adopted, with rationales in `TODO.md`: SALT-style scope and
+abort operators (each reduces to a one-operator guard already present).
+
+Known limitation: growth from genuinely-live data (many distinct values
+live at once) is not yet bounded — `gc` reclaims dead terms but not a
+large live set. The design notes for the planned fix live in `TODO.md`
+(Optimization notes).
