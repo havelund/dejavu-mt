@@ -173,23 +173,29 @@ over that distance:
                         and phi at every step until then
 
 `[a,*]` means "at least `a` time units away" (no upper bound), and the
-comparison forms are abbreviations (shown for `S`; the same forms apply
-to all of the operators):
+comparison forms are abbreviations (the same forms apply to all of the
+operators):
 
 | written | means | reading (past / future) |
 |---|---|---|
-| `S[<=n]` | `S[0,n]` | at most `n` time units ago / ahead |
-| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago / ahead |
-| `S[>=n]` | `S[n,*]` | at least `n` time units ago / ahead |
-| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago / ahead |
+| `S[<=n]`, `U[<=n]` | `S[0,n]`, `U[0,n]` | at most `n` time units ago / ahead |
+| `S[<n]`, `U[<n]`   | `S[0,n-1]`, `U[0,n-1]` | less than `n` time units ago / ahead |
+| `S[>=n]`, `U[>=n]` | `S[n,*]`, `U[n,*]` | at least `n` time units ago / ahead |
+| `S[>n]`, `U[>n]`   | `S[n+1,*]`, `U[n+1,*]` | more than `n` time units ago / ahead |
 
-The unary operators relate to the binary ones as always
-(`P[<=n] phi = true S[<=n] phi`, `H[a,b] phi = !P[a,b]!phi`,
-`F[<=5] phi = true U[0,5] phi`, `G[a,b] phi = !F[a,b]!phi`; `Z[a,b]`'s
-witness is read at the previous step). So `P[<=5] open(f)` is "open(f)
-within the last 5 time units" and `F[<=5] ack(x)` is "ack(x) within the
-next 5" — the verdicts of the future forms may arrive late (see the next
-section).
+The unary operators are derived from the binary ones as always:
+
+| operator | defined as | meaning |
+|---|---|---|
+| `P[a,b] phi` | `true S[a,b] phi` | `phi` held between `a` and `b` time units ago |
+| `H[a,b] phi` | `!P[a,b]!phi` | `phi` held at every step between `a` and `b` time units ago |
+| `phi Z[a,b] psi` | `phi & @(phi S[a,b] psi)` | since, with the witness read at the previous step |
+| `F[a,b] phi` | `true U[a,b] phi` | `phi` holds between `a` and `b` time units from now |
+| `G[a,b] phi` | `!F[a,b]!phi` | `phi` holds at every step between `a` and `b` time units from now |
+
+So `P[<=5] open(f)` is "open(f) within the last 5 time units" and
+`F[<=5] ack(x)` is "ack(x) within the next 5" — the verdicts of the future
+forms may arrive late (see the next section).
 
 A specification using timed operators is monitored against a **timed log**:
 the last column of every CSV line is the event's absolute, non-decreasing
