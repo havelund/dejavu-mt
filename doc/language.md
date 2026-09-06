@@ -486,14 +486,14 @@ The monitor leaves `n` free and reports, per position, the **constraint on
 the conjunction of the constraints so far. On the log
 
     req,a,0
-    ack,a,7
+    ack,a,3
     req,b,10
-    ack,b,13
+    ack,b,17
 
-(`a` answered after 7 time units, `b` after 3) it reports:
+(`a` answered after 3 time units, `b` after 7) it reports:
 
-    --- r at event 1: req(a) @ 0 holds iff 7 <= n
-    --- r at event 3: req(b) @ 10 holds iff 3 <= n
+    --- r at event 1: req(a) @ 0 holds iff 3 <= n
+    --- r at event 3: req(b) @ 10 holds iff 7 <= n
 
     Parametric verdict for r: holds iff 7 <= n
 
