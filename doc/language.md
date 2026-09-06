@@ -330,7 +330,7 @@ guard) cannot be decided and raises an error.
 
 ## Recursive rules
 
-A property may define **rules** (DejaVu's `where` clause) — recursively
+A property may define **rules** — recursively
 defined predicates whose extension is recomputed at every position, as if
 their facts occurred in the trace:
 
