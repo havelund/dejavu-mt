@@ -27,7 +27,7 @@ Currently supported (slice 1 -- untimed fragment):
                    own deadline; verdicts stay Boolean
     python:        a `python:` ... `end` block defines pure, annotated
                    functions usable inside formulas (size(d) < 100,
-                   risky(cmd)); see doc/pyfun.md
+                   risky(cmd)); see doc/engine.md
     rules:         prop p : ... where r(x) := body, ... -- recursive
                    predicates recomputed per position (recursion under @)
     actions:       rule `do {expr}` (extension non-empty & changed; params

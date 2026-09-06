@@ -4,9 +4,7 @@ The reference manual. The language extends DejaVu's QTL — a typed
 first-order *past-time* linear temporal logic — with future and timed
 operators, parametric bounds, string matching, rules, sequence patterns,
 state variables, and Python. Per-feature design notes:
-[timed.md](timed.md), [future.md](future.md),
-[parametric.md](parametric.md), [rules.md](rules.md),
-[pyfun.md](pyfun.md).
+the per-feature sections of [engine.md](engine.md).
 
 Contents:
 [specifications](#specifications) ·
@@ -210,7 +208,7 @@ and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
 step).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
 and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
 extensions (one extra linear inequality in the SMT encoding — see
-[timed.md](timed.md)).
+[engine.md](engine.md#timed-metric-operators)).
 
 A specification using timed operators is monitored against a **timed log**:
 the last column of every CSV line is the event's absolute, non-decreasing
@@ -225,7 +223,7 @@ time 17.  Example:
 its usual formula extended with one integer time variable `t` stamped with
 the witnessing timestamps (`t = 17`), and its exported value is the
 quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
-[timed.md](timed.md) for the full story.
+[engine.md](engine.md#timed-metric-operators) for the full story.
 
 A bound may also be a **quantified `Int` variable** — a deadline carried by
 the trace, different for every event:
@@ -235,7 +233,7 @@ the trace, different for every event:
     prop own : Forall x . Forall d . request(x,d) -> F[0,d] ack(x)
 
 Verdicts stay Boolean (the quantifier discharges `d`); see
-[timed.md](timed.md) ("Variable bounds"). This is distinct from a *symbolic
+[engine.md](engine.md#variable-bounds). This is distinct from a *symbolic
 parameter* bound, where the name is bound by nothing and verdicts become
 constraints on it — see [parametric monitoring](#parametric-monitoring).
 
@@ -311,7 +309,7 @@ To the engine a function is an SMT symbol whose value is computed by
 Python **once its arguments become ground** — which the event that binds
 them makes happen. That is also the honest boundary: an application whose
 arguments never become ground (`Forall d . size(d) > 0` with no event
-guard) cannot be decided and raises an error. See [pyfun.md](pyfun.md) for
+guard) cannot be decided and raises an error. See [engine.md](engine.md#python-functions-inside-formulas) for
 how it works and how this differs from the two-phase TP-DejaVu/PyDejaVu
 designs and MonPoly's aggregations.
 
@@ -335,7 +333,7 @@ so with arithmetic, rules can count and sum:
                       | (Exists m . (@ count(m)) & n = m + 1)
 
 A rule's extension at each position is forgotten at the next (like an
-event) unless a past operator remembers it. See [rules.md](rules.md).
+event) unless a past operator remembers it. See [engine.md](engine.md#recursive-rules-and-state-variables).
 
 **Python actions** turn monitors into data producers: `do {expr}` on a
 rule fires when its extension is non-empty and changed (parameters bound
@@ -368,7 +366,7 @@ implication) requires `phi` whenever a match ends, with the sequence's
 variables bound by the match. Sequences desugar to auto-generated
 `@`-guarded rules (a small automaton), so they work under quantifiers and
 past operators; items are past-time, and sequences may not appear inside
-rule bodies. See [rules.md](rules.md).
+rule bodies. See [engine.md](engine.md#recursive-rules-and-state-variables).
 
 ## State variables
 
@@ -437,7 +435,7 @@ broken run already decides them for every `n`). Several *distinct* parameters
 are fine, and each verdict/region is then a constraint over all of them. In
 the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
 booleans) and each `FormulaMonitor` exposes `region`. See
-[parametric.md](parametric.md) for how verdicts are decided (immediately for
+[engine.md](engine.md#parametric-monitoring) for how verdicts are decided (immediately for
 past operators; by bracket agreement for future ones) and the memory
 trade-offs.
 

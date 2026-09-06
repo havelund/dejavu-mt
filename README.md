@@ -221,13 +221,8 @@ bounds — verdicts are then backend formulas rather than booleans.
 
 - [doc/language.md](doc/language.md) — the language manual: every
   construct, with the grammar at the end.
-- [doc/engine.md](doc/engine.md) — how the engine works.
-- [doc/timed.md](doc/timed.md) — how the timed operators are encoded.
-- [doc/future.md](doc/future.md) — future operators and delayed verdicts.
-- [doc/parametric.md](doc/parametric.md) — parametric monitoring: how
-  constraint verdicts are decided.
-- [doc/rules.md](doc/rules.md) — rules, sequence patterns, state
-  variables, actions.
-- [doc/pyfun.md](doc/pyfun.md) — Python functions in formulas.
+- [doc/engine.md](doc/engine.md) — how the engine works, overall and per
+  feature (timed, future, parametric, rules/sequences/states, Python
+  functions).
 - [doc/validation.md](doc/validation.md) — the comparisons with DejaVu,
   MonPoly, and the reference evaluator.

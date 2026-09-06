@@ -18,11 +18,736 @@ garbage collection of dead value-terms (`gc`). The known limitation:
 growth from genuinely-live data (many distinct values live at once) is
 not bounded — `gc` reclaims dead terms, not a large live set.
 
-The refinements per feature have their own notes: timed operators stamp a
-time variable and project it out ([timed.md](timed.md)); future operators
-park obligations and emit verdicts once known ([future.md](future.md));
-parametric bounds are constants never eliminated, so verdicts become
-constraints ([parametric.md](parametric.md)); rules evaluate as recurrences
-over the previous position ([rules.md](rules.md)); Python functions are
-uninterpreted symbols given their values once arguments become ground
-([pyfun.md](pyfun.md)).
+The rest of this document is the design, feature by feature:
+
+- [Timed (metric) operators](#timed-metric-operators)
+- [Bounded future operators](#bounded-future-operators)
+- [Parametric monitoring](#parametric-monitoring)
+- [Rules, sequences, states, actions](#recursive-rules-and-state-variables)
+- [Python functions inside formulas](#python-functions-inside-formulas)
+
+---
+
+# Timed (metric) operators
+
+How DejaVuMT implements `S[a,b]`, `S[a,*]`, `Z[..]`, `P[..]`, `H[..]` and
+the sugar `[<=n] [<n] [>=n] [>n]`. Companion to the "Metric Operators"
+section of the paper; this is the implementation view.
+
+## Timed traces
+
+A timed trace attaches to every event an absolute, non-decreasing integer
+timestamp `T` — in the CSV log, the last column of each line (DejaVu's
+format): `open,a,17` is `open(a)` at time 17. Timed operators speak about the
+**age** of a past event: current timestamp minus the timestamp of the
+witnessing occurrence.
+
+    phi S[a,b] psi   --  psi held between a and b time units ago,
+                         and phi has held at every step since.
+
+Semantically `P[a,b] phi = true S[a,b] phi` and `H[a,b] phi = !P[a,b]!phi`.
+`Z` (*zince*) is since with a strictly-past witness: `phi Z psi` = "psi held
+strictly in the past and phi has held since, through now" =
+`phi & @(phi S psi)`; its timed form stamps the witness with the *previous*
+event's timestamp.  DejaVu provides only `Z[<=n]`; the untimed `Z` and the
+general `Z[a,b]` are DejaVuMT extensions.  (DejaVu's Z recurrence keeps only
+the most recent witness — equivalent for `[<=n]`, where the newest witness is
+always the freshest, but not for a general interval, where an older witness
+can be in the window while the newest is still too young; DejaVuMT therefore
+keeps all witnesses, which coincides with DejaVu on `[<=n]`.)
+The upper bound may be `*` (absent). With integer time the comparison forms
+are sugar: `[<=n]=[0,n]`, `[<n]=[0,n-1]`, `[>=n]=[n,*]`, `[>n]=[n+1,*]`. The
+unconstrained interval `[0,*]` is exactly the untimed `S`.
+
+Although Z, P and H are *defined* by these rewrites, the engine does not
+compile them that way: every surface operator (S, Z, P, H — timed and untimed)
+gets its
+own node interpreting its own (provably equal) recurrence, so the debug tree
+mirrors the specification one-to-one, with no encoding artifacts (no
+constant-`true` child under P, no `¬P¬` chain for H). For P the recurrence is
+the stamped since-recurrence with the phi-conjunct dropped. For H the node
+stores the record-set of phi's *failures* — the state of `P[a,b]!phi`, which
+starts at `false` = "no failure yet" = vacuously true — and exports the
+*negation* of its projection; so an H node's displayed state describes
+`!phi`, while its displayed value describes `phi`.
+
+## The state: records with a timestamp
+
+An untimed `phi S psi` node stores one formula over its free data variables,
+updated by the recurrence
+
+    S  <-  B[psi]  or  (B[phi] and pre[S]).
+
+The timed node must remember not only *that* a witnessing `psi` occurred but
+*when*. Its stored state is the same formula extended with **one integer
+variable `t`** (one fresh constant per timed node, e.g. `_t3`, with exactly
+the same status as the data variables), and the recurrence stamps the current
+timestamp onto the new disjunct:
+
+    S  <-  (B[psi] and t = T)  or  (B[phi] and pre[S]).
+
+A satisfying assignment of `S` is a **record**: "psi held for these data
+values at time t, and phi has held since". Think of `S` as a table:
+
+    x = "a"  and  t = 0        -- p(a) was observed at time 0
+    x = "b"  and  t = 3        -- p(b) was observed at time 3
+
+Two properties make this efficient:
+
+- **Records are immutable.** A record `t = 0` is written once and never
+  rewritten. There is no per-step aging update (DejaVu, by contrast, adds the
+  time delta to every stored age at every step, with a bit-level adder built
+  from BDD operations). It is the *query* that moves: the window constraint
+  `a <= T - t <= b` is evaluated against the current timestamp `T`.
+
+- **The two window bounds behave differently.**
+  The *upper* bound is monotone — a record older than `b` stays older than
+  `b` forever — so expired records can be deleted from the state
+  (`prune_expired` in `backend.py` replaces `t = c` atoms with `c < T - b` by
+  `false`, in and/or positions only). The state thus holds at most the last
+  `b` time units of records.
+  The *lower* bound is **not** monotone — a record that is too young will
+  mature into the window later — so it is applied only in the value query,
+  never to the state.
+
+- **No upper bound (`[a,*]`)**: nothing expires, but a record past the lower
+  bound satisfies the window forever, so its timestamp has become
+  irrelevant: the engine projects `t` away from the matured part
+  (`Exists t . S and T - t >= a`, quantifier-eliminated), merging all matured
+  records into one time-free formula that thereafter evolves like ordinary
+  untimed state. This is the SMT analogue of DejaVu's saturation of ages at
+  `n+1`. So DejaVu's two state-bounding devices are the two halves of the
+  window: the upper bound *prunes* records, the lower bound *anonymizes*
+  them.
+
+## State vs. exported value
+
+The node's stored state mentions `t`, but what the enclosing formula needs is
+an ordinary formula over the data variables. The node therefore **exports**
+the time-free projection
+
+    value  =  QElim( Exists t . S  and  a <= T - t <= b )
+
+where `QElim` is quantifier elimination (exact for linear integer
+arithmetic). Here a node's stored formula and its exported value differ (the
+H nodes are the other such place: failure records in, negation out); for all
+other operators the two coincide. In the code the entire difference is one
+accessor: enclosing nodes
+read a child through its exported value (`nowval`/`preval` in `engine.py`)
+instead of reading the stored slot (`now`/`pre`) directly; for untimed nodes
+the two share one object. Because the exported value is time-free, timed
+operators compose with everything — negation, quantifiers, other temporal
+operators — and *nested* timed operators just use distinct, locally
+eliminated time variables.
+
+## The evolution of an example
+
+Spec (`examples/timed/prop.qtl`):
+
+    pred open(f: String)
+    pred close(f: String)
+    prop timely : Forall f . close(f) -> P[<=5] open(f)
+
+Log (`examples/timed/log.csv`): `open(a)@0, close(a)@3, open(b)@4,
+close(b)@12`. Actual `debug` output (the unlabeled annotation on each node is
+its stored slot; where the exported value differs — timed and H nodes — it
+follows, labeled `value:`):
+
+    ----- event 1: open(a) @ 0 -----
+
+    ∀ f . (close(f) → P[<=5] open(f))  true
+    └─ (close(f) → P[<=5] open(f))  true
+       ├─ close(f)  false
+       └─ P[<=5] open(f)  (f = "a" ∧ 0 = _t1)   value: f = "a"
+          └─ open(f)  f = "a"
+
+    ----- event 2: close(a) @ 3 -----
+
+    ∀ f . (close(f) → P[<=5] open(f))  true
+    └─ (close(f) → P[<=5] open(f))  true
+       ├─ close(f)  f = "a"
+       └─ P[<=5] open(f)  (f = "a" ∧ 0 = _t1)   value: f = "a"
+          └─ open(f)  false
+
+    ----- event 3: open(b) @ 4 -----
+
+    ∀ f . (close(f) → P[<=5] open(f))  true
+    └─ (close(f) → P[<=5] open(f))  true
+       ├─ close(f)  false
+       └─ P[<=5] open(f)  ((f = "b" ∧ 4 = _t1) ∨ (f = "a" ∧ 0 = _t1))   value: (f = "a" ∨ f = "b")
+          └─ open(f)  f = "b"
+
+    ----- event 4: close(b) @ 12 -----
+
+    ∀ f . (close(f) → P[<=5] open(f))  false
+    └─ (close(f) → P[<=5] open(f))  ¬(f = "b")
+       ├─ close(f)  f = "b"
+       └─ P[<=5] open(f)  false   value: false
+          └─ open(f)  false
+
+Read the timed node's line across the events: the record `f="a" ∧ t=0` is
+written at event 1 and *never touched* afterwards; at event 2 (T=3) it is
+still in the window (3-0 <= 5) so the exported value is `f="a"` and `close(a)`
+is satisfied; at event 3 a second record is added; at event 4 (T=12) both
+records have fallen out of the window (12-0 > 5, 12-4 > 5), pruning empties
+the state, the exported value is `false`, and `close(b)` violates.
+
+## Contrast with DejaVu
+
+DejaVu bit-blasts time into the BDDs: five groups of time bits (age, new age,
+delta, carry, limit), a ripple-carry adder (`addConst`) recomputing every age
+at every step, comparator circuits (`gtConst`), saturation via BDD
+if-then-else, and a projection plus bit-renaming per step. Here time is one
+integer variable per timed node: no aging (records are immutable), the
+freshness test is a linear constraint, the projection is one quantifier
+elimination. That is also why the *interval* operator `S[a,b]` costs nothing
+extra — a second bound is one more inequality in the same query — whereas in
+the circuit encoding each bound is compiled hardware; DejaVu accordingly
+provides only the one-sided `[<=n]` and `[>n]`, which are the two degenerate
+intervals.
+
+Semantics agreement with DejaVu is validated by the differential harness
+(`experiments/ab_validate.py`): all comparable timed pairs of the DejaVu
+distribution produce identical verdicts (DejaVu decides a log is timed by its
+*filename* containing `.timed.` — the harness mirrors this convention).
+
+## Variable bounds
+
+Nothing in the encoding requires `a`, `b` to be literals — the window test
+is just a linear constraint with one more free variable. Two cases:
+
+**Symbolic parameters (implemented).** The upper bound may be a parameter
+the monitor never fixes (`P[<=n]`), turning each verdict into a constraint
+on it ("holds iff n >= 7") — see
+[parametric monitoring](#parametric-monitoring). For the past
+operators the verdicts come for free (a past verdict is known at its own
+position); the price is state: with `n` symbolic neither the expiry pruning
+nor the `[a,*]` saturation of this section applies — every record matters
+for some `n` — so the node's state grows with the trace.
+
+**Data-dependent bounds (implemented).** A bound may also be a *quantified
+variable* — a deadline carried by the trace:
+
+    Forall n . a(n) -> F[0,n] b        -- each a-event brings its own deadline
+    Forall d . rsp(d) -> P[0,d] req    -- per-response allowance
+
+The variable must be `Int`. Unlike a parameter, the quantifier discharges
+the bound, so verdicts stay Boolean. There is no numeric deadline to close
+future windows by; instead the obligation brackets do it — the upper
+bracket `Forall n . a(n) -> (q | n >= elapsed)` turns false exactly when
+time outruns the carried deadline, so violations are still reported
+promptly. As with symbolic bounds, records under a data-dependent window
+cannot be pruned or saturated.
+
+---
+
+# Bounded future operators
+
+How DejaVuMT implements `X`, `U[a,b]`, `F[a,b]`, `G[a,b]` and their unbounded
+forms. Companion to the "Bounded Future Operators" section of the paper; this
+is the implementation view.
+
+## The difficulty, and the notebook
+
+A property with a future operator cannot in general be judged at its own
+position: whether `F[<=5] ack(x)` holds at position *i* depends on events not
+yet read. So the monitor does what a person would: it writes the outstanding
+requirement in a **notebook** — "awaiting an `ack(a)` between times 3 and 8" —
+and returns to it as events arrive, crossing it off when it is fulfilled, or
+when its deadline passes unfulfilled.
+
+Two consequences for the interface:
+
+- **Verdicts carry positions.** `Monitor.step(event, ts)` returns the verdict
+  of each property *for this position*, which may be `None` (pending). Every
+  verdict determined during that step — for this position or an earlier one —
+  is in `Monitor.resolved`, a list of `(position, property, holds)`.
+- **The trace must be closed.** `Monitor.end()` forces every remaining
+  obligation to a verdict (an unwitnessed `F` becomes false, an unrefuted `G`
+  true) and returns them the same way. The CLI and the web UI call it after
+  the last event.
+
+## One mechanism: until
+
+Everything is an instance of until. A `U[a,b]` node stores **two** stamped
+tables, updated eagerly at every event, both recording observed facts only:
+
+    A  <-  A or (t = T)            # runs reaching this position
+    W  <-  W or (psi and A and t' = T)
+    A  <-  phi and A               # to reach the next position, phi must hold now
+
+Read them as relations with named columns:
+
+- `A` has columns (data, `t`): a row is a **run** — phi has held from time `t`
+  up to now. Deleted, pointwise per data value, when phi fails.
+- `W` has columns (data, `t`, `t'`): a row is an **answered run** — the run
+  begun at `t` was answered by a psi at `t'`.
+
+Hence the two time columns: a row of `W` is not a witness alone but a witness
+*together with the run it answers*, since one psi answers every run reaching
+its position. Note the update order: `W` is extended *before* phi is tested,
+because phi is required strictly before the witness, not at it.
+
+## Obligations
+
+At each event the tree is evaluated bottom-up as always; a future node exports
+its query's value over the table *so far* — a lower bound on the eventual
+answer. The root's value is then parked, verbatim, as an obligation
+`(position, frozen values)` in the **pending list**. It is checked
+immediately: obligations whose future parts turn out not to matter (a false
+antecedent) resolve at once.
+
+Implementation note: the paper presents the parked formula as containing an
+opaque constant `Q`. The engine instead freezes the whole `nowval` array and
+*recomputes* the path from the future nodes to the root at check time
+(`_recompute`). The two are equivalent, and recomputation avoids substituting
+a data-dependent formula underneath a quantifier.
+
+## Checking: brackets
+
+Each future node's eventual export lies between a lower and an upper bound
+(tables only grow; for `G`, whose table records counterexamples, the bounds
+are mirrored). Substituting the bounds according to each node's **polarity**
+w.r.t. the root brackets the eventual verdict:
+
+- `phi_lo` true  -> the verdict is true, **early** (a witness cannot be revoked);
+- `phi_hi` false -> the verdict is false, **early** (e.g. the run is broken);
+- every query **exact** -> the brackets coincide: emit the verdict.
+
+A query is exact once its deadline has passed, or — for until — once its
+anchors are dead. Polarity is computed on the compiled tree (`_compute_polarity`):
+`+1` under an even number of negations, `-1` under an odd number, `0` in both
+senses (under `<->`), in which case that obligation simply waits for exactness.
+No syntactic restriction on where future operators may occur is needed.
+
+The first check of an obligation, made at the event that creates it, comes out
+false and resolves nothing: before the deadline, false means *not yet*.
+
+## Special cases
+
+`F[a,b] phi = true U[a,b] phi`: anchors never die, the anchor column of `W`
+becomes redundant, and the node keeps a single table `S` of witness stamps.
+`G[a,b] phi = !F[a,b] !phi`: the table records phi's counterexamples and the
+node exports the negated query. `X phi` is the degenerate case, stamped by
+**position** rather than by time, with window `[1,1]`. Unbounded `F`, `G`, `U`
+(no interval) also use positions, so they need no timestamps at all: `F p`
+runs on an untimed log, with the end of the trace as the only forcing point.
+
+## Pruning
+
+A table row can serve no obligation once its stamp lies before the earliest
+pending window, and no row at all is needed when the pending list is empty —
+so the tables are cleared outright then. This is the dual of the past
+operators' rule, where the moving window kills records from behind.
+
+## Nesting: placeholders and staged resolution
+
+A future operator below a *stateful* operator (`P (F[<=2] p)`,
+`a S (F[<=2] p)`, `@ (F..)`) or inside another future operator's argument
+(`F[<=5] (p & F[<=3] q)`) poses a harder problem: the enclosing recurrence
+needs the inner node's value *at each position as input*, and that value is
+still pending there. Such "deep" nodes export, instead of a lower bound, an
+**opaque placeholder**: an uninterpreted predicate `_q..(x..)` applied to the
+node's free data variables (a predicate, not a constant, so that quantifiers
+above bind through it). The placeholder flows into states and tables like any
+subformula; `simplify` cannot touch it.
+
+Resolution is staged, innermost first: once a placeholder's answer is final
+(deadline passed or run dead) *and* its node's tables mention no other
+unresolved placeholder, its value is computed from the tables and
+**substituted, as a function, into everything** — node states, exported
+values, future tables, and parked obligations (`backend.substitute_fun`,
+capture-safe under binders). Early verdicts still work: unresolved
+placeholders in an obligation's formula are bracketed by substituting bound
+functions (today's value / ⊤) according to the placeholder node's polarity,
+which composes through stateful operators as well (every recurrence is
+monotone or antitone in each input — see `OPSIGNS`).
+
+Shallow nodes (only stateless ancestors) keep the direct query mechanism —
+the common request-response case pays nothing for any of this.
+
+## Example
+
+`examples/future/`, run with
+
+    python -m dejavumt examples/future/prop.qtl examples/future/log.csv trace
+
+The spec is `Forall x . req(x) -> F[<=5] ack(x)`; the log is
+
+    req,a,3       position 1: pending
+    ack,b,4       holds at once (no req)
+    ack,a,6       answers position 1 -> holds, early (deadline was 8)
+    req,c,10      pending
+    other,x,20    deadline 15 has passed -> position 4 VIOLATED, here
+
+`debug` additionally prints, under each tree, the positions still awaiting a
+verdict.
+
+---
+
+# Parametric monitoring
+
+An interval bound — upper or lower — of any timed operator, past
+(`P/H/S/Z`) or future (`F/G/U`), may be a *symbolic parameter* instead of a
+number. (A bound that names a variable a quantifier *binds* is a different
+feature — a **data-dependent bound** like `Forall n . a(n) -> F[0,n] b`,
+with ordinary Boolean verdicts; see
+[variable bounds](#variable-bounds). A parameter is a name
+bound by nothing: the monitor's output constrains it.)
+
+    pred req(x: String)
+    pred ack(x: String)
+    prop r : Forall x . req(x) -> F[<=n] ack(x)
+
+The monitor leaves `n` free and reports, per position, the **constraint on
+`n`** under which that position holds, plus a running **feasible region** —
+the conjunction of the constraints so far:
+
+    --- r at event 1: req(a) @ 0 holds iff 7 <= n
+    --- r at event 3: req(b) @ 10 holds iff 3 <= n
+
+    Parametric verdict for r: holds iff 7 <= n
+
+Instead of checking one deadline, the monitor *synthesizes* the tightest
+deadline the trace meets. In the API, verdicts from `Monitor.step`/`end` are
+then backend formulas rather than Booleans, and each `FormulaMonitor`
+exposes the region as `region`.
+
+## Why it is almost free
+
+The engine is symbolic throughout: timestamps, data values, and window
+bounds are all just terms in formulas. A parameter is an Int constant
+(`FormulaMonitor.params`) that the engine simply *never eliminates*, so the
+usual value query `Exists t . S & T+a <= t <= T+n` eliminates to a formula
+over `n`, and the root of the property becomes the verdict constraint. The
+tables, queries, and recurrences are untouched; `n` flows through them like
+any constant. Only two things change: how verdicts are *decided* (below,
+different for past and future), and what can be *pruned*.
+
+## Past operators: immediate verdicts, growing state
+
+A past verdict is fully known at its own position, so the constraint is
+emitted immediately — no obligations, no brackets (`step` routes the root
+through `_pverdict` instead of the Boolean `_verdict`).
+
+The cost moves to state: a parametric past window can prune nothing. A
+record at any age is still inside the window for large enough `n` and
+outside it for small `n`, so neither expiry (upper-bound pruning) nor
+saturation (the `[a,*]` projection of matured records) applies, and that
+node's state grows with the trace (`_bound_state` returns the state as-is).
+
+## Future operators: finality by bracket agreement
+
+A parametric window has no numeric deadline, so `_fexact` never closes it.
+Instead the node's bracket in `_check` is
+
+    [ q ,  q | n >= max(a, elapsed) ]
+
+any *future* witness lies at delay >= the time elapsed since the anchor
+(timestamps are non-decreasing), so the most it can still contribute is
+`n >= elapsed`. The obligation resolves when the two eliminated root
+brackets agree **for every parameter value** (one satisfiability check of
+their iff). Consequences:
+
+- `F` resolves at the **first witness** — a later one is only slower, hence
+  subsumed;
+- `G` resolves at the first counterexample;
+- `U`'s upper bracket is tightened to `q | (alive & n >= max(a, elapsed))`,
+  where `alive` is the run's surviving data values (from the `A` table): a
+  future witness also needs `phi` to have held since the anchor, so a
+  broken run collapses the brackets and yields `false` for every `n` at
+  once (the run-death satisfiability check in `_fexact` fires
+  independently of `n`);
+- anything still open resolves at end of trace (`false` for every `n` if
+  unanswered, collapsing the region).
+
+## Lower bounds: discovered minimum delays
+
+An upper-bound parameter synthesizes the tightest deadline met (`n >= 7`);
+a lower-bound parameter is the antitone twin and synthesizes guaranteed
+*minimum* ages and delays — thresholds of the form `n <= d`:
+
+    prop t : Forall x . rsp(x) -> P[>=n] req(x)     -- every response's
+                                                       request was at least
+                                                       n old: holds iff n <= 3
+
+Mechanically the lower bound is the easier direction for the future
+operators: `F[n,10]` still has its *concrete* deadline at +10, so the
+standard finality machinery applies unchanged — the obligation resolves
+when time passes the deadline, with the constraint `n <= (witness delay)`.
+`F[n,*]` has no deadline and resolves at end of trace. On the past side,
+`P[n,10]` keeps its expiry pruning (expiry depends only on the concrete
+upper bound), while `P[>=n]` can neither expire nor saturate and grows like
+the parametric-upper case. At most one bound per operator may be symbolic
+(`P[m,n]` is rejected); distinct operators may carry distinct parameters.
+
+## The feasible region
+
+Emitted constraints accumulate into `FormulaMonitor.region`, the parameter
+values under which every judged position holds. It only shrinks, and it is
+kept subsumption-free (two satisfiability checks per emission: skip a
+constraint the region already implies, replace the region by a strictly
+stronger constraint). An empty region is the parametric analogue of a
+violation: no parameter value rescues the trace.
+
+## Well-formedness
+
+Checked at compile time (`collect_params`, plus the deep-node check in
+`FormulaMonitor.__init__`):
+
+- a parameter occurs in **exactly one** bound — upper or lower, on any
+  timed operator — and an operator carries at most one symbolic bound;
+- a parameter name must not also be used as a data variable.
+
+Parametric operators may **nest anywhere**. Past occurrences are known at
+their own position; a nested (deep) future occurrence with a symbolic
+*upper* bound has no deadline, so its placeholder never resolves early —
+it is substituted at end of trace, or sooner when its run dies or when the
+obligation brackets (pointwise sound in `n`, refined by the same growth
+bound) already agree for every parameter value; `@ (F[<=n] p)` still
+resolves at the first witness. A nested symbolic *lower* bound keeps its
+concrete deadline and resolves early through the ordinary machinery.
+Verdicts are exact in all cases (validated by pointwise instantiation
+against concrete-bound runs); only latency is conservative — and
+deliberately so: parameter *discovery* is inherently a whole-trace
+question, so its natural mode is offline log analysis, where end-of-trace
+delivery is the norm rather than a defect.
+
+Several *distinct* parameters are fine; verdicts and the region are then
+constraints over all of them.
+
+Still open: two symbolic bounds on one operator, multiple or
+mixed-polarity occurrences of one parameter, and *eager* resolution of
+nested parametric future operators in general (region-guarded staged
+resolution — tracking, per placeholder, the parameter region on which its
+answer is already final).
+
+---
+
+# Recursive rules and state variables
+
+Two related features close the running-summary gap declaratively: **rules**
+(DejaVu's `where` clause) and their functional sugar, **state variables**.
+
+## Rules
+
+    prop r : Forall x . check(x) -> seen(x)
+      where seen(x) := p(x) | (@ seen(x))
+
+A rule `r(x̄) := body` is a recursively defined predicate. Its semantics
+follows DejaVu exactly:
+
+- **Per-position extension.** At every position the rule's extension is
+  recomputed, as if its facts occurred in the trace at that position.
+  Compute `o(4)` at one step and `o(5)` at the next, and `o(4)` is
+  forgotten — unless a past operator over `o` remembers it in its own
+  state.
+- **Recursion only under `@`.** Every rule call inside a rule body (self,
+  mutual, any) must sit below the previous-operator; the main formula may
+  call rules at the current position. This makes rules pure recurrences
+  over the previous position — no fixpoint computation — which is exactly
+  the shape of every stateful node in the engine.
+- Rule parameters must be exactly the body's free variables; call
+  arguments are variables (constants are rejected, as in DejaVu); rule
+  bodies are past-time.
+
+Implementation: rule bodies compile as ordinary node subtrees, *before*
+the main formula (so current-position calls read an already-computed
+value); a rule call's value is the body root's value with parameters
+renamed to the call's arguments (a constant substitution). Nodes below an
+`@` inside a rule body evaluate in a second pass, so a recursive call
+there can read its rule root's first-pass value — its own now-value is
+only ever consumed next step, through the `@`'s previous-value slot.
+
+**Rules can count.** As formulas over an SMT backend, rule bodies carry
+arithmetic, and recursion over positions is what pure first-order logic
+lacks for counting:
+
+    prop c : Forall n . check(n) -> count(n)
+      where count(n) := ((! @ true) & n = 1)
+                      | (Exists m . (@ count(m)) & n = m + 1)
+
+The extension of `count` is a moving singleton — the engine's state for it
+is literally the formula `n = 7`. A running sum in constant space; DejaVu's
+equality-only rules cannot do this.
+
+## Sequence patterns compile to rules
+
+PSL-style sequences (`{fail(u); fail(u); ok(u)} |-> alarm(u)`) are pure
+sugar over rules.  The item list is a regular expression whose atoms are
+past-time formulas; a Glushkov construction linearizes it, and each atom
+becomes one generated `@`-guarded rule over the sequence's shared
+variables:
+
+    _sq0_k(x̄) := atom_k & ( true                -- if k can start a match
+                          | @ _sq0_j(x̄) | ... ) -- for each predecessor j
+
+"A match ends here" is the disjunction of the last atoms' calls (plus
+`true` if the sequence matches emptily); `seq |-> phi` is that disjunction
+implying phi.  Because rules are automata, repetition is full regular
+repetition — `{a; {b; b}[*]; c}` (an even number of b's) exceeds plain
+LTL's star-free limit and costs nothing here.  Matching uses search
+semantics (a match may start at any position) and ends at the current
+position, so sequences are past-anchored: they work under quantifiers and
+past operators, items must be past-time, and sequences may not appear
+inside rule bodies (the generated current-position calls would violate
+the `@`-guardedness discipline).  A generated rule carries ALL the
+sequence's variables even where its atom mentions fewer — its extension
+is then unconstrained in those variables, which the formula
+representation handles directly.
+
+## Python actions: producing data during monitoring
+
+Monitors can *produce* data, not only verdicts (PyContract-inspired).
+Two attachment sites, both running deliberately side-effecting Python in
+the `python:` block's namespace:
+
+    prop c : true
+      where count(n) := ((! @ true) & n = 1)
+                      | (Exists m . (@ count(m)) & n = m + 1)
+                      do {counts.append(n)}
+
+    prop q : Forall f . Forall d . write(f,d) -> P open(f)
+        on violation {incidents.append((pos, f))}
+
+- **`do {expr}` on a rule** fires at every position where the rule's
+  extension is non-empty **and changed** from the previous position (one
+  equivalence check), with the parameters bound to a satisfying
+  assignment — exact for functional rules (the moving singleton), a
+  representative for multi-valued ones — plus `pos`.
+- **`on violation {expr}` / `on satisfaction {expr}` on a property** fire
+  once per emitted verdict, in emission order (delayed verdicts fire at
+  emission, end of trace included), with `pos` and the witness values
+  bound: falsifying values of a leading Forall-prefix for violations,
+  satisfying values of a leading Exists-prefix for satisfactions.
+
+Contract: actions may not feed back into the spec's state except through
+declared state variables; exceptions in actions abort monitoring with the
+rule/property named.
+
+## State variables
+
+The assignment idiom `x := x + 1 on ...` is the *functional* fragment of a
+rule, and gets direct syntax with Python step-expressions:
+
+    state total: Int := {0}
+        on write(f, d): {total + len(d)}
+
+    prop bound : total <= 1000000
+
+Semantics (equivalently: the functional rule it corresponds to):
+
+- the value starts as the `{init}` expression (evaluated in the `python:`
+  block's namespace);
+- on each event, every matching `on` clause updates the value — the
+  clause's parameters bind the event's arguments (coerced by the declared
+  predicate sorts), all state names are in scope with their *previous*
+  values, and multiple matching facts fold left-to-right;
+- updates run **before** the properties evaluate the event (the rule
+  reading: the body pairs the event with the `@`-previous value);
+- in formulas the state reads as a **term** — its current ground value
+  injected as a literal per position. Atoms mentioning states are
+  recompiled per event; everything else (past operators over them,
+  quantifiers around them) behaves as with any other value. A `Bool`
+  state doubles as an atom.
+
+Because state values are ground by construction, none of the symbolic
+machinery is involved: the monitor holds a Python value, and the property
+stays whole — the trace the temporal operators see is untouched, unlike
+the two-phase TP-DejaVu/PyDejaVu designs, whose examples (running byte
+totals, per-file available space) are expressible this way in-spec.
+Non-scalar bookkeeping (dicts, sets) lives in Python helper functions,
+with scalar projections exposed as state values.
+
+State variables must be pure in the same sense as spec Python functions:
+their update expressions may compute anything, but the *monitor-visible*
+value per position is the single source of truth.
+
+---
+
+# Python functions inside formulas
+
+Interpreted symbols with lazy graphs. A spec may define Python functions
+and use them *inside* formulas:
+
+    python:
+        def size(d: str) -> int:
+            return len(d)
+        def risky(cmd: str) -> bool:
+            return cmd in {"rm", "chmod", "dd"}
+    end
+
+    pred write(f: String, d: String)
+    prop q : Forall f . Forall d . write(f,d) -> size(d) < 100
+
+There is **no pre-phase**: unlike the two-phase designs of TP-DejaVu
+(VMCAI 2024) and PyDejaVu (2025), where an operational stage transforms
+events before a declarative monitor ever sees them — hiding part of the
+property in code — here the property stays whole, in the formula.
+
+## The mechanism
+
+To the engine a Python function is an **uninterpreted SMT function
+symbol** (created with `backend.func`, the same machinery as the
+staged-resolution placeholders). As a symbol it composes with everything
+the engine does — negation, quantifiers, temporal operators, storage in
+states, quantifier elimination treats it as opaque — with no fragment
+restriction on where it may appear.
+
+Its **graph is supplied lazily**. During each step's normalization the
+backend rewrite `eval_funs`:
+
+1. propagates `var = literal` equalities into their sibling subterms —
+   within conjunctions, and across the implication shape:
+   `!(d=v & R) | C  ==  !(d=v & R) | C[d:=v]` (valid because the first
+   disjunct is true whenever `d != v`); this is what makes event-guarded
+   applications ground, since a predicate match contributes exactly the
+   equalities `d = "abc"`;
+2. replaces every application whose arguments are all literals by the
+   result of calling the Python function — **memoized** per monitor, so
+   functions must be **pure**.
+
+The folded literal then flows like any other value: into since-states,
+future-operator tables, obligations. `Forall`/`Exists` above a grounded
+application eliminate as usual, since the function symbol is gone before
+the quantifier is processed.
+
+## The boundary, honestly
+
+The solver cannot reason symbolically about arbitrary Python (that would
+require the function's full graph, or a solver-side axiomatization). So
+every verdict-relevant application must become **ground** at some point of
+evaluation — in practice: guard its arguments with an event predicate so
+the trace supplies them. If a verdict still depends on an unground
+application (`Forall d . size(d) > 0` with no guard), the monitor raises a
+clear error instead of guessing.
+
+Declarations: functions must carry full type annotations
+(`str/int/float/bool` ↔ `String/Int/Real/Bool`); a `bool` function may be
+used directly as an atom; others in term position of relations
+(`size(d) < 100`, `double(n + 1) > n`). Imports and helper definitions
+inside the block are fine (only functions *defined* in the block become
+symbols). Function names must not collide with predicates or macros.
+
+## Relation to aggregations (MonPoly)
+
+MonPoly's aggregation operators (SUM/AVG/MAX/CNT) are the *declarative*
+route to computing over data: they stay inside the logic but aggregate
+over the satisfying assignments of a subformula — which a finite relation
+can enumerate and a symbolic formula-state in general cannot. The design
+space is a triangle:
+
+- **pointwise computation** — this feature: pure functions of data
+  values, fully general, composes with the symbolic engine;
+- **aggregation** — declarative operators, feasible exactly where a
+  subformula's assignment set is finitely enumerable; a natural companion
+  of future hybrid relational-state work;
+- **operational summaries** (TP-DejaVu / PyDejaVu pre-phase) — rejected
+  here: hides the property.
+
+Stateful functions (accumulating across calls) are deliberately out:
+call order/count during symbolic evaluation is an implementation detail,
+and memoization assumes purity. For running summaries, use **state
+variables** and **recursive rules** (above) — the declarative route to
+counting and sums; MonPoly-style aggregation over satisfying assignments
+remains tied to the relational-state work.

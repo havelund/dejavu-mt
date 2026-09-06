@@ -85,7 +85,7 @@ increment of the relational-state hybrid under Larger projects.)
 
 - [ ] Eager region-guarded resolution for nested parametric future — low
       priority by design: parameter discovery is offline log analysis;
-      end-of-trace delivery is the norm (`doc/parametric.md`).
+      end-of-trace delivery is the norm (doc/engine.md, Parametric monitoring).
 - [ ] Two symbolic bounds on one operator; multi-occurrence / mixed-
       polarity parameters.
 
