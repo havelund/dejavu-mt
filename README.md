@@ -16,7 +16,6 @@ Contents:
 [command-line reference](#command-line-reference) ·
 [web interface](#web-interface) ·
 [library API](#library-api) ·
-[validation](#validation) ·
 [status](#status) ·
 [documentation](#documentation)
 
@@ -218,15 +217,6 @@ Per property (`m.formulas`, one `FormulaMonitor` each): `witnesses` maps a
 violated position to the falsifying values (`{"f": "b"}`), and for
 parametric specs `region` holds the accumulated constraint on the symbolic
 bounds — verdicts are then backend formulas rather than booleans.
-
-## Validation
-
-DejaVuMT is validated differentially: against the original DejaVu on its
-distributed test suite (275 comparable pairs, 275 identical verdicts),
-against MonPoly on random formulas of the shared fragment (893 compared,
-0 mismatches), and against a brute-force reference evaluator for the
-future fragment. Details — and the DejaVuMT bugs the comparisons caught —
-in [doc/validation.md](doc/validation.md).
 
 ## Status
 
