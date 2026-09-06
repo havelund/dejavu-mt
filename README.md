@@ -170,8 +170,9 @@ debug mode, rendered with colors):
     ./start_web.sh                   # http://localhost:5001  (or: ./start_web.sh 8080)
 
 **Loading.** Each editor pane has a file bar: `open…` browses the repository
-tree (any `.qtl`/`.csv` under it, including the DejaVu distribution in
-`requirements/`). Spec and log are picked independently, so directories with
+tree (`.qtl` specs, `.csv` and `.jsonl` logs — a log pasted or loaded into
+the editor is recognized as JSONL when its first line starts with `{`).
+Spec and log are picked independently, so directories with
 several specs and logs work — with shortcuts for the common cases: clicking
 a folder that holds exactly one spec and one log (and no subfolders) loads
 both at once; picking a spec auto-loads the only log in its folder (and vice

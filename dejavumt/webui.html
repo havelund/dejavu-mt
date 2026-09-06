@@ -133,7 +133,7 @@
     </div>
     <div>
       <div class="filebar">
-        <span class="caption">log (.csv — timed: last column is the timestamp)</span>
+        <span class="caption">log (.csv or .jsonl — timed: timestamp is the last column / the "time" field)</span>
         <input type="text" id="logpath" placeholder="path…" spellcheck="false">
         <button class="mini" onclick="openBrowser('log')">open…</button>
         <button class="mini" onclick="saveFile('log')">save</button>
@@ -158,8 +158,8 @@
     event log, using an SMT solver instead of BDDs.</p>
 
     <h3>Files</h3>
-    <p><b>open…</b> browses the repository tree (<code>.qtl</code> and
-    <code>.csv</code> files only). Shortcuts: clicking a folder that holds
+    <p><b>open…</b> browses the repository tree (<code>.qtl</code> specs,
+    <code>.csv</code> and <code>.jsonl</code> logs). Shortcuts: clicking a folder that holds
     exactly one spec and one log (and no subfolders) loads both; picking a
     spec auto-loads the only log in its folder, and vice versa; the browser
     reopens where you last were.</p>
@@ -209,6 +209,7 @@
 </div>
 <script>
 const $ = id => document.getElementById(id);
+const isLog = f => ['.csv', '.jsonl', '.ndjson', '.json'].some(e => f.endsWith(e));
 
 // --- file browser / open / save -------------------------------------------
 
@@ -242,11 +243,11 @@ async function listDir(path) {
   lastListing = d;
   // A leaf folder that is exactly one spec + one log: load the pair.
   const qtls = d.files.filter(f => f.endsWith('.qtl'));
-  const csvs = d.files.filter(f => f.endsWith('.csv'));
-  if (path && !d.dirs.length && qtls.length === 1 && csvs.length === 1) {
+  const logs = d.files.filter(isLog);
+  if (path && !d.dirs.length && qtls.length === 1 && logs.length === 1) {
     const dir = d.path ? d.path + '/' : '';
     if (await loadInto('spec', dir + qtls[0]) &&
-        await loadInto('log', dir + csvs[0])) {
+        await loadInto('log', dir + logs[0])) {
       closeBrowser();
       for (const t of ['spec', 'log']) {
         $(t + 'flash').textContent = 'loaded';
@@ -278,10 +279,10 @@ async function pickFile(path) {
   if (!await loadInto(browseTarget, path)) return;
   closeBrowser();
   // If the directory has exactly one counterpart file (spec picked and one
-  // .csv there, or log picked and one .qtl), load it into the other pane.
+  // log there, or log picked and one .qtl), load it into the other pane.
   const other = browseTarget === 'spec' ? 'log' : 'spec';
-  const ext = other === 'log' ? '.csv' : '.qtl';
-  const cands = (lastListing?.files || []).filter(f => f.endsWith(ext));
+  const cands = (lastListing?.files || []).filter(
+    other === 'log' ? isLog : (f => f.endsWith('.qtl')));
   if (cands.length === 1) {
     const dir = lastListing.path ? lastListing.path + '/' : '';
     if (await loadInto(other, dir + cands[0])) {

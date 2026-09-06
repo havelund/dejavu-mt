@@ -56,9 +56,19 @@ def ansi_to_html(s: str) -> str:
     return out
 
 
-def parse_log_text(text: str, timed: bool):
-    """The CSV log as (event, ts) pairs (ts None when untimed) — the same
-    format as dejavumt.log.read_events, but from a string."""
+def parse_log_text(text: str, timed: bool, signature=None):
+    """The log as (event, ts) pairs (ts None when untimed) — the same
+    formats as dejavumt.log, but from a string.  A log whose first
+    non-blank line starts with '{' is read as JSONL (fields by name),
+    otherwise as CSV."""
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        from .log import jsonl_events
+        stream = jsonl_events(io.StringIO(text), timed=timed,
+                              signature=signature, where="log")
+        for item in stream:
+            yield item if timed else (item, None)
+        return
     for row in csv.reader(io.StringIO(text)):
         if not row or (len(row) == 1 and row[0].strip() == ""):
             continue
@@ -75,7 +85,7 @@ def parse_log_text(text: str, timed: bool):
 
 def fact_str(event) -> str:
     ((pred, args),) = event.items()
-    return pred + ("(" + ",".join(args[0]) + ")" if args[0] else "")
+    return pred + ("(" + ",".join(map(str, args[0])) + ")" if args[0] else "")
 
 
 # --- endpoints -------------------------------------------------------------
@@ -96,7 +106,7 @@ def _safe(relpath: str) -> Path:
 @app.get("/fs")
 def fs():
     """List a directory (relative to the served root): subdirectories and
-    .qtl/.csv files.  Used by the in-page file browser."""
+    .qtl/.csv/.jsonl files.  Used by the in-page file browser."""
     rel = request.args.get("path", "").strip("/")
     try:
         d = _safe(rel)
@@ -108,7 +118,7 @@ def fs():
                 continue
             if e.is_dir():
                 dirs.append(e.name)
-            elif e.suffix in (".qtl", ".csv"):
+            elif e.suffix in (".qtl", ".csv", ".jsonl", ".ndjson", ".json"):
                 files.append(e.name)
         return jsonify({"path": rel,
                         "parent": None if not rel else str(Path(rel).parent)
@@ -136,8 +146,8 @@ def file_save():
         return jsonify({"error": "no path given"}), 400
     try:
         p = _safe(rel)
-        if p.suffix not in (".qtl", ".csv"):
-            return jsonify({"error": "only .qtl and .csv files"}), 400
+        if p.suffix not in (".qtl", ".csv", ".jsonl", ".ndjson", ".json"):
+            return jsonify({"error": "only .qtl, .csv and .jsonl files"}), 400
         if not p.parent.is_dir():
             return jsonify({"error": f"no such directory: {p.parent.name}/"}), 400
         p.write_text(req.get("content", ""))
@@ -183,8 +193,9 @@ def run():
     truncated = None
     t0 = time.monotonic()
     try:
+        sig = {e.name: [p.name for p in e.params] for e in spec.events}
         for nr, (event, ts) in enumerate(
-                parse_log_text(log_text, monitor.timed), 1):
+                parse_log_text(log_text, monitor.timed, signature=sig), 1):
             if nr > MAX_EVENTS:
                 truncated = f"stopped after {MAX_EVENTS} events"
                 break
