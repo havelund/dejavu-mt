@@ -95,10 +95,13 @@ formats, and the grammar — is the language manual,
 
 ## Command-line reference
 
-    python -m dejavumt <spec.qtl> <log> [trace] [debug] [strong|weak] [z3|cvc5] [gc] [json]
+    python -m dejavumt <spec.qtl> <log> [trace] [debug] [strong|weak] [z3|cvc5] [gc] [json] [timed]
 
 The log is CSV, or JSONL if the extension is `.jsonl`/`.ndjson`/`.json`
-(see the [manual](doc/language.md#what-is-being-monitored)).
+(see the [manual](doc/language.md#what-is-being-monitored)). The `timed`
+flag marks the log's last CSV column as a timestamp even when the spec
+uses no timed operators (automatic when the spec is timed, or when the
+filename contains `.timed.` — DejaVu's convention).
 
 ### trace
 

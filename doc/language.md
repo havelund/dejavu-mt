@@ -54,6 +54,9 @@ file extension:
   Whether the last column is a timestamp is decided by the
   *specification*: it is read as one exactly when the spec uses timed
   operators (unlike DejaVu, which decides from the log's filename).
+  A timed log also works with an untimed spec: pass the `timed` CLI flag,
+  or name the log `*.timed.*` (DejaVu's convention, also honored here),
+  and the timestamp column is consumed without the properties using it.
 - **JSONL** (`.jsonl`/`.ndjson`/`.json`): one JSON object per line, fields
   matched **by name** to the predicate's declared parameters (order
   irrelevant, extra fields ignored, missing declared fields an error);

@@ -59,9 +59,14 @@ GC_PERIOD = 50  # default period for the `gc` flag
 
 def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         strong: bool = False, weak: bool = False, solver: str = "z3",
-        gc: bool = False, json_out: bool = False) -> int:
+        gc: bool = False, json_out: bool = False, timed: bool = False) -> int:
     spec = parse_file(specfile)
     monitor = Monitor(spec, solver=solver)
+    # The log carries timestamps when the spec is timed, when the `timed`
+    # flag says so, or when the filename follows DejaVu's `.timed.`
+    # convention — so a timed log also works with an untimed spec.
+    log_timed = (monitor.timed or timed
+                 or ".timed." in logfile.rsplit("/", 1)[-1])
     if weak:
         for fm in monitor.formulas:
             fm.weak = True
@@ -77,7 +82,7 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
     print("\n\n\n" + banner + "\n")
     print(f"Solver: {monitor.backend.name}"
           + (f"   (GC every {GC_PERIOD} events)" if gc else "")
-          + ("   (timed: last log column is the timestamp)" if monitor.timed
+          + ("   (timed: last log column is the timestamp)" if log_timed
              else "")
           + ("   (future operators: verdicts may be reported late)"
              if monitor.future else ""))
@@ -117,16 +122,16 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
         return "  [" + ", ".join(f"{k}={v}" for k, v in w.items()) + "]"
     if logfile.endswith((".jsonl", ".ndjson", ".json")):
         sig = {e.name: [p.name for p in e.params] for e in spec.events}
-        stream = read_jsonl(logfile, timed=monitor.timed, signature=sig)
+        stream = read_jsonl(logfile, timed=log_timed, signature=sig)
     else:
-        stream = read_events(logfile, timed=monitor.timed)
+        stream = read_events(logfile, timed=log_timed)
     for item in stream:
-        event, ts = item if monitor.timed else (item, None)
+        event, ts = item if log_timed else (item, None)
         line_nr += 1
-        facts[line_nr] = _fact(event) + (f" @ {ts}" if monitor.timed else "")
+        facts[line_nr] = _fact(event) + (f" @ {ts}" if log_timed else "")
         verdicts = monitor.step(event, ts)
         if debug:
-            at = f" @ {ts}" if monitor.timed else ""
+            at = f" @ {ts}" if log_timed else ""
             print(f"\n----- event {line_nr}: {_fact(event)}{at} -----\n")
             for fm in monitor.formulas:
                 # After step(), fm.pre holds the states just computed and
@@ -241,18 +246,18 @@ def run(specfile: str, logfile: str, debug: bool = False, trace: bool = False,
 def main() -> None:
     flags = {"debug", "--debug", "trace", "--trace",
              "strong", "--strong", "weak", "--weak", "z3", "--z3",
-             "cvc5", "--cvc5", "gc", "--gc", "json", "--json"}
+             "cvc5", "--cvc5", "gc", "--gc", "json", "--json", "timed", "--timed"}
     args = [a for a in sys.argv[1:] if a not in flags]
     chosen = {a.lstrip("-") for a in sys.argv[1:] if a in flags}
     if len(args) != 2:
         print("usage: python -m dejavumt <specfile> <logfile> "
-              "[trace] [debug] [strong|weak] [z3|cvc5] [gc] [json]")
+              "[trace] [debug] [strong|weak] [z3|cvc5] [gc] [json] [timed]")
         sys.exit(2)
     solver = "cvc5" if "cvc5" in chosen else "z3"
     sys.exit(run(args[0], args[1], debug="debug" in chosen,
                  trace="trace" in chosen, strong="strong" in chosen,
                  weak="weak" in chosen, solver=solver, gc="gc" in chosen,
-                 json_out="json" in chosen))
+                 json_out="json" in chosen, timed="timed" in chosen))
 
 
 if __name__ == "__main__":
