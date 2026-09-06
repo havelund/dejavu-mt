@@ -169,10 +169,6 @@ debug mode, rendered with colors):
     .venv/bin/pip install flask      # one-time; or: pip install -e ".[web]"
     ./start_web.sh                   # http://localhost:5001  (or: ./start_web.sh 8080)
 
-The script restarts any running instance (log at `/tmp/dejavumt_web.log`);
-`python -m dejavumt.web [port]` runs the server in the foreground instead.
-The `help` button in the page header shows this in short form.
-
 **Loading.** Each editor pane has a file bar: `open…` browses the repository
 tree (any `.qtl`/`.csv` under it, including the DejaVu distribution in
 `requirements/`). Spec and log are picked independently, so directories with
