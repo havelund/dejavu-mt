@@ -272,6 +272,13 @@ variables shared across the steps:
         ({fail(u); fail(u); ok(u); (! sudo(u))[*]; sudo(u)}
             |-> P vetted(u))
 
+— when the first `sudo(u)` after two failed logins and a success arrives,
+`u` must have been vetted. The `(! sudo(u))[*]` block is what allows
+other events between the `ok` and the `sudo` (items match *consecutive*
+positions, so without it the `sudo` would have to come immediately
+next), while its `! sudo(u)` makes the final item the *first* sudo after
+the prefix.
+
 `{e1; e2; ...}` matches when the recent trace slices into consecutive
 blocks, one per item: a plain item is one position where the formula
 holds, `e[*]` any number of positions (each satisfying `e`), `e[+]` at
