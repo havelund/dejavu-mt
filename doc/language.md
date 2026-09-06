@@ -173,15 +173,23 @@ over that distance:
                         and phi at every step until then
 
 `[a,*]` means "at least `a` time units away" (no upper bound), and the
-comparison forms are abbreviations (the same forms apply to all of the
-operators):
+comparison forms are abbreviations — backward for the past operators:
 
-| written | means | reading (past / future) |
+| written | means | reading |
 |---|---|---|
-| `S[<=n]`, `U[<=n]` | `S[0,n]`, `U[0,n]` | at most `n` time units ago / ahead |
-| `S[<n]`, `U[<n]`   | `S[0,n-1]`, `U[0,n-1]` | less than `n` time units ago / ahead |
-| `S[>=n]`, `U[>=n]` | `S[n,*]`, `U[n,*]` | at least `n` time units ago / ahead |
-| `S[>n]`, `U[>n]`   | `S[n+1,*]`, `U[n+1,*]` | more than `n` time units ago / ahead |
+| `S[<=n]` | `S[0,n]` | at most `n` time units ago |
+| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago |
+| `S[>=n]` | `S[n,*]` | at least `n` time units ago |
+| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
+
+forward for the future operators:
+
+| written | means | reading |
+|---|---|---|
+| `U[<=n]` | `U[0,n]` | at most `n` time units ahead |
+| `U[<n]`  | `U[0,n-1]` | less than `n` time units ahead |
+| `U[>=n]` | `U[n,*]` | at least `n` time units ahead |
+| `U[>n]`  | `U[n+1,*]` | more than `n` time units ahead |
 
 The unary operators are derived from the binary ones as always:
 
