@@ -348,7 +348,7 @@ so with arithmetic, rules can count and sum:
                       | (Exists m . (@ count(m)) & n = m + 1)
 
 A rule's extension at each position is forgotten at the next (like an
-event) unless a past operator remembers it. See [engine.md](engine.md#recursive-rules-and-state-variables).
+event) unless a past operator remembers it.
 
 **Python actions** turn monitors into data producers: `do {expr}` on a
 rule fires when its extension is non-empty and changed (parameters bound
@@ -381,7 +381,7 @@ implication) requires `phi` whenever a match ends, with the sequence's
 variables bound by the match. Sequences desugar to auto-generated
 `@`-guarded rules (a small automaton), so they work under quantifiers and
 past operators; items are past-time, and sequences may not appear inside
-rule bodies. See [engine.md](engine.md#recursive-rules-and-state-variables).
+rule bodies.
 
 ## State variables
 
@@ -449,10 +449,7 @@ verdicts may wait until end of trace (they come earlier when a witness or a
 broken run already decides them for every `n`). Several *distinct* parameters
 are fine, and each verdict/region is then a constraint over all of them. In
 the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
-booleans) and each `FormulaMonitor` exposes `region`. See
-[engine.md](engine.md#parametric-monitoring) for how verdicts are decided (immediately for
-past operators; by bracket agreement for future ones) and the memory
-trade-offs.
+booleans) and each `FormulaMonitor` exposes `region`.
 
 ## Grammar
 
