@@ -418,10 +418,20 @@ the previous values of all state variables in scope, and may call
 functions from the `python:` block.
 
 Updates run *before* the properties see the event. A `Bool` state is
-usable directly as an atom (`fire -> armed`); a state under temporal
-operators behaves as its value at each position (`P (total = 4)` — the
-total was 4 at some point). Non-scalar bookkeeping (dicts, sets) lives in
-Python helpers, with scalar projections exposed as states.
+usable directly as an atom:
+
+    pred arm()
+    pred fire()
+
+    state armed: Bool := {False}
+        on arm(): {True}
+
+    prop safe : fire -> armed
+
+A state under temporal operators behaves as its value at each position
+(`P (total = 4)` — the total was 4 at some point). Non-scalar bookkeeping
+(dicts, sets) lives in Python helpers, with scalar projections exposed as
+states.
 
 ## Python actions
 
