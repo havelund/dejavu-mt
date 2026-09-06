@@ -39,6 +39,8 @@ Currently supported (slice 1 -- untimed fragment):
                    wraparound + - *, unsigned comparisons, 0x literals
     state:         state x: Sort := {init} on p(a,b): {expr} -- a ground
                    Python value updated per event, read as a term
+    sequences:     {e1; e2[*]; e3} |-> phi -- PSL-style suffix
+                   implication; sequences desugar to generated rules
 
 DejaVu's seen-only lowercase exists/forall are deliberately not supported
 (occurrence-guarded equivalence -- see README Status).
@@ -114,7 +116,18 @@ _GRAMMAR = r"""
 
     ?ltl_implq: ltl_or "->" ltl_implq   -> implies
               | ltl_or "<->" ltl_implq  -> iff
+              | seqexpr "|->" ltl_implq -> trigger
               | ltl_orq
+
+    // PSL-style sequence patterns: {e1; e2[*]; e3}, nestable; usable as a
+    // formula ("a match ends here") or as the left side of |->.
+    seqexpr: "{" seqitem (";" seqitem)* "}"
+    ?seqitem: seqbody                        -> seq_one
+            | seqbody "[" "*" "]"            -> seq_star
+            | seqbody "[" "+" "]"            -> seq_plus
+            | seqbody "[" "*" INT "]"        -> seq_count
+    ?seqbody: ltl_or
+            | seqexpr
     ?ltl_orq: ltl_or "|" ltl_andq       -> or_
             | ltl_andq
     ?ltl_or: ltl_or "|" ltl_and         -> or_
@@ -179,6 +192,7 @@ _GRAMMAR = r"""
          | _F leaf                         -> eventually
          | _G leaf                         -> always
          | "[" ltl "," ltl ")"            -> interval
+         | seqexpr
          | "(" ltl ")"                     -> parens
 
     // Time bounds on S/Z/P/H: an interval [a,b] or [a,*], or comparison sugar.
@@ -398,6 +412,25 @@ class _ToAst(Transformer):
 
     def interval(self, a, b):
         return ast.Interval(a, b)
+
+    # --- sequence patterns ---
+    def seqexpr(self, *items):
+        return ast.Seq(tuple(items))
+
+    def seq_one(self, node):
+        return (node, None, 0)
+
+    def seq_star(self, node):
+        return (node, "*", 0)
+
+    def seq_plus(self, node):
+        return (node, "+", 0)
+
+    def seq_count(self, node, n):
+        return (node, "n", int(n))
+
+    def trigger(self, seq, rhs):
+        return ast.Trigger(seq, rhs)
 
     def exists(self, var, sort, f=None):
         if f is None:

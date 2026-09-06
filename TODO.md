@@ -54,10 +54,19 @@ increment of the relational-state hybrid under Larger projects.)
 
 ## To investigate
 
-- [ ] **SALT / PSL**: look at these specification languages for
-      inspiration — higher-level temporal idioms (scopes like
-      before/after/between, regular-expression layers, syntactic sugar
-      over LTL) that could inform surface syntax additions.
+- [x] **SALT / PSL** (2026-09-05): investigated; outcome:
+      * **Sequences implemented** — PSL-style SEREs with shared data
+        variables, `{e1; e2[*]; e3} |-> phi`, desugared to generated
+        @-guarded rules (rules are automata, so regular repetition
+        beyond LTL's star-free limit comes free).
+      * Scopes (upto/from/between): decided against — each is a
+        one-operator guard we already have ([a,b) for between, P/!P for
+        after/before, until-with-blocker for future confinement).
+      * Aborts (accepton/rejecton/PSL abort): decided against for now —
+        the effect is one disjunct (F[<=5] (ack | reset)) or one
+        until-blocker per obligation; revisit if a reset-heavy case
+        study appears.
+      * Counted operators (occurring >= n times): rules count already.
 
 ## Small / when touched anyway
 

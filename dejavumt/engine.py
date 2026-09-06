@@ -81,6 +81,11 @@ def _subst(f: ast.LTL, m: Dict[str, ast.Term]) -> ast.LTL:
                 segs.append(seg)
         return ast.Match(_subst_term(f.subject, m), tuple(segs), f.pattern,
                          f.regex)
+    if isinstance(f, ast.Seq):
+        return ast.Seq(tuple(
+            (_subst(node, m), op, n) for node, op, n in f.items))
+    if isinstance(f, ast.Trigger):
+        return ast.Trigger(_subst(f.seq, m), _subst(f.rhs, m))
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(_subst(f.arg, m))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist,
@@ -111,6 +116,12 @@ def expand_macros(f: ast.LTL, macros: Dict[str, ast.Macro]) -> ast.LTL:
         return expand_macros(_subst(mac.body, mapping), macros)
     if isinstance(f, (ast.TrueC, ast.FalseC, ast.Pred, ast.Compare, ast.Match)):
         return f
+    if isinstance(f, ast.Seq):
+        return ast.Seq(tuple((expand_macros(node, macros), op, n)
+                             for node, op, n in f.items))
+    if isinstance(f, ast.Trigger):
+        return ast.Trigger(expand_macros(f.seq, macros),
+                           expand_macros(f.rhs, macros))
     if isinstance(f, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
         return type(f)(expand_macros(f.arg, macros))
     if isinstance(f, (ast.TimedOnce, ast.TimedHist,
@@ -221,6 +232,12 @@ def _walk_formula(f, enter):
         _walk_formula(f.right, enter)
     elif isinstance(f, (ast.Exists, ast.Forall)):
         _walk_formula(f.arg, enter)
+    elif isinstance(f, ast.Seq):
+        for node, _, _ in f.items:
+            _walk_formula(node, enter)
+    elif isinstance(f, ast.Trigger):
+        _walk_formula(f.seq, enter)
+        _walk_formula(f.rhs, enter)
 
 
 def _check_rules(main: ast.LTL, rules: Dict[str, ast.Rule]):
@@ -281,6 +298,134 @@ def _rule_calls(f, rules):
 
     _walk_formula(f, enter)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Sequence patterns (PSL-style SEREs), desugared to rules
+# ---------------------------------------------------------------------------
+
+_SEQ_PREFIX = "_sq"
+
+
+def _seq_regex(seq: ast.Seq):
+    """Normalize a Seq item tree to a regex AST:
+    ("atom", formula) | ("cat", [r..]) | ("star", r) | ("eps",)."""
+    parts = []
+    for node, op, n in seq.items:
+        r = (_seq_regex(node) if isinstance(node, ast.Seq)
+             else ("atom", node))
+        if op == "*":
+            r = ("star", r)
+        elif op == "+":
+            r = ("cat", [r, ("star", r)])
+        elif op == "n":
+            r = ("eps",) if n <= 0 else ("cat", [r] * n)
+        parts.append(r)
+    return parts[0] if len(parts) == 1 else ("cat", parts)
+
+
+def _glushkov(r, atoms):
+    """Glushkov construction: linearize the regex's atoms into `atoms`
+    (appending their formulas) and return (nullable, first, last, follow)
+    over atom indices."""
+    if r[0] == "eps":
+        return True, set(), set(), {}
+    if r[0] == "atom":
+        k = len(atoms)
+        atoms.append(r[1])
+        return False, {k}, {k}, {}
+    if r[0] == "star":
+        nul, fst, lst, fol = _glushkov(r[1], atoms)
+        for a in lst:
+            fol.setdefault(a, set()).update(fst)
+        return True, fst, lst, fol
+    # cat
+    nul, fst, lst, fol = True, set(), set(), {}
+    for part in r[1]:
+        n2, f2, l2, fo2 = _glushkov(part, atoms)
+        for a, s in fo2.items():
+            fol.setdefault(a, set()).update(s)
+        for a in lst:
+            fol.setdefault(a, set()).update(f2)
+        if nul:
+            fst |= f2
+        lst = l2 | (lst if n2 else set())
+        nul = nul and n2
+    return nul, fst, lst, fol
+
+
+def _compile_seq(seq: ast.Seq, counter: list):
+    """Compile a sequence into (match-formula, generated rules): one
+    @-guarded rule per Glushkov atom, over the sequence's shared free
+    variables; the match formula is the disjunction of the last atoms'
+    calls (plus true when the sequence matches emptily).  Search
+    semantics: a match may start at any position (first atoms need no
+    history)."""
+    xs = sorted(free_vars(seq))
+    args = tuple(ast.Var(x) for x in xs)
+    atoms: list = []
+    nullable, first, last, follow = _glushkov(_seq_regex(seq), atoms)
+    idx = counter[0]
+    counter[0] += 1
+    name = lambda k: f"{_SEQ_PREFIX}{idx}_{k}"
+    rules = []
+    for k, phi in enumerate(atoms):
+        cond = []
+        if k in first:
+            cond.append(ast.TrueC())
+        cond += [ast.Prev(ast.Pred(name(j), args))
+                 for j in sorted(follow) if k in follow[j]]
+        disj = cond[0] if cond else ast.FalseC()
+        for c in cond[1:]:
+            disj = ast.Or(disj, c)
+        rules.append(ast.Rule(name(k), tuple(xs), ast.And(phi, disj)))
+    match = ast.TrueC() if nullable else ast.FalseC()
+    calls = [ast.Pred(name(k), args) for k in sorted(last)]
+    if calls:
+        match = calls[0] if not nullable else ast.Or(match, calls[0])
+        for c in calls[1:]:
+            match = ast.Or(match, c)
+    return match, rules
+
+
+def expand_seqs(f: ast.LTL, counter: list, out_rules: list) -> ast.LTL:
+    """Replace every Seq/Trigger in a formula by its rule-based
+    desugaring, appending the generated rules."""
+    def go(g):
+        if isinstance(g, ast.Seq):
+            m, rs = _compile_seq(g, counter)
+            out_rules.extend(rs)
+            return m
+        if isinstance(g, ast.Trigger):
+            m, rs = _compile_seq(g.seq, counter)
+            out_rules.extend(rs)
+            return ast.Implies(m, go(g.rhs))
+        if isinstance(g, (ast.Not, ast.Prev, ast.Once, ast.Hist, ast.Next)):
+            return type(g)(go(g.arg))
+        if isinstance(g, (ast.TimedOnce, ast.TimedHist,
+                          ast.TimedEventually, ast.TimedAlways)):
+            return type(g)(g.low, g.high, go(g.arg), g.disp)
+        if isinstance(g, (ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
+            return type(g)(go(g.left), g.low, g.high, go(g.right), g.disp)
+        if isinstance(g, (ast.And, ast.Or, ast.Implies, ast.Iff, ast.Since,
+                          ast.Zince, ast.Interval)):
+            return type(g)(go(g.left), go(g.right))
+        if isinstance(g, (ast.Exists, ast.Forall)):
+            return type(g)(g.var, go(g.arg), g.sort)
+        return g
+
+    return go(f)
+
+
+def _contains_seq(f) -> bool:
+    found = []
+
+    def enter(g):
+        if isinstance(g, (ast.Seq, ast.Trigger)):
+            found.append(g)
+
+    _walk_formula(f, enter)
+    return bool(found)
 
 
 def infer_var_sorts(f: ast.LTL, pred_sorts: Dict[str, List[str]],
@@ -450,6 +595,12 @@ def collect_vars(f: ast.LTL) -> set:
         elif isinstance(g, (ast.Exists, ast.Forall)):
             out.add(g.var)
             walk(g.arg)
+        elif isinstance(g, ast.Seq):
+            for node, _, _ in g.items:
+                walk(node)
+        elif isinstance(g, ast.Trigger):
+            walk(g.seq)
+            walk(g.rhs)
 
     walk(f)
     return out
@@ -469,6 +620,13 @@ def free_vars(f: ast.LTL) -> set:
                       ast.Zince, ast.Interval,
                       ast.TimedSince, ast.TimedZince, ast.TimedUntil)):
         return free_vars(f.left) | free_vars(f.right)
+    if isinstance(f, ast.Seq):
+        out = set()
+        for node, _, _ in f.items:
+            out |= free_vars(node)
+        return out
+    if isinstance(f, ast.Trigger):
+        return free_vars(f.seq) | free_vars(f.rhs)
     if isinstance(f, (ast.Pred, ast.Compare, ast.Match)):
         return collect_vars(f)
     return set()
@@ -652,7 +810,14 @@ class FormulaMonitor:
                 raise ValueError(
                     f"rule '{r.name}': duplicate parameters")
             fv = free_vars(r.body) - set(self.state_sorts)
-            if fv != set(r.params):
+            if r.name.startswith(_SEQ_PREFIX):
+                # Sequence-derived rules share the whole sequence's
+                # variables; an individual atom may mention fewer.
+                if not fv <= set(r.params):
+                    raise ValueError(
+                        f"rule '{r.name}': unbound variables "
+                        f"{sorted(fv - set(r.params))}")
+            elif fv != set(r.params):
                 raise ValueError(
                     f"rule '{r.name}': free variables {sorted(fv)} must "
                     f"be exactly the parameters {list(r.params)}")
@@ -2162,11 +2327,21 @@ class Monitor:
                             compile(expr, f"<state-{sv.name}>", "eval"))
                            for pname, params, expr in sv.clauses]))
         self.formulas: List[FormulaMonitor] = []
+        self._seq_counter = [0]   # unique names for sequence-derived rules
         for prop in spec.properties:
             body = expand_macros(prop.body, macros)
             rules = tuple(ast.Rule(r.name, r.params,
                                    expand_macros(r.body, macros), r.action)
                           for r in prop.rules)
+            for r in rules:
+                if _contains_seq(r.body):
+                    raise ValueError(
+                        f"rule '{r.name}': sequence patterns are not "
+                        f"supported inside rule bodies")
+            if _contains_seq(body):
+                seq_rules: list = []
+                body = expand_seqs(body, self._seq_counter, seq_rules)
+                rules = rules + tuple(seq_rules)
             self.formulas.append(
                 FormulaMonitor(prop, body, pred_sorts, self.backend,
                                self.pyfuns, rules=rules,

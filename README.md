@@ -267,6 +267,7 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
 
     formula     ::= "Exists" name [":" sort] "." formula   // quantifiers bind loosest
                   | "Forall" name [":" sort] "." formula
+                  | seq "|->" formula                      // suffix implication
                   | formula "->" formula | formula "<->" formula
                   | formula "|"  formula
                   | formula "&"  formula
@@ -289,6 +290,9 @@ is the main gain over DejaVu's untyped, equality-only BDD encoding.
     relop       ::= "=" | "<" | "<=" | ">" | ">=" | "contains"
 
     match       ::= term ("matches" | "has") (string | regex)  // {var} holes, {_} anonymous
+
+    seq         ::= "{" seqitem (";" seqitem)* "}"     // also usable as a formula
+    seqitem     ::= (formula | seq) [ "[*]" | "[+]" | "[*" int "]" ]
 
     timebound   ::= "[" bound "," (bound | "*") "]"     // between a and b time units
                   | "[" ("<=" | "<") int "]" | "[" ("<=") name "]"   // sugar
@@ -555,6 +559,28 @@ block's namespace:
 
     prop q : Forall f . Forall d . write(f,d) -> P open(f)
         on violation {incidents.append((pos, f))}
+
+### Sequence patterns
+
+PSL-style **sequences** (inspired by IEEE 1850's SEREs), with data
+variables shared across the steps:
+
+    prop b : Forall u .
+        ({fail(u); fail(u); ok(u); (! sudo(u))[*]; sudo(u)}
+            |-> P vetted(u))
+
+`{e1; e2; ...}` matches when the recent trace slices into consecutive
+blocks, one per item: a plain item is one position where the formula
+holds, `e[*]` any number of positions (each satisfying `e`), `e[+]` at
+least one, `e[*n]` exactly `n`; items may themselves be sequences
+(`{a; {b; b}[*]; c}` — c after an *even* number of b's, beyond plain
+LTL). A match may start anywhere and ends at the current position. As a
+formula, `{..}` means "a match ends here"; `seq |-> phi` (suffix
+implication) requires `phi` whenever a match ends, with the sequence's
+variables bound by the match. Sequences desugar to auto-generated
+`@`-guarded rules (a small automaton), so they work under quantifiers and
+past operators; items are past-time, and sequences may not appear inside
+rule bodies. See `doc/rules.md`.
 
 ### State variables
 

@@ -366,6 +366,38 @@ class TimedAlways(LTL):
 
 
 @dataclass(frozen=True)
+class Seq(LTL):
+    """A PSL-style sequence pattern  {e_1; ...; e_k}  matching (ending at
+    the current position) when the recent trace slices into consecutive
+    blocks, block m matching item m.  Items are (node, op, n) with node a
+    past-time formula or a nested Seq, and op None (one position), "*"
+    (zero or more), "+" (one or more), or "n" (exactly n).  Free data
+    variables are shared across items.  As a formula: "some match ends
+    here" (search semantics: a match may start anywhere).  Desugared to
+    auto-generated @-guarded rules before monitoring."""
+    items: tuple   # tuple[(LTL-or-Seq, op, n), ...]
+
+    def __str__(self) -> str:
+        def it(node, op, n):
+            s = str(node) if isinstance(node, Seq) else _b(node)
+            return s + {None: "", "*": "[*]", "+": "[+]",
+                        "n": f"[*{n}]"}[op]
+        return "{" + "; ".join(it(*i) for i in self.items) + "}"
+
+
+@dataclass(frozen=True)
+class Trigger(LTL):
+    """seq |-> phi  -- suffix implication: whenever a match of the
+    sequence ends at the current position (with the shared variables
+    bound by the match), phi holds."""
+    seq: Seq
+    rhs: LTL
+
+    def __str__(self) -> str:
+        return f"({self.seq} |-> {_b(self.rhs)})"
+
+
+@dataclass(frozen=True)
 class Interval(LTL):
     """[phi, psi)  -- phi has occurred (incl. now) and psi has not occurred since."""
     left: LTL

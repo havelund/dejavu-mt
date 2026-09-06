@@ -45,6 +45,31 @@ The extension of `count` is a moving singleton — the engine's state for it
 is literally the formula `n = 7`. A running sum in constant space; DejaVu's
 equality-only rules cannot do this.
 
+## Sequence patterns compile to rules
+
+PSL-style sequences (`{fail(u); fail(u); ok(u)} |-> alarm(u)`) are pure
+sugar over rules.  The item list is a regular expression whose atoms are
+past-time formulas; a Glushkov construction linearizes it, and each atom
+becomes one generated `@`-guarded rule over the sequence's shared
+variables:
+
+    _sq0_k(x̄) := atom_k & ( true                -- if k can start a match
+                          | @ _sq0_j(x̄) | ... ) -- for each predecessor j
+
+"A match ends here" is the disjunction of the last atoms' calls (plus
+`true` if the sequence matches emptily); `seq |-> phi` is that disjunction
+implying phi.  Because rules are automata, repetition is full regular
+repetition — `{a; {b; b}[*]; c}` (an even number of b's) exceeds plain
+LTL's star-free limit and costs nothing here.  Matching uses search
+semantics (a match may start at any position) and ends at the current
+position, so sequences are past-anchored: they work under quantifiers and
+past operators, items must be past-time, and sequences may not appear
+inside rule bodies (the generated current-position calls would violate
+the `@`-guardedness discipline).  A generated rule carries ALL the
+sequence's variables even where its atom mentions fewer — its extension
+is then unconstrained in those variables, which the formula
+representation handles directly.
+
 ## Python actions: producing data during monitoring
 
 Monitors can *produce* data, not only verdicts (PyContract-inspired).
