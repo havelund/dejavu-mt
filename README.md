@@ -259,6 +259,7 @@ large live set.
 
 - [doc/language.md](doc/language.md) — the language manual: every
   construct, with the grammar at the end.
+- [doc/engine.md](doc/engine.md) — how the engine works.
 - [doc/timed.md](doc/timed.md) — how the timed operators are encoded.
 - [doc/future.md](doc/future.md) — future operators and delayed verdicts.
 - [doc/parametric.md](doc/parametric.md) — parametric monitoring: how
@@ -268,11 +269,3 @@ large live set.
 - [doc/pyfun.md](doc/pyfun.md) — Python functions in formulas.
 - [doc/validation.md](doc/validation.md) — the comparisons with DejaVu,
   MonPoly, and the reference evaluator.
-
-How the engine works, in one paragraph: each subformula node holds an SMT
-formula over its free variables in two copies — `pre` (previous position)
-and `now`. On every event the `now` formulas are recomputed bottom-up
-following the temporal-logic semantics, and the closed top formula is
-checked for satisfiability to yield the verdict. Quantifiers translate
-directly to SMT quantifiers over each variable's declared sort. The `debug`
-flag shows all of this live.
