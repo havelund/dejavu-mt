@@ -16,8 +16,8 @@ Contents:
 [anchored properties](#anchored-properties) ·
 [sequences](#sequence-patterns) ·
 [string matching](#string-matching) ·
-[Python functions](#python-functions-in-specs) ·
 [rules](#recursive-rules) ·
+[Python functions](#python-functions-in-specs) ·
 [state variables](#state-variables) ·
 [Python actions](#python-actions) ·
 [parametric monitoring](#parametric-monitoring) ·
@@ -327,37 +327,6 @@ not a regex engine's leftmost-greedy single choice. The simpler shorthands
 also cost less: they compile to plain equations and native substring
 atoms rather than full regex constraints.
 
-## Python functions in specs
-
-A spec may define pure Python functions and call them **inside formulas**
-— no preprocessing phase, the property stays whole:
-
-    python:
-        def size(d: str) -> int:
-            return len(d)
-        def risky(cmd: str) -> bool:
-            return cmd in {"rm", "chmod", "dd"}
-    end
-
-    pred write(f: String, d: String)
-    pred run(cmd: String)
-
-    prop q : Forall f . Forall d . write(f,d) -> size(d) < 100
-    prop r : Forall cmd . run(cmd) -> ! risky(cmd)
-
-Functions must carry full Python type annotations on arguments and
-result, which map to the spec's sorts: `str` is `String`, `int` is `Int`,
-`float` is `Real`, `bool` is `Bool`. A `bool` function can be used
-directly as an atom, others inside relations (`size(d) < 100`, also with
-arithmetic arguments). Imports and helpers inside the block are fine. Functions must
-be **pure** — results are cached.
-
-A function is evaluated once its arguments have concrete values, which
-the trace supplies: guard the application with an event predicate that
-binds them, as in the examples above. An application whose arguments
-never get values from the trace (`Forall d . size(d) > 0` with no event
-guard) cannot be decided and raises an error.
-
 ## Recursive rules
 
 A property may define **rules** — recursively defined predicates,
@@ -397,6 +366,37 @@ the count is carried forward, incremented when an `error` occurs.)
 
 A rule's extension at each position is forgotten at the next (like an
 event) unless a past operator remembers it.
+
+## Python functions in specs
+
+A spec may define pure Python functions and call them **inside formulas**
+— no preprocessing phase, the property stays whole:
+
+    python:
+        def size(d: str) -> int:
+            return len(d)
+        def risky(cmd: str) -> bool:
+            return cmd in {"rm", "chmod", "dd"}
+    end
+
+    pred write(f: String, d: String)
+    pred run(cmd: String)
+
+    prop q : Forall f . Forall d . write(f,d) -> size(d) < 100
+    prop r : Forall cmd . run(cmd) -> ! risky(cmd)
+
+Functions must carry full Python type annotations on arguments and
+result, which map to the spec's sorts: `str` is `String`, `int` is `Int`,
+`float` is `Real`, `bool` is `Bool`. A `bool` function can be used
+directly as an atom, others inside relations (`size(d) < 100`, also with
+arithmetic arguments). Imports and helpers inside the block are fine. Functions must
+be **pure** — results are cached.
+
+A function is evaluated once its arguments have concrete values, which
+the trace supplies: guard the application with an event predicate that
+binds them, as in the examples above. An application whose arguments
+never get values from the trace (`Forall d . size(d) > 0` with no event
+guard) cannot be decided and raises an error.
 
 ## State variables
 
