@@ -14,10 +14,10 @@ Contents:
 [timed operators](#timed-metric-operators) ·
 [future operators](#future-operators-and-delayed-verdicts) ·
 [anchored properties](#anchored-properties) ·
+[sequences](#sequence-patterns) ·
 [string matching](#string-matching) ·
 [Python functions](#python-functions-in-specs) ·
 [rules](#recursive-rules) ·
-[sequences](#sequence-patterns) ·
 [state variables](#state-variables) ·
 [Python actions](#python-actions) ·
 [parametric monitoring](#parametric-monitoring) ·
@@ -263,6 +263,28 @@ whole trace:
 
     prop a anchored : F init
 
+## Sequence patterns
+
+PSL-style **sequences** (inspired by IEEE 1850's SEREs), with data
+variables shared across the steps:
+
+    prop b : Forall u .
+        ({fail(u); fail(u); ok(u); (! sudo(u))[*]; sudo(u)}
+            |-> P vetted(u))
+
+`{e1; e2; ...}` matches when the recent trace slices into consecutive
+blocks, one per item: a plain item is one position where the formula
+holds, `e[*]` any number of positions (each satisfying `e`), `e[+]` at
+least one, `e[*n]` exactly `n`; items may themselves be sequences
+(`{a; {b; b}[*]; c}` — c after an *even* number of b's, beyond plain
+LTL). A match may start anywhere and ends at the current position. As a
+formula, `{..}` means "a match ends here"; `seq |-> phi` (suffix
+implication) requires `phi` whenever a match ends, with the sequence's
+variables bound by the match. Sequences desugar to auto-generated
+`@`-guarded rules (a small automaton — see [rules](#recursive-rules)
+below), so they work under quantifiers and past operators; items are
+past-time, and sequences may not appear inside rule bodies.
+
 ## String matching
 
 A `String` term can be matched against a **pattern**: a regular expression
@@ -368,28 +390,6 @@ the count is carried forward, incremented when an `error` occurs.)
 
 A rule's extension at each position is forgotten at the next (like an
 event) unless a past operator remembers it.
-
-## Sequence patterns
-
-PSL-style **sequences** (inspired by IEEE 1850's SEREs), with data
-variables shared across the steps:
-
-    prop b : Forall u .
-        ({fail(u); fail(u); ok(u); (! sudo(u))[*]; sudo(u)}
-            |-> P vetted(u))
-
-`{e1; e2; ...}` matches when the recent trace slices into consecutive
-blocks, one per item: a plain item is one position where the formula
-holds, `e[*]` any number of positions (each satisfying `e`), `e[+]` at
-least one, `e[*n]` exactly `n`; items may themselves be sequences
-(`{a; {b; b}[*]; c}` — c after an *even* number of b's, beyond plain
-LTL). A match may start anywhere and ends at the current position. As a
-formula, `{..}` means "a match ends here"; `seq |-> phi` (suffix
-implication) requires `phi` whenever a match ends, with the sequence's
-variables bound by the match. Sequences desugar to auto-generated
-`@`-guarded rules (a small automaton), so they work under quantifiers and
-past operators; items are past-time, and sequences may not appear inside
-rule bodies.
 
 ## State variables
 
