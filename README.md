@@ -20,6 +20,7 @@ Contents:
 [command-line reference](#command-line-reference) ·
 [web interface](#web-interface) ·
 [library API](#library-api) ·
+[performance](#performance) ·
 [documentation](#documentation)
 
 ## Quick start
@@ -223,6 +224,22 @@ Per property (`m.formulas`, one `FormulaMonitor` each): `witnesses` maps a
 violated position to the falsifying values (`{"f": "b"}`), and for
 parametric specs `region` holds the accumulated constraint on the symbolic
 bounds — verdicts are then backend formulas rather than booleans.
+
+## Performance
+
+A speed-limit warning: the focus of this project so far has been the
+*expressiveness* of a first-order temporal logic, not efficiency. Every
+operator step runs through an SMT solver rather than a compiled data
+structure, and it shows: on our benchmarks MonPoly and the BDD-based
+DejaVu process an event in a few microseconds, DejaVuMT in tens of
+microseconds to milliseconds depending on the property — roughly a
+hundred to some thousands of events per second, two to four orders of
+magnitude slower. The per-event cost is essentially constant over the
+trace, so long logs are a matter of patience, not blowup — with one
+exception: properties tracking many distinct data values live at once
+grow the monitor's state (`gc` reclaims dead values, not live ones).
+Offline analysis of moderate logs — the tool's natural mode — is
+comfortable; high-throughput online monitoring is not the current target.
 
 ## Documentation
 
