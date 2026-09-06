@@ -1,16 +1,20 @@
 # DejaVuMT
 
-Runtime verification for first-order past-time LTL (DejaVu's QTL), using an SMT
-solver (Z3) instead of BDDs.
+Runtime verification for first-order temporal logic — DejaVu's QTL extended
+with future and timed operators, parametric (symbolic) time bounds, recursive
+rules, sequence patterns, state variables, and Python functions in formulas —
+using an SMT solver (Z3 or CVC5) instead of BDDs.
 
-Each subformula node holds a Z3 **formula** over its free variables, in two
+Each subformula node holds an SMT **formula** over its free variables, in two
 copies — `pre` (previous position) and `now` (current position). On every event
-the `now` formulas are recomputed bottom-up following the Boolean-formula
-semantics of past-time LTL, and the closed top formula is checked for
-satisfiability to yield the verdict. Quantifiers translate directly to Z3
-quantifiers over each variable's declared sort, which is what lets the logic
-reason about data theories (arithmetic, strings, orders) beyond DejaVu's
-equality-only BDD encoding.
+the `now` formulas are recomputed bottom-up following the temporal-logic
+semantics, and the closed top formula is checked for satisfiability to yield
+the verdict (future operators emit their verdicts with a delay, once known).
+Quantifiers translate directly to SMT quantifiers over each variable's declared
+sort, which is what lets the logic reason about data theories (arithmetic,
+strings, enums, bit-vectors, orders) beyond DejaVu's equality-only BDD
+encoding — and lets a verdict be a *constraint* over symbolic bounds rather
+than just true/false.
 
 ## Install
 
