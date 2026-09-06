@@ -191,6 +191,11 @@ repository root, and caps runs at 5000 events / 60 s.
 
 ## Library API
 
+For embedding the monitor in a Python program instead of running the CLI —
+events can then come from anywhere (a socket, a running system, a test
+harness), not just a log file. The CLI and the web UI are both thin loops
+over this API.
+
     from dejavumt import parse_spec, Monitor
 
     m = Monitor(parse_spec(spec_text))          # or solver="cvc5"
@@ -199,9 +204,20 @@ repository root, and caps runs at 5000 events / 60 s.
         m.resolved      # every (position, property, holds) decided by this step
     m.end()             # closes the future windows; returns the final resolutions
 
-Witnesses of violations are in each `FormulaMonitor`'s `witnesses`
-(position → `{var: value}`); parametric properties expose `region`, and
-their verdicts are backend formulas instead of booleans.
+`step(ev)` feeds one event — a dict from predicate name to a list of
+argument tuples (several facts, of several predicates, allowed) — and
+returns this position's verdict; with future operators the verdict may not
+be known yet, hence possibly `None`. `resolved` is the delayed-verdict
+channel: after each step it holds every `(position, property, holds)` that
+step decided, including *earlier* positions whose deadline just passed.
+`end()` must be called after the last event: it closes the open future
+windows (an unwitnessed `F` becomes false, an unrefuted `G` true) and
+returns those final resolutions.
+
+Per property (`m.formulas`, one `FormulaMonitor` each): `witnesses` maps a
+violated position to the falsifying values (`{"f": "b"}`), and for
+parametric specs `region` holds the accumulated constraint on the symbolic
+bounds — verdicts are then backend formulas rather than booleans.
 
 ## Validation
 
