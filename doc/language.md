@@ -74,8 +74,6 @@ annotation is omitted; the supported sorts are `String`, `Int`, `Real`,
     prop safe    : Forall m . fire(m) -> m = ACTIVE
     prop covered : eof -> Forall m . P set(m)   -- every mode exercised
 
-Constructor names are literals in formulas, and log values are validated
-against them (a misspelled `ACTVE` in the log is rejected at read time).
 Quantifiers over an enum range over exactly its constructors — which makes
 **coverage properties** like `covered` expressible (over an infinite sort
 they are trivially false).
