@@ -267,13 +267,15 @@ whole trace:
 Two relations over `String` terms:
 
     d contains "AUTOMATIC"          -- substring test
-    m matches "user {u}"            -- pattern with holes
+    m matches "user {u}"            -- pattern with a hole
 
 `matches` tests a term against a pattern of literal text and **holes**
-`{var}`; a hole names a data variable and captures a substring, optionally
-constrained by a regular expression: `{n:[0-9]+}`. `{_}` is an anonymous
-hole (matches, binds nothing) (subset: literals, `.`,
-classes, `* + ?`, `|`, grouping). A capture is a *constraint*, not an
+`{var}`: a hole names a data variable and captures a substring, so the
+pattern above matches `"user bob"` with `u = "bob"`. A hole may be
+constrained by a regular expression — `"user {n:[0-9]+}"` captures only
+digit ids (regex subset: literals, `.`, classes, `* + ?`, `|`, grouping) —
+and `{_}` is an anonymous hole (matches, binds nothing). A capture is a
+*constraint*, not an
 extraction — the pattern means `m = "user " ++ u` — so the hole variable is
 an ordinary quantified variable and flows anywhere data flows, e.g.
 
