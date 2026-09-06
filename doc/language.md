@@ -508,11 +508,12 @@ every `n`, collapsing the region). For `U` the same holds with one twist: a
 future witness also needs its run alive (`p` holding since the anchor), so a
 broken run yields `false` for every `n` as soon as it breaks.
 
-The trade: a parametric *past* window can prune nothing — a record at any age
-is still in the window for large enough `n` and outside it for small `n` — so
-that node's state grows with the trace (like `P[a,*]` without the saturation
-rescue). Parametric `F`/`G` obligations, by contrast, die at their first
-witness/counterexample as usual.
+The cost is memory, for the *past* operators: with a concrete bound
+(`P[<=5]`) the monitor can forget events older than 5 time units; with
+`P[<=n]` nothing can ever be forgotten — whether an event is in the window
+depends on `n` — so that operator's state grows with the trace. Parametric
+*future* operators carry no such cost: each obligation is discharged at
+its first witness or counterexample, as described above.
 
 Well-formedness (checked at compile time): a parameter may occur in **exactly
 one** bound, and an operator carries at most one symbolic bound. Parametric
