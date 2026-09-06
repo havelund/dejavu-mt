@@ -206,9 +206,10 @@ So `P[<=5] open(f)` is "open(f) within the last 5 time units" and
 forms may arrive late (see the next section).
 
 A specification using timed operators is monitored against a **timed log**:
-the last column of every CSV line is the event's absolute, non-decreasing
-integer timestamp (DejaVu's timed format), e.g. `open,a,17` is `open(a)` at
-time 17.  Example:
+every event carries an absolute, non-decreasing integer timestamp — in CSV
+the last column of the line (DejaVu's timed format), e.g. `open,a,17` is
+`open(a)` at time 17; in JSONL the integer field `"time"`, e.g.
+`{"name": "open", "f": "a", "time": 17}`.  Example:
 
     pred open(f: String)
     pred close(f: String)
