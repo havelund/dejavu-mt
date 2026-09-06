@@ -95,16 +95,14 @@ shl lshr` (infix `&`/`|` would collide with the connectives):
         (frame(c) & @ frame(c0)) -> c = c0 + 1     -- modulo 2^16
 
 A variable's type is inferred from how it is used: the predicate positions it
-appears in, numeric constants it is related to, and — matching DejaVu, which
-compares order relations numerically — a variable used in `< <= > >=` with no
-other type information defaults to `Int` (declare it `String` explicitly if you
-want lexicographic comparison). A quantified variable may also carry an
-explicit annotation — `Forall m: Mode . ...` — which is authoritative, like
-a predicate declaration; useful where inference has nothing to go on (e.g.
-a variable used only in variable-variable equalities). Types are what enable
-*theory* reasoning: numeric order, lexicographic order, and arithmetic on the
-numeric sorts. This is the main gain over DejaVu's untyped, equality-only BDD
-encoding.
+appears in, numeric constants it is related to; a variable used in
+`< <= > >=` with no other type information defaults to `Int` (declare it
+`String` explicitly if you want lexicographic comparison). A quantified
+variable may also carry an explicit annotation — `Forall m: Mode . ...` —
+which is authoritative, like a predicate declaration; useful where inference
+has nothing to go on (e.g. a variable used only in variable-variable
+equalities). Types are what enable *theory* reasoning: numeric order,
+lexicographic order, and arithmetic on the numeric sorts.
 
 **Relations** `= < <= > >=` compare two expressions of compatible type.
 Relation operands may be arithmetic expressions built with `+ - *` and unary
