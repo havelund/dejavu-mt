@@ -161,8 +161,9 @@ explicitly with a rule (`resource(r) := ...`) when one is wanted.
 
 ## Timed (metric) operators
 
-`S`, `P` and `H` accept a **time bound**, constraining how long ago the
-witnessing event happened.  The primitive form is an interval over the event
+The past operators `S`, `Z`, `P`, `H` and the future operators `U`, `F`,
+`G` accept a **time bound**. For a past operator it constrains how long ago
+the witnessing event happened.  The primitive form is an interval over the event
 *age* (current timestamp minus the witness's timestamp): `phi S[a,b] psi`
 means "`psi` held between `a` and `b` time units ago, and `phi` at every step
 since".  `[a,*]` means "at least `a` time units ago" (no upper bound), and the
@@ -177,9 +178,9 @@ comparison forms are abbreviations:
 
 and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
 `H[a,b] phi = !P[a,b]!phi`; `Z[a,b]`'s witness is read at the previous
-step).  The future operators `U`, `F` and `G` take the same bounds, read
-forward: `F[<=5] ack` is "ack within 5 time units from now" (their
-verdicts may arrive late — see the next section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
+step).  For the future operators the bounds are read forward:
+`F[<=5] ack` is "ack within 5 time units from now" (their verdicts may
+arrive late — see the next section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
 and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
 extensions (one extra linear inequality in the SMT encoding — see
 [engine.md](engine.md#timed-metric-operators)).
