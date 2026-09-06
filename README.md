@@ -268,7 +268,6 @@ large live set.
 - [doc/pyfun.md](doc/pyfun.md) — Python functions in formulas.
 - [doc/validation.md](doc/validation.md) — the comparisons with DejaVu,
   MonPoly, and the reference evaluator.
-- `DEJAVU.md` — the repair of the original DejaVu used for validation.
 
 How the engine works, in one paragraph: each subformula node holds an SMT
 formula over its free variables in two copies — `pre` (previous position)
