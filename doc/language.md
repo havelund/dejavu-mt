@@ -51,6 +51,9 @@ file extension:
 
 - **CSV** (default): one line is one fact with positional arguments —
   `open,a,read` — and, for timed specs, the timestamp as the last column.
+  Whether the last column is a timestamp is decided by the
+  *specification*: it is read as one exactly when the spec uses timed
+  operators (unlike DejaVu, which decides from the log's filename).
 - **JSONL** (`.jsonl`/`.ndjson`/`.json`): one JSON object per line, fields
   matched **by name** to the predicate's declared parameters (order
   irrelevant, extra fields ignored, missing declared fields an error);
