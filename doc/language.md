@@ -218,12 +218,6 @@ the last column of the line (DejaVu's timed format), e.g. `open,a,17` is
     prop timely : Forall f . close(f) -> P[<=5] open(f)
     prop confirm: Forall f . close(f) -> F[<=3] ack(f)
 
-(see `examples/timed/`).  How it works, in one sentence: a timed node stores
-its usual formula extended with one integer time variable `t` stamped with
-the witnessing timestamps (`t = 17`), and its exported value is the
-quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
-[engine.md](engine.md#timed-metric-operators) for the full story.
-
 A bound may also be a **quantified `Int` variable** — a deadline carried by
 the trace, different for every event:
 
