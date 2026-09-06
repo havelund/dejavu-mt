@@ -189,9 +189,7 @@ The unary operators relate to the binary ones as always
 witness is read at the previous step). So `P[<=5] open(f)` is "open(f)
 within the last 5 time units" and `F[<=5] ack(x)` is "ack(x) within the
 next 5" — the verdicts of the future forms may arrive late (see the next
-section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of
-`S`/`P`/`H` and `Z[<=n]`; the general interval, the untimed `Z`, and all
-the timed future operators are DejaVuMT extensions.
+section).
 
 A specification using timed operators is monitored against a **timed log**:
 the last column of every CSV line is the event's absolute, non-decreasing
