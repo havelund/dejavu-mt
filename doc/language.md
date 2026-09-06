@@ -245,9 +245,9 @@ becomes false, an unrefuted `G` true). Bounded intervals bound the delay.
 **Violations come with witnesses.** When a `Forall`-led property fails,
 the falsifying values of the quantified variables are extracted from a
 solver model and shown with the violation — automatically, for every
-property, no message templates needed:
+property, no message templates needed. For the violation above:
 
-    *** Violation of q at event 3: write(b,boom)  [f=b, d=boom]
+    *** Violation of resp at event 4: req(c) @ 10 (determined at event 5)  [x=c]
 
 In trace mode, positions whose verdict never resolved show `pending`.
 
