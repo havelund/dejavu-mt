@@ -322,13 +322,11 @@ directly as an atom, others inside relations (`size(d) < 100`, also with
 arithmetic arguments). Imports and helpers inside the block are fine. Functions must
 be **pure** — results are cached.
 
-To the engine a function is an SMT symbol whose value is computed by
-Python **once its arguments become ground** — which the event that binds
-them makes happen. That is also the honest boundary: an application whose
-arguments never become ground (`Forall d . size(d) > 0` with no event
-guard) cannot be decided and raises an error. See [engine.md](engine.md#python-functions-inside-formulas) for
-how it works and how this differs from the two-phase TP-DejaVu/PyDejaVu
-designs and MonPoly's aggregations.
+A function is evaluated once its arguments have concrete values, which
+the trace supplies: guard the application with an event predicate that
+binds them, as in the examples above. An application whose arguments
+never get values from the trace (`Forall d . size(d) > 0` with no event
+guard) cannot be decided and raises an error.
 
 ## Recursive rules
 
