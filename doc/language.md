@@ -481,10 +481,16 @@ a number:
     pred ack(x: String)
     prop r : Forall x . req(x) -> F[<=n] ack(x)
 
-The monitor leaves `n` free (an ordinary Int constant it simply never
-eliminates) and reports, per position, the **constraint on `n`** under which
-that position holds, plus a running **feasible region** — the conjunction of
-the constraints so far:
+The monitor leaves `n` free and reports, per position, the **constraint on
+`n`** under which that position holds, plus a running **feasible region** —
+the conjunction of the constraints so far. On the log
+
+    req,a,0
+    ack,a,7
+    req,b,10
+    ack,b,13
+
+(`a` answered after 7 time units, `b` after 3) it reports:
 
     --- r at event 1: req(a) @ 0 holds iff 7 <= n
     --- r at event 3: req(b) @ 10 holds iff 3 <= n
