@@ -300,13 +300,10 @@ quantifier-free string atoms (`contains`/`prefixof`/`suffixof`); internal or
 constrained gaps use existentially-quantified slack, the shape where string
 quantifier elimination may need the bounded fallback.
 
-If a pattern decomposes ambiguously (`"{a}-{c}"` against `"x-y-z"`), **all
-decompositions count** (declarative matching, not leftmost-greedy).
-Matching log values is as cheap as equality (see
-`experiments/string_bench.py`); quantifier elimination over string
-constraints can diverge, in which case the engine falls back to leaving the
-quantifier in place (a bounded `qe2` attempt) and deciding via the final
-satisfiability check.
+If a pattern decomposes in several ways, **every decomposition is a
+match**: `"{a}-{c}"` against `"x-y-z"` matches both with `a="x", c="y-z"`
+and with `a="x-y", c="z"`. Matching is declarative — a constraint the
+values must satisfy — not a regex engine's leftmost-greedy single choice.
 
 ## Python functions in specs
 
