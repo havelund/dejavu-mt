@@ -248,13 +248,12 @@ same formula. The feature adds neither expressiveness nor, in practice,
 brevity; its real function in DejaVu is the `bounded` annotation licensing
 BDD garbage collection, which has no counterpart here. Name a universe
 explicitly with a rule (`resource(r) := ...`) when one is wanted.
-Likewise not adopted, with rationales in `TODO.md`: SALT-style scope and
-abort operators (each reduces to a one-operator guard already present).
+Likewise not adopted: SALT-style scope and abort operators (each reduces
+to a one-operator guard already present).
 
 Known limitation: growth from genuinely-live data (many distinct values
 live at once) is not yet bounded — `gc` reclaims dead terms but not a
-large live set. The design notes for the planned fix live in `TODO.md`
-(Optimization notes).
+large live set.
 
 ## Documentation
 
@@ -270,7 +269,6 @@ large live set. The design notes for the planned fix live in `TODO.md`
 - [doc/validation.md](doc/validation.md) — the comparisons with DejaVu,
   MonPoly, and the reference evaluator.
 - `DEJAVU.md` — the repair of the original DejaVu used for validation.
-- `TODO.md` — roadmap, decisions, optimization notes.
 
 How the engine works, in one paragraph: each subformula node holds an SMT
 formula over its free variables in two copies — `pre` (previous position)
