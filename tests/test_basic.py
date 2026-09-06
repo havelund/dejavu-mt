@@ -101,6 +101,18 @@ def test_access_with_macros():
     assert violations(spec, events, "access") == [5]
 
 
+def test_macro_def_keyword():
+    # "def" is the preferred macro keyword; "pred ... =" stays for DejaVu.
+    spec = """
+    pred p(x: String)
+    pred q(x: String)
+    def seen(x) = P p(x)
+    prop m : Forall x . q(x) -> seen(x)
+    """
+    events = [{"p": [("a",)]}, {"q": [("a",)]}, {"q": [("b",)]}]
+    assert violations(spec, events, "m") == [3]
+
+
 # --- once / historically -----------------------------------------------------
 
 def test_demo_grant_revoke_since():

@@ -30,13 +30,14 @@ properties:
     pred open(f: String, m: String)     // event/predicate declarations
     pred close(f: String)
 
-    pred isOpen(f,m) = [open(f,m),close(f))        // a macro (abbreviation)
+    def isOpen(f,m) = [open(f,m),close(f))         // a macro (abbreviation)
 
     prop file : Forall f . close(f) -> Exists m . @ isOpen(f,m)
 
-Macros (`pred name(args) = formula`) are named abbreviations, expanded
-syntactically before monitoring. Comments are `//` to end of line or
-`/* ... */`.
+Macros (`def name(args) = formula`) are named abbreviations, expanded
+syntactically before monitoring; for backwards compatibility with DejaVu
+the keyword `pred` is also accepted in the macro form. Comments are `//`
+to end of line or `/* ... */`.
 
 ## What is being monitored
 
@@ -456,7 +457,7 @@ trade-offs.
     sort        ::= "String" | "Int" | "Real" | "Bool"
                   | "BV8" | "BV16" | "BV32" | "BV64" | enum-name
 
-    macro       ::= "pred" name [ "(" [ name ("," name)* ] ")" ] "=" formula
+    macro       ::= ("def" | "pred") name [ "(" [ name ("," name)* ] ")" ] "=" formula
     property    ::= "prop" name [ "anchored" ] ":" formula
                     [ ("on" "violation" pyexpr) | ("on" "satisfaction" pyexpr) ]
                     [ "where" rule ("," rule)* ]

@@ -7,7 +7,7 @@ type annotations on declared predicate/event parameters.
 Currently supported (slice 1 -- untimed fragment):
 
     declarations:  pred/event/preds/events  name(p1: Sort, ...), ...
-    macros:        pred name(a, ...) = <ltl>
+    macros:        def name(a, ...) = <ltl>   (DejaVu's "pred" also accepted)
     properties:    prop name : <ltl>            one verdict per position
                    prop name anchored : <ltl>   judged at position 1 only
 
@@ -259,7 +259,7 @@ _GRAMMAR = r"""
     // A braced Python expression (one level of nested braces allowed, for
     // dict/set literals).
     PYEXPR: /\{([^{}]|\{[^{}]*\})*\}/
-    PRED: "pred"
+    PRED: "def" | "pred"
     DECLKW: "preds" | "pred" | "events" | "event"
 
     // Past-time operators S/Z/P/H are single uppercase letters. They MUST be
