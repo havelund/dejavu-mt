@@ -330,18 +330,30 @@ guard) cannot be decided and raises an error.
 
 ## Recursive rules
 
-A property may define **rules** — recursively
-defined predicates whose extension is recomputed at every position, as if
-their facts occurred in the trace:
+A property may define **rules** — recursively defined predicates,
+introduced by `where` and callable in the property's formula. Rules reach
+properties that no plain formula can express, such as transitive closure:
+every reporting task must descend from `root` through a chain of spawns:
 
-    prop r : Forall x . check(x) -> seen(x)
-      where seen(x) := p(x) | (@ seen(x))
+    pred spawn(parent: String, child: String)
+    pred report(task: String)
+
+    prop lineage : Forall t . report(t) -> spawned(t)
+      where spawned(c) := spawn("root", c)
+                        | (@ spawned(c))
+                        | (Exists m . (@ spawned(m)) & spawn(m, c))
+
+Read the three disjuncts as: `c` is spawned if `root` spawns it now, or it
+was already spawned, or something already-spawned spawns it now.
 
 Any rule call *inside a rule body* must sit below `@` (recursion is a pure
 recurrence over the previous position — no fixpoints); the main formula
 may call rules at the current position. Mutual recursion is fine. Rule
 bodies are past-time (arithmetic, strings, metric operators all allowed) —
-so with arithmetic, rules can count and sum:
+so with arithmetic, rules can count and sum. Here `count(n)` holds exactly
+for the current position number, i.e. it counts the events:
+
+    pred check(n: Int)
 
     prop c : Forall n . check(n) -> count(n)
       where count(n) := ((! @ true) & n = 1)
