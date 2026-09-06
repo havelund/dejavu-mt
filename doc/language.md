@@ -350,14 +350,20 @@ Any rule call *inside a rule body* must sit below `@` (recursion is a pure
 recurrence over the previous position — no fixpoints); the main formula
 may call rules at the current position. Mutual recursion is fine. Rule
 bodies are past-time (arithmetic, strings, metric operators all allowed) —
-so with arithmetic, rules can count and sum. Here `count(n)` holds exactly
-for the current position number, i.e. it counts the events:
+so with arithmetic, rules can count and sum. Here `errors(n)` holds
+exactly for the number `n` of errors seen so far, and the property allows
+at most three:
 
-    pred check(n: Int)
+    pred error()
+    pred ok()
 
-    prop c : Forall n . check(n) -> count(n)
-      where count(n) := ((! @ true) & n = 1)
-                      | (Exists m . (@ count(m)) & n = m + 1)
+    prop few : Forall n . errors(n) -> n <= 3
+      where errors(n) := ((! @ true) & ((error & n = 1) | ((! error) & n = 0)))
+                       | (Exists m . (@ errors(m))
+                            & ((error & n = m + 1) | ((! error) & n = m)))
+
+(`! @ true` holds only at the first position — the base case; from then on
+the count is carried forward, incremented when an `error` occurs.)
 
 A rule's extension at each position is forgotten at the next (like an
 event) unless a past operator remembers it.
