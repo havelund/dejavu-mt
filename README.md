@@ -1,13 +1,17 @@
 # DejaVuMT
 
 Runtime verification for first-order temporal logic: DejaVu's QTL extended
-with future and timed operators, parametric (symbolic) time bounds, recursive
-rules, sequence patterns, state variables, and Python functions in formulas.
+with future and timed operators, parametric bounds (symbolic time bounds,
+for which the monitor synthesizes the constraints under which the trace
+satisfies the property), string matching, sequence patterns, recursive
+rules, state variables, and Python functions in formulas.
 It is written in Python and represents monitor state as SMT formulas
 (over Z3 or CVC5) where DejaVu uses BDDs. DejaVu's BDDs support data,
 but essentially only equality comparisons; the SMT representation adds
 reasoning in data theories (arithmetic, strings, enums, bit-vectors) and
 verdicts that are *constraints* rather than just true/false.
+The language manual is [doc/language.md](doc/language.md); the design,
+per feature, is [doc/engine.md](doc/engine.md).
 
 Contents:
 [quick start](#quick-start) ·
