@@ -400,25 +400,28 @@ guard) cannot be decided and raises an error.
 
 ## State variables
 
-The functional special case of a rule gets direct, extended-state-machine
-syntax: a **state variable** is a ground Python value, updated per matching
-event by a braced Python expression (previous state values and the event's
-arguments in scope; the `python:` block's helpers usable), and read in
-formulas as a term:
+A **state variable** holds a concrete value, updated as events arrive and
+read in formulas like any other term. Here `total` tracks the number of
+bytes written, and must stay within a quota:
+
+    pred write(f: String, d: String)
 
     state total: Int := {0}
         on write(f, d): {total + len(d)}
 
-    pred write(f: String, d: String)
     prop bound : total <= 1000000
 
+The declaration gives the variable's sort, its initial value, and one
+update clause per event of interest. The braced parts are Python
+expressions; an update clause has the event's arguments (`f`, `d`) and
+the previous values of all state variables in scope, and may call
+functions from the `python:` block.
+
 Updates run *before* the properties see the event. A `Bool` state is
-usable directly as an atom (`fire -> armed`); any state under temporal
-operators behaves as its per-position literal (`P (total = 4)`).
-Non-scalar bookkeeping (dicts, sets) lives in Python helpers, with scalar
-projections exposed as states. This covers TP-DejaVu/PyDejaVu-style
-running summaries without a preprocessing phase — the update law is in the
-spec, and the trace the temporal operators see is untouched.
+usable directly as an atom (`fire -> armed`); a state under temporal
+operators behaves as its value at each position (`P (total = 4)` — the
+total was 4 at some point). Non-scalar bookkeeping (dicts, sets) lives in
+Python helpers, with scalar projections exposed as states.
 
 ## Python actions
 
