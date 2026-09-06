@@ -16,7 +16,6 @@ Contents:
 [command-line reference](#command-line-reference) ·
 [web interface](#web-interface) ·
 [library API](#library-api) ·
-[status](#status) ·
 [documentation](#documentation)
 
 ## Quick start
@@ -217,43 +216,6 @@ Per property (`m.formulas`, one `FormulaMonitor` each): `witnesses` maps a
 violated position to the falsifying values (`{"f": "b"}`), and for
 parametric specs `region` holds the accumulated constraint on the symbolic
 bounds — verdicts are then backend formulas rather than booleans.
-
-## Status
-
-Implemented — the logic: the first-order fragment (connectives,
-`@ S Z P H` and intervals, full-domain typed quantifiers with optional
-sort annotations, macros), typed relations with arithmetic, the timed
-operators with the `[<=n] [<n] [>=n] [>n]` sugar, the bounded future
-operators `X`/`U[..]`/`F[..]`/`G[..]` (nestable anywhere — under
-negation, below past operators, inside each other), parametric bounds on
-every timed operator (verdicts become constraints on `n`), data-dependent
-bounds (`Forall n . a(n) -> F[0,n] b`), string matching (`contains`,
-`matches`/`has` with capture holes), enumeration sorts, bit-vectors,
-recursive rules, sequence patterns (`{e1; e2[*]; e3} |-> phi`), state
-variables, Python functions inside formulas, Python actions
-(`do`/`on violation`/`on satisfaction`), and anchored properties.
-
-Implemented — the tooling: pluggable Z3/CVC5 backends; violation (and
-satisfaction) witnesses from solver models; CSV and JSONL logs; JSON
-results recording (`json` flag); the web UI; periodic garbage collection
-of dead value-terms (`gc`). The engine accepts events containing multiple
-facts (including several of one predicate), though the log readers emit
-one fact per line.
-
-Deliberately not implemented: DejaVu's seen-only lowercase
-`exists`/`forall`. Its universe is derived from the quantified variable's
-occurrence positions in the formula, so every meaningful lowercase formula
-already contains its own guard as an atom — the uppercase version is the
-same formula. The feature adds neither expressiveness nor, in practice,
-brevity; its real function in DejaVu is the `bounded` annotation licensing
-BDD garbage collection, which has no counterpart here. Name a universe
-explicitly with a rule (`resource(r) := ...`) when one is wanted.
-Likewise not adopted: SALT-style scope and abort operators (each reduces
-to a one-operator guard already present).
-
-Known limitation: growth from genuinely-live data (many distinct values
-live at once) is not yet bounded — `gc` reclaims dead terms but not a
-large live set.
 
 ## Documentation
 

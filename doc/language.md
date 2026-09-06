@@ -146,6 +146,14 @@ appear nested in operand position (`! Exists i . phi`, `a | Exists m . phi`),
 again scoping to the end of the enclosing formula; parenthesize to limit the
 scope.
 
+DejaVu's seen-only lowercase `exists`/`forall` are deliberately not
+provided. Their universe is derived from the quantified variable's
+occurrence positions in the formula, so every meaningful lowercase formula
+already contains its own guard as an atom — the uppercase version is the
+same formula; the feature's real function in DejaVu is licensing BDD
+garbage collection, which has no counterpart here. Name a universe
+explicitly with a rule (`resource(r) := ...`) when one is wanted.
+
 ## Future operators and delayed verdicts
 
 A property with a future operator cannot in general be judged at its own

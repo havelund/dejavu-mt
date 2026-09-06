@@ -14,7 +14,9 @@ This is the same recurrence the original DejaVu runs over BDDs; carrying
 formulas instead is what admits data theories (arithmetic, strings, enums,
 bit-vectors) and symbolic parameters. Per-step formulas are kept small by
 simplification (`strong`/`weak` select the level) and, on long traces, by
-garbage collection of dead value-terms (`gc`).
+garbage collection of dead value-terms (`gc`). The known limitation:
+growth from genuinely-live data (many distinct values live at once) is
+not bounded — `gc` reclaims dead terms, not a large live set.
 
 The refinements per feature have their own notes: timed operators stamp a
 time variable and project it out ([timed.md](timed.md)); future operators
