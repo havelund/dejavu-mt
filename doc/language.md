@@ -264,46 +264,38 @@ whole trace:
 
 ## String matching
 
-Two relations over `String` terms:
+A `String` term can be matched against a **pattern**: a regular expression
+with embedded capture **holes** `{var}`, where a hole names a data variable
+that captures the substring it matches. The general form is the *slashed*
+pattern:
 
-    d contains "AUTOMATIC"          -- substring test
-    m matches "user {u}"            -- pattern with a hole
+    m matches /[a-z ]*user {u:[a-z]+}( .*)?/
 
-`matches` tests a term against a pattern of literal text and **holes**
-`{var}`: a hole names a data variable and captures a substring, so the
-pattern above matches `"user bob"` with `u = "bob"`. A hole may be
-constrained by a regular expression — `"user {n:[0-9]+}"` captures only
-digit ids (regex subset: literals, `.`, classes, `* + ?`, `|`, grouping) —
-and `{_}` is an anonymous hole (matches, binds nothing). A capture is a
-*constraint*, not an
-extraction — the pattern means `m = "user " ++ u` — so the hole variable is
-an ordinary quantified variable and flows anywhere data flows, e.g.
+(regex subset: literals, `.`, classes, `* + ?`, `|`, grouping; a hole's
+own constraining regex is optional, and `{_}` is an anonymous hole —
+matches, binds nothing). The other forms are shorthands for such a
+pattern:
+
+    m matches "user {u}"       -- quoted: literal text with holes;
+                                  matches "user bob" with u = "bob"
+    m matches "...user {u}..." -- "..." is a gap: matches anything,
+                                  binds nothing
+    m has "user {u}"           -- wraps the pattern in gaps: same as above
+    d contains "AUTOMATIC"     -- a gap-literal-gap pattern with no holes
+
+A capture is a *constraint*, not an extraction — `m matches "user {u}"`
+means `m = "user " ++ u` — so the hole variable is an ordinary quantified
+variable and flows anywhere data flows, e.g.
 
     prop resp : Forall m . Forall u .
         login(m) & m matches "user {u}" -> F[<=5] logout(u)
 
-Patterns come in two flavours. **Quoted** patterns are literal text with
-holes plus `...` **gaps** (match anything, bind nothing) and `{:RE}`
-(anonymous constrained gap):
-
-    m matches "...user {u:[a-z]+}..."       -- unanchored capture, no
-                                               pre/post variables needed
-    m has "user {u:[a-z]+}"                 -- sugar for the same (`has`
-                                               wraps the pattern in gaps)
-
-**Slashed** patterns are a full regex with embedded holes:
-
-    m matches /[a-z ]*user {u:[a-z]+}( .*)?/
-
-Unconstrained gaps at the pattern's ends compile to the native
-quantifier-free string atoms (`contains`/`prefixof`/`suffixof`); internal or
-constrained gaps use existentially-quantified slack, the shape where string
-quantifier elimination may need the bounded fallback.
-
-If a pattern decomposes in several ways, **every decomposition is a
-match**: `"{a}-{c}"` against `"x-y-z"` matches both with `a="x", c="y-z"`
-and with `a="x-y", c="z"`. Matching is declarative — a constraint the
-values must satisfy — not a regex engine's leftmost-greedy single choice.
+Consequently, if a pattern decomposes in several ways, **every
+decomposition is a match**: `"{a}-{c}"` against `"x-y-z"` matches both
+with `a="x", c="y-z"` and with `a="x-y", c="z"` — declarative matching,
+not a regex engine's leftmost-greedy single choice. The simpler shorthands
+also cost less: they compile to plain equations and native substring
+atoms rather than full regex constraints.
 
 ## Python functions in specs
 
