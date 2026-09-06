@@ -225,11 +225,6 @@ the trace, different for every event:
     pred ack(x: String)
     prop own : Forall x . Forall d . request(x,d) -> F[0,d] ack(x)
 
-Verdicts stay Boolean (the quantifier discharges `d`); see
-[engine.md](engine.md#variable-bounds). This is distinct from a *symbolic
-parameter* bound, where the name is bound by nothing and verdicts become
-constraints on it — see [parametric monitoring](#parametric-monitoring).
-
 ## Future operators and delayed verdicts
 
 A property with a future operator cannot in general be judged at its own
