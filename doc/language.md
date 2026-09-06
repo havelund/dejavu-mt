@@ -143,10 +143,12 @@ timestamps are needed: unbounded operators work on ordinary untimed logs.
 
 Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
 (possibly infinite) domain of `x`'s type; they translate directly to SMT
-quantifiers.  A quantifier scopes over everything to its right, and may also
-appear nested in operand position (`! Exists i . phi`, `a | Exists m . phi`),
-again scoping to the end of the enclosing formula; parenthesize to limit the
-scope.
+quantifiers.  A quantifier scopes over everything to its right, up to the
+parenthesis (or end of formula) that closes the enclosing formula — so
+`Forall f . close(f) -> phi` means `Forall f . (close(f) -> phi)`. This
+also holds nested in operand position (`! Exists i . phi`,
+`a | Exists m . phi`); parenthesize the quantified formula itself to limit
+the scope.
 
 DejaVu's seen-only lowercase `exists`/`forall` are deliberately not
 provided. Their universe is derived from the quantified variable's
