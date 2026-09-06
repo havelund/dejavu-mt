@@ -162,28 +162,36 @@ explicitly with a rule (`resource(r) := ...`) when one is wanted.
 ## Timed (metric) operators
 
 The past operators `S`, `Z`, `P`, `H` and the future operators `U`, `F`,
-`G` accept a **time bound**. For a past operator it constrains how long ago
-the witnessing event happened.  The primitive form is an interval over the event
-*age* (current timestamp minus the witness's timestamp): `phi S[a,b] psi`
-means "`psi` held between `a` and `b` time units ago, and `phi` at every step
-since".  `[a,*]` means "at least `a` time units ago" (no upper bound), and the
-comparison forms are abbreviations:
+`G` accept a **time bound** constraining the *distance in time* to the
+witnessing event: backward for past operators (how long ago), forward for
+future ones (how far ahead).  The primitive form is an interval `[a,b]`
+over that distance:
 
-| written | means | reading |
+    phi S[a,b] psi   -- psi held between a and b time units AGO,
+                        and phi at every step since
+    phi U[a,b] psi   -- psi holds between a and b time units FROM NOW,
+                        and phi at every step until then
+
+`[a,*]` means "at least `a` time units away" (no upper bound), and the
+comparison forms are abbreviations (shown for `S`; the same forms apply
+to all of the operators):
+
+| written | means | reading (past / future) |
 |---|---|---|
-| `S[<=n]` | `S[0,n]` | at most `n` time units ago |
-| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago |
-| `S[>=n]` | `S[n,*]` | at least `n` time units ago |
-| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
+| `S[<=n]` | `S[0,n]` | at most `n` time units ago / ahead |
+| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago / ahead |
+| `S[>=n]` | `S[n,*]` | at least `n` time units ago / ahead |
+| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago / ahead |
 
-and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
-`H[a,b] phi = !P[a,b]!phi`; `Z[a,b]`'s witness is read at the previous
-step).  For the future operators the bounds are read forward:
-`F[<=5] ack` is "ack within 5 time units from now" (their verdicts may
-arrive late — see the next section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
-and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
-extensions (one extra linear inequality in the SMT encoding — see
-[engine.md](engine.md#timed-metric-operators)).
+The unary operators relate to the binary ones as always
+(`P[<=n] phi = true S[<=n] phi`, `H[a,b] phi = !P[a,b]!phi`,
+`F[<=5] phi = true U[0,5] phi`, `G[a,b] phi = !F[a,b]!phi`; `Z[a,b]`'s
+witness is read at the previous step). So `P[<=5] open(f)` is "open(f)
+within the last 5 time units" and `F[<=5] ack(x)` is "ack(x) within the
+next 5" — the verdicts of the future forms may arrive late (see the next
+section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of
+`S`/`P`/`H` and `Z[<=n]`; the general interval, the untimed `Z`, and all
+the timed future operators are DejaVuMT extensions.
 
 A specification using timed operators is monitored against a **timed log**:
 the last column of every CSV line is the event's absolute, non-decreasing
@@ -192,7 +200,10 @@ time 17.  Example:
 
     pred open(f: String)
     pred close(f: String)
+    pred ack(f: String)
+
     prop timely : Forall f . close(f) -> P[<=5] open(f)
+    prop confirm: Forall f . close(f) -> F[<=3] ack(f)
 
 (see `examples/timed/`).  How it works, in one sentence: a timed node stores
 its usual formula extended with one integer time variable `t` stamped with
