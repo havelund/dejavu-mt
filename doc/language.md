@@ -19,6 +19,7 @@ Contents:
 [rules](#recursive-rules) ·
 [sequences](#sequence-patterns) ·
 [state variables](#state-variables) ·
+[Python actions](#python-actions) ·
 [parametric monitoring](#parametric-monitoring) ·
 [grammar](#grammar)
 
@@ -368,17 +369,6 @@ the count is carried forward, incremented when an `error` occurs.)
 A rule's extension at each position is forgotten at the next (like an
 event) unless a past operator remembers it.
 
-**Python actions** turn monitors into data producers: `do {expr}` on a
-rule fires when its extension is non-empty and changed (parameters bound
-to a satisfying assignment, plus `pos`); `on violation {expr}` and
-`on satisfaction {expr}` on a property fire per emitted verdict with
-`pos` and the witness values bound (falsifying values of a Forall-prefix,
-satisfying values of an Exists-prefix) — all evaluated in the `python:`
-block's namespace:
-
-    prop q : Forall f . Forall d . write(f,d) -> P open(f)
-        on violation {incidents.append((pos, f))}
-
 ## Sequence patterns
 
 PSL-style **sequences** (inspired by IEEE 1850's SEREs), with data
@@ -422,6 +412,27 @@ Non-scalar bookkeeping (dicts, sets) lives in Python helpers, with scalar
 projections exposed as states. This covers TP-DejaVu/PyDejaVu-style
 running summaries without a preprocessing phase — the update law is in the
 spec, and the trace the temporal operators see is untouched.
+
+## Python actions
+
+Actions turn monitors into data *producers*: Python expressions, evaluated
+in the `python:` block's namespace, attached to a property or a rule.
+
+`on violation {expr}` and `on satisfaction {expr}` on a **property** fire
+once per emitted verdict, with `pos` and the witness values bound
+(falsifying values of a `Forall` prefix, satisfying values of an `Exists`
+prefix):
+
+    prop q : Forall f . Forall d . write(f,d) -> P open(f)
+        on violation {incidents.append((pos, f))}
+
+`do {expr}` on a **rule** fires at every position where the rule's
+extension is non-empty and changed from the previous position, with the
+rule's parameters bound to a satisfying assignment, plus `pos`:
+
+    prop few : Forall n . errors(n) -> n <= 3
+      where errors(n) := ...
+                         do {history.append((pos, n))}
 
 ## Parametric monitoring
 
