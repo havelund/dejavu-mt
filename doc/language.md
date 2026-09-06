@@ -429,9 +429,26 @@ usable directly as an atom:
     prop safe : fire -> armed
 
 A state under temporal operators behaves as its value at each position
-(`P (total = 4)` — the total was 4 at some point). Non-scalar bookkeeping
-(dicts, sets) lives in Python helpers, with scalar projections exposed as
-states.
+(`P (total = 4)` — the total was 4 at some point).
+
+A state variable itself always holds a scalar (its declared sort). When
+the bookkeeping behind it is a set or a dict, keep that in the `python:`
+block and let the state carry the number the property needs — here the
+count of *distinct* users:
+
+    python:
+        seen = set()
+        def note(u: str) -> int:
+            seen.add(u)
+            return len(seen)
+    end
+
+    pred login(u: String)
+
+    state users: Int := {0}
+        on login(u): {note(u)}
+
+    prop cap : users <= 100
 
 ## Python actions
 
