@@ -11,9 +11,9 @@ Contents:
 [what is monitored](#what-is-monitored) ·
 [types](#types) ·
 [operators](#the-operators) ·
+[timed operators](#timed-metric-operators) ·
 [future operators](#future-operators-and-delayed-verdicts) ·
 [anchored properties](#anchored-properties) ·
-[timed operators](#timed-metric-operators) ·
 [string matching](#string-matching) ·
 [Python functions](#python-functions-in-specs) ·
 [rules](#recursive-rules) ·
@@ -159,6 +159,58 @@ same formula; the feature's real function in DejaVu is licensing BDD
 garbage collection, which has no counterpart here. Name a universe
 explicitly with a rule (`resource(r) := ...`) when one is wanted.
 
+## Timed (metric) operators
+
+`S`, `P` and `H` accept a **time bound**, constraining how long ago the
+witnessing event happened.  The primitive form is an interval over the event
+*age* (current timestamp minus the witness's timestamp): `phi S[a,b] psi`
+means "`psi` held between `a` and `b` time units ago, and `phi` at every step
+since".  `[a,*]` means "at least `a` time units ago" (no upper bound), and the
+comparison forms are abbreviations:
+
+| written | means | reading |
+|---|---|---|
+| `S[<=n]` | `S[0,n]` | at most `n` time units ago |
+| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago |
+| `S[>=n]` | `S[n,*]` | at least `n` time units ago |
+| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
+
+and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
+`H[a,b] phi = !P[a,b]!phi`; `Z[a,b]`'s witness is read at the previous
+step).  The future operators `U`, `F` and `G` take the same bounds, read
+forward: `F[<=5] ack` is "ack within 5 time units from now" (their
+verdicts may arrive late — see the next section).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
+and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
+extensions (one extra linear inequality in the SMT encoding — see
+[engine.md](engine.md#timed-metric-operators)).
+
+A specification using timed operators is monitored against a **timed log**:
+the last column of every CSV line is the event's absolute, non-decreasing
+integer timestamp (DejaVu's timed format), e.g. `open,a,17` is `open(a)` at
+time 17.  Example:
+
+    pred open(f: String)
+    pred close(f: String)
+    prop timely : Forall f . close(f) -> P[<=5] open(f)
+
+(see `examples/timed/`).  How it works, in one sentence: a timed node stores
+its usual formula extended with one integer time variable `t` stamped with
+the witnessing timestamps (`t = 17`), and its exported value is the
+quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
+[engine.md](engine.md#timed-metric-operators) for the full story.
+
+A bound may also be a **quantified `Int` variable** — a deadline carried by
+the trace, different for every event:
+
+    pred request(x: String, d: Int)
+    pred ack(x: String)
+    prop own : Forall x . Forall d . request(x,d) -> F[0,d] ack(x)
+
+Verdicts stay Boolean (the quantifier discharges `d`); see
+[engine.md](engine.md#variable-bounds). This is distinct from a *symbolic
+parameter* bound, where the name is bound by nothing and verdicts become
+constraints on it — see [parametric monitoring](#parametric-monitoring).
+
 ## Future operators and delayed verdicts
 
 A property with a future operator cannot in general be judged at its own
@@ -195,56 +247,6 @@ position 1 only — the classic `trace |= f` reading, one verdict for the
 whole trace:
 
     prop a anchored : F init
-
-## Timed (metric) operators
-
-`S`, `P` and `H` accept a **time bound**, constraining how long ago the
-witnessing event happened.  The primitive form is an interval over the event
-*age* (current timestamp minus the witness's timestamp): `phi S[a,b] psi`
-means "`psi` held between `a` and `b` time units ago, and `phi` at every step
-since".  `[a,*]` means "at least `a` time units ago" (no upper bound), and the
-comparison forms are abbreviations:
-
-| written | means | reading |
-|---|---|---|
-| `S[<=n]` | `S[0,n]` | at most `n` time units ago |
-| `S[<n]`  | `S[0,n-1]` | less than `n` time units ago |
-| `S[>=n]` | `S[n,*]` | at least `n` time units ago |
-| `S[>n]`  | `S[n+1,*]` | more than `n` time units ago |
-
-and likewise for `P` and `H` (`P[<=n] phi = true S[<=n] phi`;
-`H[a,b] phi = !P[a,b]!phi`; `Z[a,b]`'s witness is read at the previous
-step).  DejaVu provides exactly the `[<=n]` and `[>n]` forms of `S`/`P`/`H`
-and `Z[<=n]`; the general interval — and the untimed `Z` — are DejaVuMT
-extensions (one extra linear inequality in the SMT encoding — see
-[engine.md](engine.md#timed-metric-operators)).
-
-A specification using timed operators is monitored against a **timed log**:
-the last column of every CSV line is the event's absolute, non-decreasing
-integer timestamp (DejaVu's timed format), e.g. `open,a,17` is `open(a)` at
-time 17.  Example:
-
-    pred open(f: String)
-    pred close(f: String)
-    prop timely : Forall f . close(f) -> P[<=5] open(f)
-
-(see `examples/timed/`).  How it works, in one sentence: a timed node stores
-its usual formula extended with one integer time variable `t` stamped with
-the witnessing timestamps (`t = 17`), and its exported value is the
-quantifier-eliminated projection `Exists t . state & a <= T - t <= b` — see
-[engine.md](engine.md#timed-metric-operators) for the full story.
-
-A bound may also be a **quantified `Int` variable** — a deadline carried by
-the trace, different for every event:
-
-    pred request(x: String, d: Int)
-    pred ack(x: String)
-    prop own : Forall x . Forall d . request(x,d) -> F[0,d] ack(x)
-
-Verdicts stay Boolean (the quantifier discharges `d`); see
-[engine.md](engine.md#variable-bounds). This is distinct from a *symbolic
-parameter* bound, where the name is bound by nothing and verdicts become
-constraints on it — see [parametric monitoring](#parametric-monitoring).
 
 ## String matching
 
