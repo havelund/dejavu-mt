@@ -5,8 +5,6 @@ first-order *past-time* linear temporal logic — with future and timed
 operators, parametric bounds (symbolic time bounds, for which the monitor
 synthesizes the constraints under which the trace satisfies the property),
 string matching, sequence patterns, rules, state variables, and Python.
-Per-feature design notes: the corresponding sections of
-[engine.md](engine.md).
 
 Contents:
 [specifications](#specifications) ·
