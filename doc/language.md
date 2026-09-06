@@ -315,10 +315,11 @@ A spec may define pure Python functions and call them **inside formulas**
     prop q : Forall f . Forall d . write(f,d) -> size(d) < 100
     prop r : Forall cmd . run(cmd) -> ! risky(cmd)
 
-Functions need full type annotations (`str/int/float/bool` ↔
-`String/Int/Real/Bool`); a `bool` function can be used directly as an
-atom, others inside relations (`size(d) < 100`, also with arithmetic
-arguments). Imports and helpers inside the block are fine. Functions must
+Functions must carry full Python type annotations on arguments and
+result, which map to the spec's sorts: `str` is `String`, `int` is `Int`,
+`float` is `Real`, `bool` is `Bool`. A `bool` function can be used
+directly as an atom, others inside relations (`size(d) < 100`, also with
+arithmetic arguments). Imports and helpers inside the block are fine. Functions must
 be **pure** — results are cached.
 
 To the engine a function is an SMT symbol whose value is computed by
