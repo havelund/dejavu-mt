@@ -136,9 +136,10 @@ see below):
 | `F phi` | `phi` holds at some present-or-future step (**eventually**); `= true U phi` |
 | `G phi` | `phi` holds at **every** present-or-future step (**always**); `= !F!phi` |
 
-`U`, `F` and `G` take the same optional time bound as the past operators
-(`F[<=5] ack`, `busy U[2,7] ack`, `G[0,60] !alarm`). Unbounded `F`, `G`, `U`
-and `X` need no timestamps and work on ordinary untimed logs.
+Past and future operators alike may carry an optional **time bound**
+(`P[<=5] open`, `F[<=5] ack`, `busy U[2,7] ack`), described in
+[timed operators](#timed-metric-operators) below. Without a bound no
+timestamps are needed: unbounded operators work on ordinary untimed logs.
 
 Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
 (possibly infinite) domain of `x`'s type; they translate directly to SMT
