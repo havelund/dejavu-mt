@@ -32,9 +32,9 @@ properties:
     pred open(f: String, m: String)     // event/predicate declarations
     pred close(f: String)
 
-    pred isOpen(f) = [open(f,m),close(f))          // a macro (abbreviation)
+    pred isOpen(f,m) = [open(f,m),close(f))        // a macro (abbreviation)
 
-    prop file : Forall f . close(f) -> Exists m . @ [open(f,m),close(f))
+    prop file : Forall f . close(f) -> Exists m . @ isOpen(f,m)
 
 Macros (`pred name(args) = formula`) are named abbreviations, expanded
 syntactically before monitoring. Comments are `//` to end of line or
