@@ -1,6 +1,6 @@
 # DejaVuMT
 
-Runtime verification for first-order temporal logic: DejaVu's QTL extended
+Runtime verification for first-order temporal logic: [DejaVu's](https://github.com/havelund/dejavu) QTL extended
 with future and timed operators, parametric bounds (symbolic time bounds,
 for which the monitor synthesizes the constraints under which the trace
 satisfies the property), string matching, sequence patterns, recursive
@@ -10,6 +10,14 @@ It is written in Python and represents monitor state as SMT formulas
 but essentially only equality comparisons; the SMT representation adds
 reasoning in data theories (arithmetic, strings, enums, bit-vectors) and
 verdicts that are *constraints* rather than just true/false.
+
+The SMT representation also yields a comparatively simple implementation:
+the logic's semantics maps almost directly onto recurrences over formulas,
+with the solver doing the heavy lifting, where the BDD solution encodes
+data, and in particular time, into bit vectors. The price paid is speed
+(see [performance](#performance)): this is a study in expressiveness
+rather than efficiency.
+
 The language manual is [doc/language.md](doc/language.md); the design,
 per feature, is [doc/engine.md](doc/engine.md).
 
@@ -67,26 +75,27 @@ quantified variables (a **witness**, extracted from a solver model):
 The language extends DejaVu's QTL — a typed first-order past-time linear
 temporal logic — into a full temporal logic. In brief:
 
-- **Past operators** `@ S Z P H [_,_)` and **future operators** `X U F G`,
-  freely nested; a future verdict is reported once known — possibly at a
-  later event, or at end of trace.
-- **Timed variants** of all of them (`P[<=5]`, `busy U[2,7] ack`), checked
-  against timestamped logs.
-- **Typed data**: quantifiers over `String`, `Int`, `Real`, `Bool`,
-  bit-vectors and enumerations; relations with arithmetic
-  (`v2 = v1 + 1`); string matching with capture holes
-  (`m matches "user {u}"`).
+- **Past operators** `@ S Z P H [_,_)`.
+- **Future operators** `X U F G`, freely nested with the past ones; a
+  future verdict is reported once known — possibly at a later event, or
+  at end of trace.
+- **Timed variants** of the temporal operators (`P[<=5]`,
+  `busy U[2,7] ack`), checked against timestamped logs.
 - **Parametric bounds**: `req(x) -> F[<=n] ack(x)` with `n` symbolic —
   verdicts become constraints on `n`, and the monitor synthesizes the
   tightest deadline the trace meets.
-- **Rules, sequences, states**: recursive rules
-  (`where seen(x) := p(x) | @ seen(x)` — they can count and sum),
-  PSL-style sequence patterns
-  (`{fail(u); fail(u); ok(u)} |-> P vetted(u)`), and state variables
-  updated by Python expressions.
-- **Python**: pure functions callable inside formulas
-  (`write(f,d) -> size(d) < 100`), and actions fired on rule matches,
-  violations and satisfactions.
+- **Typed quantification** over `String`, `Int`, `Real`, `Bool`,
+  bit-vectors, and enumerations.
+- **Relations with arithmetic** (`v2 = v1 + 1`).
+- **String matching** with capture holes (`m matches "user {u}"`).
+- **Sequence patterns** (`{fail(u); fail(u); ok(u)} |-> P vetted(u)`).
+- **Recursive rules** (`where seen(x) := p(x) | @ seen(x)`) — reaching
+  transitive closure and counting.
+- **State variables**, updated per event by Python expressions.
+- **Python functions**, callable inside formulas
+  (`write(f,d) -> size(d) < 100`).
+- **Python actions**, fired on violations, satisfactions, and rule
+  matches.
 - **Anchored properties**: judged once for the whole trace instead of at
   every position.
 
