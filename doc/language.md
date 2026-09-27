@@ -1,6 +1,8 @@
 # The DejaVuMT specification language
 
-The reference manual. The language extends DejaVu's QTL — a typed
+The DejaVuMT specification language is an extension of the [DejaVu](https://github.com/havelund/dejavu)
+specification language QTL. The explanation below does not assume previous knowledge about DejaVu, but for the interested reader,
+the language extends DejaVu's QTL — a typed
 first-order *past-time* linear temporal logic — with future and timed
 operators, parametric bounds (symbolic time bounds, for which the monitor
 synthesizes the constraints under which the trace satisfies the property),
@@ -16,7 +18,7 @@ Contents:
 [anchored properties](#anchored-properties) ·
 [sequences](#sequence-patterns) ·
 [string matching](#string-matching) ·
-[rules](#recursive-rules) ·
+[rules](#rules) ·
 [Python functions](#python-functions-in-specs) ·
 [state variables](#state-variables) ·
 [Python actions](#python-actions) ·
@@ -25,8 +27,9 @@ Contents:
 
 ## Specifications
 
-A specification is a sequence of declarations, macro definitions and
-properties:
+A specification is a sequence of predicate declarations (the events the
+trace may contain), macro definitions, and properties — later sections
+add enumerations, state variables, and Python blocks:
 
     pred open(f: String, m: String)     // event/predicate declarations
     pred close(f: String)
@@ -112,7 +115,7 @@ numeric (`Int`/`Real`), typically via their predicate declarations.
 Arithmetic is not allowed inside predicate arguments (those are plain
 variables or constants).
 
-## The operators
+## The logic's operators
 
 Propositional: `!` (not), `&` (and), `|` (or), `->` (implies), `<->` (iff).
 
@@ -144,36 +147,28 @@ timestamps are needed: unbounded operators work on ordinary untimed logs.
 
 Quantifiers `Exists x . phi` and `Forall x . phi` range over the *full*
 (possibly infinite) domain of `x`'s type; they translate directly to SMT
-quantifiers.  A quantifier scopes over everything to its right, up to the
-parenthesis (or end of formula) that closes the enclosing formula — so
-`Forall f . close(f) -> phi` means `Forall f . (close(f) -> phi)`. A quantifier may also appear inside a formula — negated, as in
-`! Exists i . err(i)` ("no i satisfies err"), or as an operand of a
-connective, as in `off | Exists m . active(m)` — and its scope still runs
-rightward the same way; parenthesize the quantified formula itself to
-limit the scope.
+quantifiers.  Quantifiers have weak precedence relative to other operators — so
+`Forall f . close(f) -> P open(f)` means `Forall f . (close(f) -> P open(f))`. 
+Parenthesize the quantified formula itself to limit the scope.
 
-DejaVu's seen-only lowercase `exists`/`forall` are deliberately not
-provided. Their universe is derived from the quantified variable's
-occurrence positions in the formula, so every meaningful lowercase formula
-already contains its own guard as an atom — the uppercase version is the
-same formula; the feature's real function in DejaVu is licensing BDD
-garbage collection, which has no counterpart here. Name a universe
-explicitly with a rule (`resource(r) := ...`) when one is wanted.
+DejaVu's seen-only lowercase `exists`/`forall` that quantify over only seen values in the trace
+are deliberately not provided. Name a set of seen values
+explicitly with a rule (`resource(r) := ...`) when one is wanted, see [rules](#rules) below.
 
 ## Timed (metric) operators
 
 The past operators `S`, `Z`, `P`, `H` and the future operators `U`, `F`,
 `G` accept a **time bound** constraining the *distance in time* to the
 witnessing event: backward for past operators (how long ago), forward for
-future ones (how far ahead).  The primitive form is an interval `[a,b]`
+future ones (how far ahead).  The basic core form is an interval `[a,b]`
 over that distance:
 
-    phi S[a,b] psi   -- psi held between a and b time units AGO,
-                        and phi at every step since
-    phi U[a,b] psi   -- psi holds between a and b time units FROM NOW,
-                        and phi at every step until then
+    phi1 S[a,b] psi2   -- psi2 held between a and b time units AGO,
+                        and phi1 held at every step since
+    phi1 U[a,b] psi2   -- psi2 holds between a and b time units FROM NOW,
+                        and phi1 holds at every step until then
 
-`[a,*]` means "at least `a` time units away" (no upper bound), and the
+`[a,*]` means "at least `a` time units away" (no upper bound for future time operators and 0 for past time operators), and the
 comparison forms are abbreviations — backward for the past operators:
 
 | written | means | reading |
@@ -258,7 +253,7 @@ By default a property is evaluated at *every* position — one verdict per
 position (DejaVu's and MonPoly's convention). For a top-level future formula
 that can be noisy: with `prop a : F init`, every position after the last
 `init` is a violation. Marking the property **anchored** evaluates it at
-position 1 only — the classic `trace |= f` reading, one verdict for the
+position 0 only — the classic `trace |= f` reading, one verdict for the
 whole trace:
 
     prop a anchored : F init
@@ -288,7 +283,7 @@ LTL). A match may start anywhere and ends at the current position. As a
 formula, `{..}` means "a match ends here"; `seq |-> phi` (suffix
 implication) requires `phi` whenever a match ends, with the sequence's
 variables bound by the match. Sequences desugar to auto-generated
-`@`-guarded rules (a small automaton — see [rules](#recursive-rules)
+`@`-guarded rules (a small automaton — see [rules](#rules)
 below), so they work under quantifiers and past operators; items are
 past-time, and sequences may not appear inside rule bodies.
 
@@ -327,7 +322,7 @@ not a regex engine's leftmost-greedy single choice. The simpler shorthands
 also cost less: they compile to plain equations and native substring
 atoms rather than full regex constraints.
 
-## Recursive rules
+## Rules
 
 A property may define **rules** — recursively defined predicates,
 introduced by `where` and callable in the property's formula. Rules reach
@@ -369,8 +364,7 @@ event) unless a past operator remembers it.
 
 ## Python functions in specs
 
-A spec may define pure Python functions and call them **inside formulas**
-— no preprocessing phase, the property stays whole:
+A spec may define pure Python functions and call them **inside formulas**:
 
     python:
         def size(d: str) -> int:
@@ -390,7 +384,7 @@ result, which map to the spec's sorts: `str` is `String`, `int` is `Int`,
 `float` is `Real`, `bool` is `Bool`. A `bool` function can be used
 directly as an atom, others inside relations (`size(d) < 100`, also with
 arithmetic arguments). Imports and helpers inside the block are fine. Functions must
-be **pure** — results are cached.
+be **pure** — results are cached. For Python code with side effects, see [State variables](#state-variables) below.
 
 A function is evaluated once its arguments have concrete values, which
 the trace supplies: guard the application with an event predicate that
@@ -415,7 +409,7 @@ The declaration gives the variable's sort, its initial value, and one
 update clause per event of interest. The braced parts are Python
 expressions; an update clause has the event's arguments (`f`, `d`) and
 the previous values of all state variables in scope, and may call
-functions from the `python:` block.
+functions from the `python` block.
 
 Updates run *before* the properties see the event. A `Bool` state is
 usable directly as an atom:
@@ -432,7 +426,7 @@ A state under temporal operators behaves as its value at each position
 (`P (total = 4)` — the total was 4 at some point).
 
 A state variable itself always holds a scalar (its declared sort). When
-the bookkeeping behind it is a set or a dict, keep that in the `python:`
+the bookkeeping behind it is a set or a dict, keep that in the `python`
 block and let the state carry the number the property needs — here the
 count of *distinct* users:
 
@@ -453,7 +447,7 @@ count of *distinct* users:
 ## Python actions
 
 Actions turn monitors into data *producers*: Python expressions, evaluated
-in the `python:` block's namespace, attached to a property or a rule.
+in the `python` block's namespace, attached to a property or a rule.
 
 `on violation {expr}` and `on satisfaction {expr}` on a **property** fire
 once per emitted verdict, with `pos` and the witness values bound
