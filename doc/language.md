@@ -56,8 +56,8 @@ file extension:
 - **CSV** (default): one line is one fact with positional arguments —
   `open,a,read` — and, for timed specs, the timestamp as the last column.
   Whether the last column is a timestamp is decided by the
-  *specification*: it is read as one exactly when the spec uses timed
-  operators (unlike DejaVu, which decides from the log's filename).
+  *specification*: it is read as a timestamp exactly when the spec uses
+  timed operators (unlike DejaVu, which decides from the log's filename).
   A timed log also works with an untimed spec: pass the `timed` CLI flag,
   or name the log `*.timed.*` (DejaVu's convention, also honored here),
   and the timestamp column is consumed without the properties using it.

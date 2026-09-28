@@ -1,0 +1,39 @@
+====
+TODO
+====
+
+The future time operators do not quite match the past time operators: 
+- @ vs. X
+- No future operator corresponding to Z
+
+---
+
+Rules are per property. Should the be per specification?
+
+---
+
+We should have a shorthand for ! @ true.
+
+---
+
+should we allow predicates of the form errors instead of error()?
+
+--- 
+
+Should we use python {...} instead of python begin ... end?
+
+---
+
+Does one want a special "quantifier" for n here:
+
+pred req(x: String)
+pred ack(x: String)
+prop r : Forall x . req(x) -> F[<=n] ack(x)
+
+---
+
+Should we change Forall and Exists to forall and exists (or just introduce the new ones).
+Only drawback: lack of compatibility with DejaVu.
+
+---
+
