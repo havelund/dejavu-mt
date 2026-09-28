@@ -1210,6 +1210,8 @@ class FormulaMonitor:
                 return b.sub(l, r)
             if t.op == "*":
                 return b.mul(l, r)
+            if t.op == "/":
+                return b.div(l, r)
             raise ValueError(f"bad arithmetic operator {t.op}")
         raise TypeError(f"cannot build expression for {type(t).__name__}")
 

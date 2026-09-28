@@ -172,3 +172,17 @@ def test_bv_cvc5():
     got = replay(BV_SPEC, [{"stat": [("0x2A",)]}, {"stat": [("0x6A",)]}],
                  prop="err", solver="cvc5")
     assert got == [True, False]
+
+
+def test_division():
+    """/ is integer division on Int (6/2 = 7/2 = 3), unsigned on BV."""
+    spec = """
+    pred p(n: Int)
+    prop halves : Forall n . p(n) -> n / 2 = 3
+    """
+    events = [{"p": [("6",)]}, {"p": [("7",)]}, {"p": [("8",)]}]
+    assert replay(spec, events, prop="halves") == [True, True, False]
+    assert replay(spec, events, prop="halves", solver="cvc5") \
+        == [True, True, False]
+    bv = "pred s(w: BV8)\nprop b : Forall w . s(w) -> w / 2 = 0x20"
+    assert replay(bv, [{"s": [("0x40",)]}], prop="b") == [True]

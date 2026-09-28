@@ -45,13 +45,18 @@ to end of line or `/* ... */`.
 
 ## What is being monitored
 
-A **trace** is a finite sequence of **events**, read one at a time. Each event
-is a set of ground **facts** — predicate instances such as `open("a","read")`.
-An event may contain several facts, including several of the *same* predicate
-(e.g. both `p(1)` and `p(2)` at one step). A **property** is a closed formula;
-after each event the monitor reports whether the property *holds* or is
-*violated* at that point in the trace. Two log formats are read, chosen by
-file extension:
+A **trace** is a finite sequence of **events**, read one at a time. Each
+event is a set of ground **facts** — predicate instances such as
+`open("a","read")` — and may in general contain several facts, including
+several of the *same* predicate (e.g. both `p(1)` and `p(2)` at one step).
+In a *log file*, however, one line is one fact and becomes one
+single-fact event (lines are not grouped, not even by equal timestamps);
+for now, multi-fact events arise only when events are fed through the
+[library API](../README.md#library-api) — log-file syntax for them is
+planned. A **property** is a closed
+formula; after each event the monitor reports whether the property
+*holds* or is *violated* at that point in the trace. Two log formats are
+read, chosen by file extension:
 
 - **CSV** (default): one line is one fact with positional arguments —
   `open,a,read` — and, for timed specs, the timestamp as the last column.
@@ -74,7 +79,13 @@ file extension:
 Every predicate parameter has a type (sort), defaulting to `String` if the
 annotation is omitted; the supported sorts are `String`, `Int`, `Real`,
 `Bool`, the bit-vector sorts `BV8`/`BV16`/`BV32`/`BV64`, and declared
-**enumerations**:
+**enumerations**. For example — no write may exceed 4096 bytes:
+
+    pred write(f: String, size: Int)
+
+    prop small : Forall f . Forall n . write(f, n) -> n <= 4096
+
+An **enumeration** declares a sort with exactly the listed values:
 
     enum Mode = OFF | STANDBY | ACTIVE
     pred set(m: Mode)
@@ -98,6 +109,10 @@ shl lshr` (infix `&`/`|` would collide with the connectives):
     prop inc  : Forall c . Forall c0 .
         (frame(c) & @ frame(c0)) -> c = c0 + 1     -- modulo 2^16
 
+(`0x40` is hexadecimal notation: each digit after the `x` stands for four
+bits, so `4`,`0` is the binary `0100 0000` = 64 — the mask with only
+bit 6 set. `err` thus says the error bit of a status word is never set.)
+
 A variable's type is inferred from how it is used: the predicate positions it
 appears in, numeric constants it is related to; a variable used in
 `< <= > >=` with no other type information defaults to `Int` (declare it
@@ -109,9 +124,13 @@ equalities). Types are what enable *theory* reasoning: numeric order,
 lexicographic order, and arithmetic on the numeric sorts.
 
 **Relations** `= < <= > >=` compare two expressions of compatible type.
-Relation operands may be arithmetic expressions built with `+ - *` and unary
-minus, e.g. `v2 = v1 + 1` or `a * 2 <= b`; the variables involved must be
-numeric (`Int`/`Real`), typically via their predicate declarations.
+Relation operands may be arithmetic expressions built with `+ - * /` and
+unary minus, e.g. `v2 = v1 + 1` or `a * 2 <= b`; the variables involved
+must be numeric (`Int`/`Real`), typically via their predicate
+declarations. On `Int`, `/` is integer division (`7 / 2 = 3`); on `Real`
+it is exact; on bit-vectors it is unsigned. Division by zero is not an
+error: as in SMT, `x / 0` is an unspecified value, so guard against it in
+the property when the divisor can be zero.
 Arithmetic is not allowed inside predicate arguments (those are plain
 variables or constants).
 
@@ -193,9 +212,15 @@ The unary operators are derived from the binary ones as always:
 |---|---|---|
 | `P[a,b] phi` | `true S[a,b] phi` | `phi` held between `a` and `b` time units ago |
 | `H[a,b] phi` | `!P[a,b]!phi` | `phi` held at every step between `a` and `b` time units ago |
-| `phi Z[a,b] psi` | `phi & @(phi S[a,b] psi)` | since, with the witness read at the previous step |
 | `F[a,b] phi` | `true U[a,b] phi` | `phi` holds between `a` and `b` time units from now |
 | `G[a,b] phi` | `!F[a,b]!phi` | `phi` holds at every step between `a` and `b` time units from now |
+
+The timed zince `phi Z[a,b] psi` means: `psi` held at some *strictly
+earlier* step, between `a` and `b` time units ago, and `phi` at every
+step since, through now. It has no defining equation: the untimed
+identity `phi Z psi = phi & @(phi S psi)` does not lift to time bounds,
+since under the `@` the witness's age would be measured from the previous
+event's timestamp instead of from now.
 
 So `P[<=5] open(f)` is "open(f) within the last 5 time units" and
 `F[<=5] ack(x)` is "ack(x) within the next 5" — the verdicts of the future
@@ -268,24 +293,39 @@ variables shared across the steps:
             |-> P vetted(u))
 
 — when the first `sudo(u)` after two failed logins and a success arrives,
-`u` must have been vetted. The `(! sudo(u))[*]` block is what allows
-other events between the `ok` and the `sudo` (items match *consecutive*
-positions, so without it the `sudo` would have to come immediately
-next), while its `! sudo(u)` makes the final item the *first* sudo after
-the prefix.
+`u` must have been vetted.
 
-`{e1; e2; ...}` matches when the recent trace slices into consecutive
-blocks, one per item: a plain item is one position where the formula
-holds, `e[*]` any number of positions (each satisfying `e`), `e[+]` at
-least one, `e[*n]` exactly `n`; items may themselves be sequences
-(`{a; {b; b}[*]; c}` — c after an *even* number of b's, beyond plain
-LTL). A match may start anywhere and ends at the current position. As a
-formula, `{..}` means "a match ends here"; `seq |-> phi` (suffix
-implication) requires `phi` whenever a match ends, with the sequence's
-variables bound by the match. Sequences desugar to auto-generated
-`@`-guarded rules (a small automaton — see [rules](#rules)
-below), so they work under quantifiers and past operators; items are
-past-time, and sequences may not appear inside rule bodies.
+**How matching works.** `{e1; e2; ...}` matches when a segment of the
+trace, ending at the current position, slices into consecutive blocks,
+one per item — the blocks abut, with **no implicit gaps** between items:
+
+- a plain item is **exactly one** position where its formula holds — so
+  `fail(u); fail(u)` is two fails at *adjacent* positions, nothing in
+  between;
+- `e[*]` is any number of consecutive positions (possibly zero), each
+  satisfying `e`; `e[+]` at least one; `e[*n]` exactly `n`;
+- an item may itself be a sequence (`{a; {b; b}[*]; c}` — c after an
+  *even* number of b's, beyond plain LTL).
+
+Because there are no implicit gaps, "other events may happen here" must
+be written as an explicit item: `true[*]` for "anything", or a
+constrained gap like `(! sudo(u))[*]` for "anything without a sudo(u)".
+That is the role of the `[*]` in the example — a plain `! sudo(u)` item
+would be a *single* sudo-free position, not an interval — and the
+`! sudo(u)` inside it makes the final item the *first* sudo after the
+prefix. (In logics where a formula item denotes an interval by itself,
+the gap is implicit; here the star is what says "interval".)
+
+Matching is **nondeterministic, not greedy**: the sequence matches if the
+segment can be sliced in *some* way, and every way it can end counts —
+`seq |-> phi` (suffix implication) requires `phi`, with the sequence's
+variables bound by the match, whenever any match ends at the current
+position. The match may start anywhere in the trace. As a formula on its
+own, `{..}` means "a match ends here". Sequences desugar to
+auto-generated `@`-guarded rules (a small automaton — see
+[rules](#rules) below), so they work under quantifiers and past
+operators; items are past-time, and sequences may not appear inside rule
+bodies.
 
 ## String matching
 
@@ -296,17 +336,25 @@ pattern:
 
     m matches /[a-z ]*user {u:[a-z]+}( .*)?/
 
-(regex subset: literals, `.`, classes, `* + ?`, `|`, grouping; a hole's
-own constraining regex is optional, and `{_}` is an anonymous hole —
-matches, binds nothing). The other forms are shorthands for such a
+(regex subset: literals, `.` for any character, character classes such
+as `[a-z]` and `[0-9]`, the repetitions `* + ?`, alternation `|`, and
+grouping with parentheses, as in `( .*)?`; a hole's own constraining
+regex is optional, and `{_}` is an anonymous hole — matches, binds
+nothing). The other forms are shorthands for such a
 pattern:
 
-    m matches "user {u}"       -- quoted: literal text with holes;
-                                  matches "user bob" with u = "bob"
-    m matches "...user {u}..." -- "..." is a gap: matches anything,
-                                  binds nothing
-    m has "user {u}"           -- wraps the pattern in gaps: same as above
-    d contains "AUTOMATIC"     -- a gap-literal-gap pattern with no holes
+    m matches "user {u}"        =  m matches /user {u}/
+        -- quoted: literal text with holes; matches "user bob" with u = "bob"
+    m matches "...user {u}..."  =  m matches /.*user {u}.*/
+        -- "..." is a gap: matches anything, binds nothing
+    m has "user {u}"            =  m matches "...user {u}..."
+        -- has wraps the pattern in gaps
+    d contains "AUTOMATIC"      =  d matches /.*AUTOMATIC.*/
+        -- a substring test: gap-literal-gap, no holes
+
+with one difference: text in a *quoted* pattern is taken literally
+(`"3.5"` matches only `3.5`, whereas in a slashed pattern the `.` would
+match any character).
 
 A capture is a *constraint*, not an extraction — `m matches "user {u}"`
 means `m = "user " ++ u` — so the hole variable is an ordinary quantified
@@ -318,7 +366,13 @@ variable and flows anywhere data flows, e.g.
 Consequently, if a pattern decomposes in several ways, **every
 decomposition is a match**: `"{a}-{c}"` against `"x-y-z"` matches both
 with `a="x", c="y-z"` and with `a="x-y", c="z"` — declarative matching,
-not a regex engine's leftmost-greedy single choice. The simpler shorthands
+not a regex engine's leftmost-greedy single choice. For monitoring this
+means the enclosing quantifier decides: under `Forall a . Forall c .
+... matches ... -> phi`, *every* decomposition's bindings must satisfy
+`phi` (each is a separate obligation, and a violation witness may show
+any of them); under `Exists`, one suffices. When one specific capture is
+meant, make the pattern unambiguous — constrain the hole
+(`{n:[0-9]+}`) or anchor it with delimiter text around it. The simpler shorthands
 also cost less: they compile to plain equations and native substring
 atoms rather than full regex constraints.
 
@@ -384,7 +438,11 @@ result, which map to the spec's sorts: `str` is `String`, `int` is `Int`,
 `float` is `Real`, `bool` is `Bool`. A `bool` function can be used
 directly as an atom, others inside relations (`size(d) < 100`, also with
 arithmetic arguments). Imports and helpers inside the block are fine. Functions must
-be **pure** — results are cached. For Python code with side effects, see [State variables](#state-variables) below.
+be **pure** — results are cached per argument tuple, so a function that
+reads *mutable* Python state would silently return stale cached values.
+Route changing values through a **state variable** instead: its update
+expressions (and actions) are not cached and may read and change Python
+state freely. For Python code with side effects, see [State variables](#state-variables) below.
 
 A function is evaluated once its arguments have concrete values, which
 the trace supplies: guard the application with an event predicate that
@@ -448,6 +506,11 @@ count of *distinct* users:
 
 Actions turn monitors into data *producers*: Python expressions, evaluated
 in the `python` block's namespace, attached to a property or a rule.
+The braces hold a single Python *expression*, evaluated for its side
+effect (`incidents.append(...)` is a call, hence an expression).
+Statements — assignments, `if`, loops — are not allowed there; for
+anything beyond one call, define a function in the `python` block and
+call it from the action: `on violation {report(pos, f)}`.
 
 `on violation {expr}` and `on satisfaction {expr}` on a **property** fire
 once per emitted verdict, with `pos` and the witness values bound
@@ -464,6 +527,14 @@ rule's parameters bound to a satisfying assignment, plus `pos`:
     prop few : Forall n . errors(n) -> n <= 3
       where errors(n) := ...
                          do {history.append((pos, n))}
+
+Note that actions give the `python` block's variables a second role:
+plain Python state, accumulated across events (like `history` here, or
+`incidents` and `seen` above). The division of labor: what a *formula*
+must see goes in a **state variable**; what is only collected — reports,
+statistics, extracted data — can live in ordinary Python variables,
+invisible to the properties. Actions must not influence the monitor's
+verdicts except through state variables.
 
 ## Parametric monitoring
 
@@ -571,7 +642,7 @@ booleans) and each `FormulaMonitor` exposes `region`.
                                       // quantified Int variable (data bound)
 
     expr        ::= expr "+" product | expr "-" product | product   // arithmetic
-    product     ::= product "*" atom | atom
+    product     ::= product "*" atom | product "/" atom | atom
     atom        ::= name | int | float | string | "-" atom | "(" expr ")"
                   | name "(" [ expr ("," expr)* ] ")"   // python function call
     term        ::= name | int | float | string        // predicate arguments

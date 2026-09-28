@@ -217,6 +217,7 @@ _GRAMMAR = r"""
         | sum "-" product   -> sub
         | product
     ?product: product "*" atom -> mul
+            | product "/" atom -> div
             | atom
     ?atom: NAME             -> var
          | NAME "(" [sum ("," sum)*] ")" -> funapp
@@ -331,6 +332,9 @@ class _ToAst(Transformer):
 
     def mul(self, left, right):
         return ast.BinExpr(left, "*", right)
+
+    def div(self, left, right):
+        return ast.BinExpr(left, "/", right)
 
     def neg(self, x):
         # Constant-fold  -literal  into a negative constant.

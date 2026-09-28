@@ -57,6 +57,7 @@ class Backend:
     def add(self, a, b): ...
     def sub(self, a, b): ...
     def mul(self, a, b): ...
+    def div(self, a, b): ...
     def neg(self, a): ...
 
     # quantifiers (over a free constant, which becomes the bound variable)
@@ -255,6 +256,13 @@ class Z3Backend(Backend):
     def mul(self, a, b):
         a, b = self._adapt2(a, b)
         return a * b
+
+    def div(self, a, b):
+        # Integer division on Int, exact division on Real, unsigned on BV.
+        a, b = self._adapt2(a, b)
+        if isinstance(a, self.z3.BitVecRef):
+            return self.z3.UDiv(a, b)
+        return a / b
 
     def neg(self, a):    return -a
 
@@ -761,6 +769,17 @@ class Cvc5Backend(Backend):
     def mul(self, a, b):
         a, b = self._adapt2(a, b)
         k = self.Kind.BITVECTOR_MULT if self._isbv(a) else self.Kind.MULT
+        return self.tm.mkTerm(k, a, b)
+
+    def div(self, a, b):
+        # Integer division on Int, exact division on Real, unsigned on BV.
+        a, b = self._adapt2(a, b)
+        if self._isbv(a):
+            k = self.Kind.BITVECTOR_UDIV
+        elif a.getSort().isInteger():
+            k = self.Kind.INTS_DIVISION
+        else:
+            k = self.Kind.DIVISION
         return self.tm.mkTerm(k, a, b)
 
     def bvand(self, a, b):

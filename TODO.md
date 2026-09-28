@@ -68,8 +68,36 @@ increment of the relational-state hybrid under Larger projects.)
         study appears.
       * Counted operators (occurring >= n times): rules count already.
 
+## Language design questions (merged from notes/todo.txt, 2026-09-27)
+
+- [ ] Future/past operator symmetry: `@` has `X`, but `Z` (since with a
+      strictly-past witness) has no future counterpart.
+- [ ] Rules are per property — should they be per specification (shared
+      by all properties)?
+- [ ] A shorthand for `! @ true` ("first position").
+- [ ] Allow 0-ary predicates written without parentheses in
+      declarations: `pred errors` instead of `pred errors()`.
+- [ ] `python { ... }` instead of `python: ... end`?
+- [ ] A dedicated binder for a symbolic parameter (`n` in
+      `prop r : Forall x . req(x) -> F[<=n] ack(x)`) instead of the bare
+      free name?
+- [ ] Rename `Forall`/`Exists` to `forall`/`exists` (or accept both).
+      Drawback: `forall`/`exists` mean seen-only quantification in
+      DejaVu, so accepting both risks confusing DejaVu users.
+- [ ] Alternative sequence semantics (Klaus, 2026-09-27): an item could
+      denote an *interval* throughout which its formula holds, rather
+      than a single position — `{fail(u); ok(u); ! sudo(u); sudo(u)}`
+      would then need no `[*]`s (Klaus once designed a logic with this
+      reading). Trade-off: adjacency and "exactly one position" then
+      need their own notation instead. Could coexist as a second item
+      form or a per-sequence mode.
+
 ## Small / when touched anyway
 
+- [ ] Log-file syntax for multi-fact events (2026-09-27, promised in
+      doc/language.md; also raised in notes/todo.txt): the engine takes
+      them via the API; CSV/JSONL read one fact per line. E.g. a JSONL
+      line whose value is a list of facts, or a CSV continuation marker.
 - [x] Anchored + trace-table polish (2026-08-30): `-` cells documented;
       `Anchored verdict for ...` summary line in CLI output.
 - [x] `{_}` anonymous hole / unanchored `has` sugar for string patterns
