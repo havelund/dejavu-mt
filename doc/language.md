@@ -31,8 +31,8 @@ A specification is a sequence of predicate declarations (the events the
 trace may contain), macro definitions, and properties — later sections
 add enumerations, state variables, and Python blocks:
 
-    pred open(f: String, m: String)     // event/predicate declarations
-    pred close(f: String)
+    pred open(f: String, m: String)     // an event: file f opened in mode m
+    pred close(f: String)               // an event: file f closed
 
     def isOpen(f,m) = [open(f,m),close(f))         // a macro (abbreviation)
 
