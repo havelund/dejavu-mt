@@ -562,46 +562,67 @@ the conjunction of the constraints so far. On the log
 
     Parametric verdict for r: holds iff 7 <= n
 
-So instead of checking one deadline, the monitor *synthesizes* the tightest
-deadline the trace meets. The past form (`rsp(x) -> P[<=n] req(x)`) works the
-same way and is even simpler: a past verdict is fully known at its own
-position, so each constraint is emitted immediately. Future verdicts resolve
-at the **first witness** (for `F`; a later witness is only slower) or the
-first counterexample (for `G`), not at a deadline — with a symbolic bound
-there is none; unanswered positions resolve at end of trace (`false` for
-every `n`, collapsing the region). For `U` the same holds with one twist: a
-future witness also needs its run alive (`p` holding since the anchor), so a
-broken run yields `false` for every `n` as soon as it breaks.
+The verdict can be read two ways: as the answer to "for which `n` does
+this trace satisfy the property?" (the region `7 <= n`), or as a *learned
+bound* — the boundary value 7 is the worst-case response time the trace
+exhibits, the tightest deadline it meets. So instead of checking one
+deadline, the monitor *synthesizes* it.
+
+*When* a position's constraint is reported depends on the operator:
+
+- A parametric **past** operator (`rsp(x) -> P[<=n] req(x)`) is the
+  simple case: a past verdict is fully known at its own position, so its
+  constraint is reported immediately.
+- A parametric **future** operator has no deadline to wait out — the
+  bound is symbolic — so its constraint is reported as soon as later
+  events can no longer change it. For `F[<=n]` that is at the **first
+  witness**: it fixes the delay, and a later witness could only be
+  slower. For `G[<=n]`, at the first counterexample.
+- `phi U[<=n] psi` is like `F`, with one twist: a future witness only
+  counts if `phi` has held since the anchor position, so if `phi` breaks
+  before a witness arrives, the position is `false` for every `n` and is
+  reported right then.
+- A position still unanswered when the trace ends is then `false` for
+  every `n`, collapsing the region to empty.
 
 Well-formedness (checked at compile time): a parameter may occur in **exactly
 one** bound, and an operator carries at most one symbolic bound. Parametric
 operators may **nest anywhere** — a nested `F[<=n]` has no deadline, so its
 verdicts may wait until end of trace (they come earlier when a witness or a
 broken run already decides them for every `n`). Several *distinct* parameters
-are fine, and each verdict/region is then a constraint over all of them. In
-the API, `Monitor.step`/`end` verdicts are then backend formulas (instead of
-booleans) and each `FormulaMonitor` exposes `region`.
+are fine, and each verdict/region is then a constraint over all of them. In the library API, a parametric property's verdicts are no longer
+`True`/`False` but solver formulas over the parameters (the constraints
+shown above), returned by `Monitor.step` and `Monitor.end` like any other
+verdict; the running feasible region is the `region` attribute of the
+property's `FormulaMonitor` (an entry of `Monitor.formulas`).
 
 ## Grammar
 
-    spec        ::= definition*
-    definition  ::= declaration | macro | property | pythonblock | statedef
+    spec        ::= definition+
+    definition  ::= eventdef | enumdef | macrodef | statedef | pythonblock
+                  | property
 
-    pythonblock ::= "python:" ... "end"        // Python functions for formulas
-    enumdef     ::= "enum" name "=" name ("|" name)*
-    statedef    ::= "state" name ":" sort ":=" pyexpr
-                    ("on" name "(" [ name ("," name)* ] ")" ":" pyexpr)*
-    pyexpr      ::= "{" python-expression "}"
-
-    declaration ::= ("pred" | "event" | "preds" | "events") predsig ("," predsig)*
+    eventdef    ::= ("pred" | "event" | "preds" | "events")
+                    predsig ("," predsig)*
     predsig     ::= name [ "(" [ typedparam ("," typedparam)* ] ")" ]
     typedparam  ::= name [ ":" sort ]
     sort        ::= "String" | "Int" | "Real" | "Bool"
                   | "BV8" | "BV16" | "BV32" | "BV64" | enum-name
 
-    macro       ::= ("def" | "pred") name [ "(" [ name ("," name)* ] ")" ] "=" formula
+    enumdef     ::= "enum" name "=" name ("|" name)*
+
+    macrodef    ::= ("def" | "pred") name [ "(" [ name ("," name)* ] ")" ]
+                    "=" formula
+
+    statedef    ::= "state" name ":" sort ":=" pyexpr
+                    ("on" name "(" [ name ("," name)* ] ")" ":" pyexpr)*
+    pyexpr      ::= "{" python-expression "}"
+
+    pythonblock ::= "python:" ... "end"        // Python functions for formulas
+
     property    ::= "prop" name [ "anchored" ] ":" formula
-                    [ ("on" "violation" pyexpr) | ("on" "satisfaction" pyexpr) ]
+                    ( "on" "violation" pyexpr
+                    | "on" "satisfaction" pyexpr )*
                     [ "where" rule ("," rule)* ]
     rule        ::= name [ "(" [ name ("," name)* ] ")" ] ":=" formula
                     [ "do" pyexpr ]
