@@ -1,14 +1,355 @@
 # How the engine works
 
-Each subformula node holds an SMT formula over its free variables in two
-copies — `pre` (previous position) and `now`. On every event the `now`
-formulas are recomputed bottom-up following the temporal-logic semantics
-(e.g. `p S q` becomes `q ∨ (p ∧ pre(p S q))`), and the closed top formula
-is checked for satisfiability to yield the verdict; then `now` becomes
-`pre` and the next event is read. Quantifiers translate directly to SMT
-quantifiers over each variable's declared sort. The `debug` flag shows all
-of this live: the formula tree per event, each node annotated with its
-current formula.
+A property compiles into an array of **nodes** — its subformula tree in
+bottom-up order, `root` last. The two algorithms below — the past
+fragment, then the future extension that modifies it in exactly two
+places — are the per-property core of `FormulaMonitor.step`/`end` in
+`engine.py`; they omit rules
+(evaluated in a second pass so that recursion under `@` reads this
+position's first pass), state variables, Python functions, parametric
+bounds, and the placeholder machinery for *nested* future operators —
+each covered in its section below.
+
+## Algorithm 1: the past fragment
+
+Types: `Node` — the property's compiled subformula nodes; `Formula` —
+SMT formulas; `Time` — integer timestamps. `QElim` is quantifier
+elimination: it rewrites a quantified formula into an equivalent
+quantifier-free one (exact over linear integer arithmetic; over strings
+it may fail, in which case the quantifier is left in place and the final
+SAT check decides). For example, projecting the time variable out of a
+stamped record at current timestamp `T = 7`:
+
+    QElim( Exists t . (x = "a" & t = 3) & 7 - t <= 5 )  =  x = "a"
+
+(the record's age is 4, within the bound; had the record been `t = 1`,
+the result would be `false`).
+
+    -- State:
+    pre, now       : Node -> Formula
+        -- node n's STORED state: one formula over the subformula's free
+        -- variables, plus a private time variable t at a timed past
+        -- node (its stamped records)
+    preval, nowval : Node -> Formula
+        -- node n's EXPORTED value, the formula its parent reads.  Equal
+        -- to the stored state, except: a timed past node exports the
+        -- time-free window projection of its records, and an H node --
+        -- whose stored records are phi's FAILURES -- exports the
+        -- negation of that projection ("no failure in the window")
+
+    pre[n] := false for every n;  pos := 0
+
+    for each event E (with timestamp T):
+        pos := pos + 1
+        for each node n, bottom-up:
+            -- 1. update the stored state by n's recurrence.  Rule:
+            --    exports for others, state for self -- children are read
+            --    through nowval/preval, a node's own history through
+            --    pre[n]
+            case n of
+              p(x1,..,xk):  now[n] := E's p-facts as a formula:
+                            (x1=v1 & .. & xk=vk) | ..      (false if none)
+              connective:   now[n] := the operator applied to the
+                            children's nowval
+              @ phi:        now[n] := preval[phi]
+              phi S psi:    now[n] := nowval[psi] | (nowval[phi] & pre[n])
+              phi S[a,b] psi:
+                            now[n] := bound( (nowval[psi] & t = T)
+                                             | (nowval[phi] & pre[n]) )
+                            -- Z, P, H with a bound: analogous stamped
+                            -- recurrences through the same bound()
+              Exists x.phi: now[n] := QElim(Exists x . nowval[phi])
+            simplify now[n]
+            -- 2. export the value the parent reads:
+            nowval[n] := export(n, now[n])
+              -- identity, except at a timed past node:
+              --   export = QElim(Exists t . now[n] & a <= T - t <= b)
+              --   (negated for H: "no failure in the window")
+        pre := now;  preval := nowval
+        report (pos, SAT(nowval[root]))
+            -- root is closed, so SAT decides it:
+            -- satisfiable = holds, unsatisfiable = violated
+
+That is the whole monitor for past-time properties: one bottom-up pass of
+recurrences per event, one satisfiability check of the closed root.
+
+## Algorithm 2: the future extension
+
+Future operators change the algorithm in exactly two places; everything
+above stays as it is.
+
+**Change 1 — a new branch in the pass's case analysis.** Algorithm 1's
+bottom-up pass dispatches on each node's operator (`case n of ...`);
+the future operators add one more branch to that dispatch, given below.
+Each node headed by a future operator (`FNode ⊆ Node` is the set of
+these) carries new state — a table of stamped observations:
+
+    tab : FNode -> Formula x Formula   (for U)
+        | FNode -> Formula             (for F, G, X)
+        -- a "table" is ONE formula, read as a relation: its satisfying
+        -- assignments are the rows.  Typically it is a disjunction with
+        -- one disjunct per row, e.g.
+        --     A  =  (x = "a" & s = 2) | (x = "b" & s = 5)
+        -- is the table holding runs ("a", 2) and ("b", 5).  For
+        -- phi U[a,b] psi there are two such formulas, (A, W), over
+        -- different columns, coupled only through the update (a psi
+        -- observation adds to W one row per run currently in A).
+        -- In the row shapes below, "data" stands for the data columns:
+        -- the subformula's free variables (x, u, ...), SMT variables
+        -- exactly like s and t2 -- a row assigns concrete values to
+        -- all columns at once:
+        --   a row (data, s) of A is a live RUN -- phi has held for
+        --     these data at every position from position s through the
+        --     current one.  Runs are identified by their start POSITION
+        --     s: positions are unique, timestamps need not be;
+        --   a row (data, s, t2) of W is an ANSWERED run -- the run
+        --     begun at position s was still alive when a psi for these
+        --     data was observed, at clock value t2.
+        -- For F a single table of observed psi's (witnesses), each
+        -- stamped with its clock value; for G likewise but recording
+        -- the counterexamples (positions where psi failed)
+
+The new branches are shaped like Algorithm 1's: update the state (here
+the table), export a value for the parent to read. `clock` is `T`, or
+`pos` for the untimed forms.
+
+Two kinds of names appear inside these formulas, and they are not alike:
+`s`, `t2`, `t` and the data variables are **SMT variables** — the
+table's columns, living in the formulas across events; `pos`, `clock`,
+`anchor`, `a`, `b` are **concrete numbers** at the moment a line runs,
+inserted as numerals. So `A := A | (s = pos)` executed at position 17
+literally adds the disjunct `s = 17`. The data columns end up as
+equations in a row too (`x = "a"`), but by a different route: the engine
+never writes them itself — they arrive ready-made inside `nowval[psi]`
+and `nowval[phi]`, built at the predicate leaves from the event's facts,
+and conjoining those values into a row is what writes its data
+equations.
+
+The `U` branch, in words, does three things in a deliberate order.
+- *Start:* a run begins at this position — the new row has its data
+columns unconstrained, because which data values matter is decided by
+the later steps, not here. 
+- *Answer:* a `psi` in this event answers every
+run alive right now; `phi` is required strictly *before* the witness,
+not at it, which is why this happens before the phi test — in
+particular, the run just started may be answered immediately, with no
+`phi` involved. 
+- *Survive:* a run that was not answered can only be
+answered by a later witness, and for that `phi` must hold now; runs (and
+data values) failing `phi` are deleted — the new row included. Deletion
+is by conjunction: `A` is a disjunction of rows, so conjoining
+`nowval[phi]` distributes over them and filters each row down to the
+data values satisfying `phi` — e.g. with `A = (x="a" & s=2) |
+(x="b" & s=5)` and `nowval[phi] = (x="a")`, the second row becomes
+unsatisfiable and disappears (that run died), the first survives
+unchanged.
+
+              phi U[a,b] psi (an FNode, with tab[n] = (A, W)):
+                            A := A | (s = pos)                  -- start
+                            W := W | (nowval[psi] & A & t2 = clock)
+                                                                -- answer
+                            A := nowval[phi] & A                -- survive
+                            nowval[n] := QElim( Exists s, t2 . W
+                                                & s = pos
+                                                & a <= t2 - clock <= b )
+                                -- the window is measured from the clock
+                                -- value of the position being judged --
+                                -- here the current one, hence clock.
+                                -- Every stored t2 is <= clock, so at
+                                -- export only a witness from THIS event
+                                -- (t2 = clock, delay 0) can satisfy the
+                                -- query: the export really is just
+                                -- "proven so far".  Positive delays are
+                                -- credited later by CHECK, which re-runs
+                                -- this same query for a parked position
+                                -- with that position's older clock value
+                                -- (its ANCHOR) in place of clock -- the
+                                -- stamps exceed THAT.
+                                --
+                                -- s and t2 are W's column variables:
+                                -- they occur in W's rows, e.g.
+                                --   W = (x="a" & s=2 & t2=9) | ...
+                                -- The two conjuncts constrain them:
+                                -- s = pos picks the rows whose run is
+                                -- the one started HERE, and
+                                -- a <= t2 - clock <= b keeps those
+                                -- whose witness lies in the window.
+                                -- Each row pins s and t2 to numerals,
+                                -- so the two conjuncts act as row
+                                -- filters (arithmetic on constants, per
+                                -- row), and the Exists/QElim just
+                                -- discards the spent columns.  E.g.
+                                -- judging position 2, which occurred at
+                                -- time 7 (anchor=7), window [0,5]; the
+                                -- rows were stamped when their psi's
+                                -- arrived (times 9 and 30), and the
+                                -- current clock -- at least 30 -- does
+                                -- not occur in the query at all:
+                                --   W = (x="a" & s=2 & t2=9)
+                                --     | (x="b" & s=2 & t2=30)
+                                -- row 1: t2-7=2, in the window; row 2:
+                                -- t2-7=23, out.  Result: x = "a" -- the
+                                -- data values for which the query
+                                -- holds.  A LOWER bound on the eventual
+                                -- answer, since W can still grow
+              F[a,b] psi (an FNode, with tab[n] = S):
+                            S := S | (nowval[psi] & t = clock)
+                            nowval[n] := QElim( Exists t . S
+                                                & a <= t - clock <= b )
+                                -- t is S's column variable, occurring
+                                -- in S's rows (x="a" & t=9); the
+                                -- conjunct keeps rows in the window,
+                                -- QElim projects t away, leaving the
+                                -- data values for which it holds
+              G[a,b] psi:   as F, but S records !psi (counterexamples)
+                            and the exported query is negated
+              X psi:        as F, stamped by pos, window [1,1]
+
+The export is only what the table proves *so far* — dealing with that
+provisionality is Change 2's job.
+
+A note on the stamps, since the subtraction `t2 - anchor` can mislead:
+`t2` never exceeds the current clock — rows record the *past*. What a
+stamp exceeds is the **anchor** of an older parked position: the delay
+`t2 - anchor` is measured from the judged position forward, so it is
+`>= 0` for every row written at or after that position.
+
+**A worked trace.** `prop u : Exists x . busy(x) U[0,5] done(x)` on the
+timed log `busy(a)@0, busy(a)@2, done(a)@4, busy(b)@9`. The tables have
+one data column `x`; recall that a new run's row leaves `x`
+unconstrained, and the survive step then narrows it:
+
+    event 1, busy(a) @ 0  (pos 1):
+        start:   (A, W) = ( (s=1),           false )   -- new row, any x
+        answer:  (A, W) = ( (s=1),           false )   -- no done here
+        survive: (A, W) = ( (x="a" & s=1),   false )   -- busy's value
+                                                       --   is x="a"
+        export: false; position 1 parked (deadline 0+5)
+
+    event 2, busy(a) @ 2  (pos 2):
+        start:   (A, W) = ( (x="a" & s=1) | (s=2),            false )
+        answer:  (A, W) = ( (x="a" & s=1) | (s=2),            false )
+        survive: (A, W) = ( (x="a" & s=1) | (x="a" & s=2),    false )
+        export: false; position 2 parked; neither deadline passed
+
+    event 3, done(a) @ 4  (pos 3):
+        start:   (A, W) = ( (x="a" & s=1) | (x="a" & s=2) | (s=3),
+                            false )
+        answer:  (A, W) = ( (x="a" & s=1) | (x="a" & s=2) | (s=3),
+                            (x="a" & s=1 & t2=4)
+                          | (x="a" & s=2 & t2=4)
+                          | (x="a" & s=3 & t2=4) )
+                 -- done's value x="a" conjoined with A: one done
+                 -- answers all three live runs (the fresh s=3 row
+                 -- narrows to x="a" too)
+        survive: (A, W) = ( false,  W as above )
+                 -- busy is false here (the event is a done): all runs
+                 -- die -- but they are answered
+        CHECK: position 1 (anchor 0): row s=1, delay 4-0 in [0,5],
+                 Exists x: x="a"  -> true
+               position 2 (anchor 2): row s=2, delay 2  -> true
+               position 3 (anchor 4): row s=3, delay 0  -> true
+        all pending resolved; tables cleared: (A, W) = (false, false)
+
+    event 4, busy(b) @ 9  (pos 4):
+        start:   (A, W) = ( (s=4),           false )
+        answer:  (A, W) = ( (s=4),           false )
+        survive: (A, W) = ( (x="b" & s=4),   false )
+        export: false; position 4 parked (deadline 9+5 = 14)
+        -- the run is alive and the deadline ahead: undecided
+
+    end of trace: the window closes with no witness -- position 4 is
+    forced to FALSE ("determined at end of trace").
+    Verdicts: 1-3 hold, 4 violated.
+
+**Change 2 — verdict delivery.** The root's value now depends on events
+not yet read, so the report line of Algorithm 1 is replaced by
+park-and-check over a notebook of open positions (new state):
+
+    pending : Set(Obligation),  Obligation = Pos x Time x (Node -> Formula)
+        -- one obligation per position whose verdict is not yet known:
+        -- the position, its timestamp (the anchor its time windows are
+        -- measured from), and a snapshot of nowval there.  The snapshot
+        -- is a copy of the ARRAY only -- formulas are immutable and
+        -- shared, so it is one reference per node; its cost is keeping
+        -- that position's formulas alive while the obligation pends
+        -- (bounded windows bound how long)
+
+    -- in place of Algorithm 1's report line:
+        add (pos, T, copy of nowval) to pending
+        for each ob in pending:             -- newest included
+            v := CHECK(ob); if v /= undecided: report (ob.pos, v), drop ob
+        drop from every tab[j] the rows older than the earliest window still
+        awaited by pending (all rows if pending is empty)
+
+    at end of trace:
+        for each ob in pending: report CHECK(ob) with every query exact
+            -- closes the windows: an unwitnessed F is false, an
+            -- unrefuted G true
+
+**Checking an obligation.** The verdict for position `p` is the value of
+`root` computed from the values of all subformulas at `p`. For past and
+propositional subformulas those values never change after `p` — the
+obligation's snapshot `vals` holds them, final. Only the future nodes'
+entries are provisional, and their *eventual* answers may not be known
+yet. `CHECK` handles this by computing two roots instead of one:
+
+- `root_lo` — each future node contributes only what its table already
+  **proves**: its window query, as of now.
+- `root_hi` — each future node is additionally credited with the
+  **best a future event could still do** for it: for `F`, a witness may
+  still arrive while the deadline is ahead; for `U`, only for runs still
+  alive in `A`. A node whose answer is *final* — deadline passed, runs
+  dead, or trace over — gets no such credit: there `hi = lo`.
+
+Tables only grow, so the true eventual root value lies between the two:
+`root_lo  =>  eventual  =>  root_hi`. One wrinkle: for a future node
+sitting under a negation, more witnesses make the root *falser*, not
+truer — so at such a node `lo` and `hi` trade places (the node's
+*polarity*: the parity of negations on its path to the root).
+
+The sandwich decides:
+
+    CHECK(p, time, vals):                 -- time: the anchor for p's windows
+        for each future node j:
+            lo[j] := the window query over tab[j], anchored at p
+            hi[j] := lo[j] if j's answer is final,
+                     else lo[j] weakened by the best still possible
+            swap lo[j], hi[j] if j lies under an odd number of negations
+        root_lo := root evaluated over vals, with entry j := lo[j]
+        root_hi := root evaluated over vals, with entry j := hi[j]
+        if root_lo is true:          return true
+            -- even with no further help, p already holds
+        if root_hi is false:         return false
+            -- even crediting all possible help, p fails
+        if every j's answer final:   return root_lo   -- lo = hi: exact
+        return undecided
+
+In the worked trace above: at event 2, position 1 has `root_lo = false`
+(no `done` yet) but `root_hi = true` (a run is alive, the deadline
+ahead) — undecided. At event 3 the query alone proves it:
+`root_lo = true`, resolved two time units *before* the deadline. And at
+end of trace position 4 is final with `root_lo = root_hi = false`.
+
+**The combined algorithm** is Algorithm 1 with the two changes in place:
+
+    pre[n] := false;  tab[j] := empty;  pending := {};  pos := 0
+
+    for each event E (with timestamp T):
+        pos := pos + 1
+        for each node n, bottom-up:
+            case n of
+              ...                         -- the cases of Algorithm 1
+              future (j): ...             -- Change 1
+            simplify now[n];  nowval[n] := export(n, now[n])
+        pre := now;  preval := nowval
+        park, check pending, prune tables -- Change 2 (replacing report)
+
+    at end of trace: force the pending obligations        -- Change 2
+
+The `debug` flag shows all of this live: the formula tree per event, each
+node annotated with its current formula, plus the positions still
+pending.
 
 This is the same recurrence the original DejaVu runs over BDDs; carrying
 formulas instead is what admits data theories (arithmetic, strings, enums,
@@ -45,7 +386,7 @@ witnessing occurrence.
     phi S[a,b] psi   --  psi held between a and b time units ago,
                          and phi has held at every step since.
 
-Semantically `P[a,b] phi = true S[a,b] phi` and `H[a,b] phi = !P[a,b]!phi`.
+To recall: semantically `P[a,b] phi = true S[a,b] phi` and `H[a,b] phi = !P[a,b]!phi`.
 `Z` (*zince*) is since with a strictly-past witness: `phi Z psi` = "psi held
 strictly in the past and phi has held since, through now" =
 `phi & @(phi S psi)`; its timed form stamps the witness with the *previous*
@@ -59,17 +400,13 @@ The upper bound may be `*` (absent). With integer time the comparison forms
 are sugar: `[<=n]=[0,n]`, `[<n]=[0,n-1]`, `[>=n]=[n,*]`, `[>n]=[n+1,*]`. The
 unconstrained interval `[0,*]` is exactly the untimed `S`.
 
-Although Z, P and H are *defined* by these rewrites, the engine does not
+Although the semantics of Z, P and H are *defined* by these rewrites, the engine does not
 compile them that way: every surface operator (S, Z, P, H — timed and untimed)
 gets its
 own node interpreting its own (provably equal) recurrence, so the debug tree
 mirrors the specification one-to-one, with no encoding artifacts (no
-constant-`true` child under P, no `¬P¬` chain for H). For P the recurrence is
-the stamped since-recurrence with the phi-conjunct dropped. For H the node
-stores the record-set of phi's *failures* — the state of `P[a,b]!phi`, which
-starts at `false` = "no failure yet" = vacuously true — and exports the
-*negation* of its projection; so an H node's displayed state describes
-`!phi`, while its displayed value describes `phi`.
+constant-`true` child under P, no `¬P¬` chain for H). The P and H
+recurrences are given at the end of the next section.
 
 ## The state: records with a timestamp
 
@@ -92,33 +429,60 @@ values at time t, and phi has held since". Think of `S` as a table:
     x = "a"  and  t = 0        -- p(a) was observed at time 0
     x = "b"  and  t = 3        -- p(b) was observed at time 3
 
-Two properties make this efficient:
+A record is written once and never touched again — there is no per-step
+aging. It is the *query* that moves: the window constraint
+`a <= T - t <= b` is re-evaluated against each new timestamp `T`. The
+state is kept small through the two bounds, which behave differently:
 
-- **Records are immutable.** A record `t = 0` is written once and never
-  rewritten. There is no per-step aging update (DejaVu, by contrast, adds the
-  time delta to every stored age at every step, with a bit-level adder built
-  from BDD operations). It is the *query* that moves: the window constraint
-  `a <= T - t <= b` is evaluated against the current timestamp `T`.
+- **Upper bound `b`.** A record's age only grows, so once it exceeds `b`
+  the record can never satisfy the window again. Such records are
+  deleted: the state never holds more than the last `b` time units of
+  history.
+- **Lower bound `a`.** A record with age below `a` does not satisfy the
+  window *yet* — but it will, once enough time has passed. Deleting it
+  would therefore be wrong: the lower bound only filters the query's
+  answer, and the record stays in the state.
+- **No upper bound (`[a,*]`).** Now no record ever becomes useless, so
+  nothing may be deleted. But once a record's age reaches `a`, it
+  satisfies the window from then on, forever — *when* it happened has
+  stopped mattering. The engine therefore forgets the timestamp: all such
+  records are merged into a single formula without `t`, which from then
+  on evolves like ordinary untimed state.
 
-- **The two window bounds behave differently.**
-  The *upper* bound is monotone — a record older than `b` stays older than
-  `b` forever — so expired records can be deleted from the state
-  (`prune_expired` in `backend.py` replaces `t = c` atoms with `c < T - b` by
-  `false`, in and/or positions only). The state thus holds at most the last
-  `b` time units of records.
-  The *lower* bound is **not** monotone — a record that is too young will
-  mature into the window later — so it is applied only in the value query,
-  never to the state.
+This defines the `bound` operation of the overview's loop (`_bound_state`
+in `engine.py`). It acts per node: only a subformula headed by a timed
+past operator carries a window, and the node supplies its own window
+`[a,b]` and its own time variable `t` (`T` is the current timestamp);
+every other node passes through unchanged. (Future-operator tables are
+kept small by their own rule — see the pruning paragraph under bounded
+future operators.)
 
-- **No upper bound (`[a,*]`)**: nothing expires, but a record past the lower
-  bound satisfies the window forever, so its timestamp has become
-  irrelevant: the engine projects `t` away from the matured part
-  (`Exists t . S and T - t >= a`, quantifier-eliminated), merging all matured
-  records into one time-free formula that thereafter evolves like ordinary
-  untimed state. This is the SMT analogue of DejaVu's saturation of ages at
-  `n+1`. So DejaVu's two state-bounding devices are the two halves of the
-  window: the upper bound *prunes* records, the lower bound *anonymizes*
-  them.
+    bound(S)  =  S with every record of age > b deleted   -- past, window [a,b]
+                 (its stamp t = c rewritten to false)
+
+    bound(S)  =     QElim( Exists t . S and T - t >= a )  -- past, window [a,*]
+                 or ( S and T - t < a )
+                 -- matured records merged, t eliminated;
+                 -- young records kept, stamps untouched
+
+    bound(S)  =  S            -- every other node: untimed, future (tables
+                              -- pruned by their own rule), or a parametric
+                              -- bound (nothing may be dropped)
+
+The other past operators run recurrences of the same shape. `P[a,b] phi`
+drops the since-recurrence's phi-conjunct — once a witness is on record,
+nothing more is required of the steps after it:
+
+    S  <-  (B[phi] and t = T)  or  pre[S].
+
+`H[a,b] phi` is P in disguise (`H = !P[a,b]!phi`): its table records the
+positions where `phi` **failed**, stamped like any witness. The initial
+state `false` then means "no failure on record", which is exactly H's
+vacuous truth at the start of the trace; and the node exports the
+*negation* of the window query over this failure table — "no failure in
+the window". One consequence for `debug` output: an H node's state line
+describes `!phi` (the recorded failures), while its value line describes
+`phi`.
 
 ## State vs. exported value
 

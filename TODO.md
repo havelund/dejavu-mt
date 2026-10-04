@@ -51,6 +51,21 @@ increment of the relational-state hybrid under Larger projects.)
       node-list evaluator as a Rust/C++ core against the Z3 C API, Python
       kept as frontend.  Recovers the ~50–100 µs/event interpreter floor;
       see the Optimization section below.
+- [ ] **Correctness proof** (2026-10-03), VeriMon-style in spirit: one
+      invariant per state array, induction on the trace.  Invariants:
+      nowval[n]'s satisfying assignments = the valuations making the
+      subformula true at position i (fuzz_reference already tests this
+      at the root); stored states/tables with their stamped readings
+      (records; A = live runs, W = answered runs); pending = positions
+      not yet reported.  Lemma groups: (1) per-operator recurrence =
+      semantics unfolding; (2) harmlessness of bound()/table pruning
+      (expired rows satisfy no future query, matured rows satisfy all);
+      (3) the bracket lemma -- tables only grow + OPSIGNS monotonicity
+      make polarity-directed lo/hi substitution bracket the eventual
+      root value; (4) trusted base: QElim equivalence, SAT correctness
+      (the solver).  Paper-level: state the invariants and lemmas;
+      mechanization (Isabelle/Coq, cf. VeriMon for MonPoly) is the
+      research-grade version.
 
 ## To investigate
 
