@@ -1330,7 +1330,8 @@ class FormulaMonitor:
         Conservative by construction: skipping is offered only where "this event holds
         none of my predicates" really does mean "this event cannot affect me", and where
         a skipped position owes nothing but its verdict. So it is off for
-          - properties with future operators (they never settle; handled later),
+          - (properties with future operators may skip, but only from a quiet state:
+            see the future branch of step()),
           - state variables (`dyn` atoms): another property's action can change them on
             an event this one does not mention,
           - Python functions in the spec, which need not be pure,
@@ -1341,7 +1342,7 @@ class FormulaMonitor:
           - a backend without term_id (CVC5): slower there, never different."""
         if self._skip_ok is None:
             self._skip_ok = (
-                not self.future and not self.weak
+                not self.weak
                 and hasattr(self.backend, "term_id")
                 and not any(nd.kind == "dyn" for nd in self.nodes)
                 and not self.pyfuns and not self._rule_actions and not self._sat_action
@@ -1399,6 +1400,7 @@ class FormulaMonitor:
         self._time = time
         self.position += 1
         b = self.backend
+        ftab_before = {j: self.ftab[j] for j in self.fnodes} if self.future else None
         now = self.now
         pre = self.pre
         preval = self.preval
@@ -1558,6 +1560,31 @@ class FormulaMonitor:
                                      "vals": list(nowval)})
             self._resolve_bindings()
             resolved = self._check_pending()
+            if self._skippable():
+                # A future property settles only from a quiet state: this position's
+                # obligation was decided on the spot -- and decided TRUE, so nothing is
+                # owed but the verdict -- nothing is pending or awaiting a placeholder,
+                # and the step left every state, exported value and future table the
+                # same term. An obligation checked at its own position compares its
+                # clock with itself plus a fixed bound (_fexact) and its readiness
+                # depends only on outstanding placeholders (_fready), so the next
+                # irrelevant event reaches the same decision; anything that would
+                # differ by position -- a position-stamped until run, a fresh
+                # placeholder -- shows up as a changed term and prevents settling.
+                mine = [h for p, h in resolved if p == self.position]
+                tid = b.term_id
+                self._settled = (
+                    irrelevant and mine == [True] and not self.pending and not self.qbind
+                    and all(tid(x) == tid(y) for x, y in zip(pre, now))
+                    and all(tid(x) == tid(y) for x, y in zip(preval, nowval))
+                    and all(tid(x) == tid(y)
+                            for j in self.fnodes
+                            for x, y in zip(ftab_before[j], self.ftab[j])))
+                if self._settled:
+                    self._last_verdict = True
+                    self._deadline = self._next_deadline(now, time)
+                    if self._deadline == -1:
+                        self._settled = False
         elif self.anchored and self.position > 1:
             resolved = []
         else:
