@@ -153,6 +153,14 @@ class Z3Backend(Backend):
         # as "leave the quantifier in place"; the verdict then falls to the
         # closed root's satisfiability check, which handles the ground case.
         self._qe = z3.TryFor(z3.Tactic("qe2"), 3000)
+        # ... but TryFor costs a fixed ~70-190 us per call (it arms a timer), which
+        # on a typical spec was 15-30% of all monitoring time -- for a divergence that
+        # only string concatenation and regex terms can cause. So the limited tactic
+        # is used only once the spec has built such a term (_strings_used, set by the
+        # builders below, all of which run while the spec is compiled, before any
+        # quantifier is eliminated); otherwise plain qe2.
+        self._qe_plain = z3.Tactic("qe2")
+        self._strings_used = False
         # Memo tables for the two pure, expensive operations (see _memo). A qelim that
         # hits the TryFor limit returns its argument unchanged -- an equivalent formula --
         # so caching that outcome is sound too; it just isn't retried.
@@ -256,7 +264,9 @@ class Z3Backend(Backend):
         a, b = self._adapt2(a, b)
         return self.z3.UGE(a, b) if self.z3.is_bv(a) else a >= b
 
-    def contains(self, a, b): return self.z3.Contains(a, b)
+    def contains(self, a, b):
+        self._strings_used = True
+        return self.z3.Contains(a, b)
 
     # +,-,* are native wraparound on bit-vectors.
     def add(self, a, b):
@@ -352,11 +362,13 @@ class Z3Backend(Backend):
 
     def _qelim_uncached(self, q):
         try:
-            return self._qe(q).as_expr()
+            tactic = self._qe if self._strings_used else self._qe_plain
+            return tactic(q).as_expr()
         except self.z3.Z3Exception:
             return q
 
     def concat(self, parts):
+        self._strings_used = True
         z3 = self.z3
         parts = list(parts)
         if not parts:
@@ -386,10 +398,16 @@ class Z3Backend(Backend):
             return z3.Union(*[self._re(x) for x in r[1]])
         raise ValueError(f"bad regex node {k}")
 
-    def prefixof(self, pre, s): return self.z3.PrefixOf(pre, s)
-    def suffixof(self, suf, s): return self.z3.SuffixOf(suf, s)
+    def prefixof(self, pre, s):
+        self._strings_used = True
+        return self.z3.PrefixOf(pre, s)
+
+    def suffixof(self, suf, s):
+        self._strings_used = True
+        return self.z3.SuffixOf(suf, s)
 
     def in_re(self, s, rast):
+        self._strings_used = True
         return self.z3.InRe(s, self._re(rast))
 
     def func(self, name, arg_sorts, ret_sort="Bool"):
