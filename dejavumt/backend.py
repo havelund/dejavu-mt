@@ -106,6 +106,14 @@ class Backend:
         of dejavumt.pattern."""
         ...
 
+    def stamps(self, t, tc):
+        """The timestamps c of every atom  tc = c  in a timed node's state, or None if
+        tc occurs in any other form. Used to find when the node's value can next change
+        (see FormulaMonitor._next_deadline); None means "cannot tell", which disables
+        skipping for that property. The default is None, so a backend that does not
+        implement it is merely slower, never wrong."""
+        return None
+
     def prune_expired(self, t, tc, deadline: int):
         """Replace every atom  tc = c  (c a concrete integer < deadline)
         occurring in a positive position (under and/or only) by false --- used
@@ -323,6 +331,10 @@ class Z3Backend(Backend):
     def simplify(self, t):
         return self._memo(self._simplify_memo, t, self.z3.simplify)
 
+    # Equal ids mean structurally identical terms (Z3 hash-conses), which is how the
+    # engine recognises that an irrelevant event changed nothing.
+    def term_id(self, t): return t.get_id()
+
     def strong_simplify(self, t):
         try:
             return self._ctx(t).as_expr()
@@ -534,6 +546,31 @@ class Z3Backend(Backend):
                     return True
                 stack.extend(e.children())
         return False
+
+    def stamps(self, t, tc):
+        z3 = self.z3
+        found, seen = set(), set()
+        ok = True
+
+        def walk(e):
+            nonlocal ok
+            if not ok or e.get_id() in seen:
+                return
+            seen.add(e.get_id())
+            if z3.is_eq(e):
+                l, r = e.arg(0), e.arg(1)
+                for u, v in ((l, r), (r, l)):
+                    if u.eq(tc) and z3.is_int_value(v):
+                        found.add(v.as_long())
+                        return
+            if e.eq(tc):            # tc in any other position: give up
+                ok = False
+                return
+            for c in e.children():
+                walk(c)
+
+        walk(t)
+        return sorted(found) if ok else None
 
     def prune_expired(self, t, tc, deadline):
         z3 = self.z3

@@ -936,6 +936,18 @@ class FormulaMonitor:
         self.weak = False            # if True, do no simplification/elimination at all
         self.gc_period = 0           # if > 0, prune dead terms every gc_period events
         self._steps = 0
+        # Skipping irrelevant events (see _skippable). An event is irrelevant when it
+        # holds none of the predicates this property mentions. Once one such event has
+        # left every node unchanged, further ones change nothing either -- except that
+        # timed nodes can change as time passes, which _deadline bounds.
+        self._preds = {nd.data[0] for nd in self.nodes if nd.kind == "pred"}
+        self._timed_nodes = [i for i, nd in enumerate(self.nodes)
+                             if nd.kind in ("tsince", "tzince", "tonce", "thist")]
+        self._settled = False        # the last step was irrelevant and changed nothing
+        self._deadline = None        # earliest time a timed node can change (None: never)
+        self._last_verdict = None
+        self.skipped = 0             # events skipped, for reporting
+        self._skip_ok = None         # computed lazily by _skippable
 
     # --- compilation: flatten AST into post-order node list ---
 
@@ -1305,6 +1317,54 @@ class FormulaMonitor:
 
     # --- per-event evaluation ---
 
+    def _skippable(self) -> bool:
+        """Whether skipping irrelevant events is available for this property at all.
+
+        Conservative by construction: skipping is offered only where "this event holds
+        none of my predicates" really does mean "this event cannot affect me", and where
+        a skipped position owes nothing but its verdict. So it is off for
+          - properties with future operators (they never settle; handled later),
+          - state variables (`dyn` atoms): another property's action can change them on
+            an event this one does not mention,
+          - Python functions in the spec, which need not be pure,
+          - rule actions and on-satisfaction actions, which run code per position,
+          - anchored and parametric properties, whose verdicts are not a plain Boolean
+            per position,
+          - weak mode, which displays every step's raw formulas,
+          - a backend without term_id (CVC5): slower there, never different."""
+        if self._skip_ok is None:
+            self._skip_ok = (
+                not self.future and not self.weak
+                and hasattr(self.backend, "term_id")
+                and not any(nd.kind == "dyn" for nd in self.nodes)
+                and not self.pyfuns and not self._rule_actions and not self._sat_action
+                and not self.anchored and not self.params)
+        return self._skip_ok
+
+    def _next_deadline(self, now, time):
+        """The earliest time at which a timed node's value can change without a relevant
+        event: when one of its stored witnesses, stamped c, enters the window (age
+        reaches lo, at c + lo) or leaves it (age passes hi, at c + hi + 1). None means no
+        timed node can ever change; -1 means it cannot be determined -- a state that
+        could not be analysed, or a symbolic (parametric) bound -- in which case the
+        property is evaluated in full."""
+        if not self._timed_nodes:
+            return None
+        candidates = []
+        for i in self._timed_nodes:
+            lo, hi, tc = self.nodes[i].data
+            if not isinstance(lo, int) or not (hi is None or isinstance(hi, int)):
+                return -1
+            stamps = self.backend.stamps(now[i], tc)
+            if stamps is None:
+                return -1
+            for c in stamps:
+                if lo > 0 and c + lo > time:
+                    candidates.append(c + lo)
+                if hi is not None and c + hi + 1 > time:
+                    candidates.append(c + hi + 1)
+        return min(candidates) if candidates else None
+
     def step(self, event: Dict[str, List[Tuple]], time: int = None):
         """Process one event; return the verdicts it determines, as a list of
         (position, holds) pairs.  Without future operators that is always the
@@ -1316,6 +1376,19 @@ class FormulaMonitor:
             raise ValueError(
                 f"property {self.name} uses timed operators; "
                 f"events need timestamps (timed log: last CSV column)")
+        irrelevant = self._skippable() and not (self._preds & event.keys())
+        if (irrelevant and self._settled
+                and (self._deadline is None or time < self._deadline)):
+            # Nothing this event holds can reach any node, and nothing has changed
+            # since an identical step: the state and the verdict carry over.
+            self._time = time
+            self.position += 1
+            self._prev_time = time
+            self._steps += 1
+            self.skipped += 1
+            if self.gc_period and self._steps % self.gc_period == 0:
+                self._collect_garbage()
+            return [(self.position, self._last_verdict)]
         self._time = time
         self.position += 1
         b = self.backend
@@ -1492,6 +1565,21 @@ class FormulaMonitor:
             elif verdict is True and self._sat_action:
                 self._note_sat_witness(self.position, nowval)
             resolved = [(self.position, verdict)]
+            if self._skippable():
+                # Settled: an irrelevant event left every node's state and exported
+                # value exactly as they were, so the next irrelevant one will too.
+                # Only a plain `true` verdict is carried over: a violation owes a
+                # witness and its action at every position, so it is never skipped.
+                tid = b.term_id
+                self._settled = (
+                    irrelevant and verdict is True
+                    and all(tid(x) == tid(y) for x, y in zip(pre, now))
+                    and all(tid(x) == tid(y) for x, y in zip(preval, nowval)))
+                if self._settled:
+                    self._last_verdict = verdict
+                    self._deadline = self._next_deadline(now, time)
+                    if self._deadline == -1:
+                        self._settled = False
         self._prev_time = time
         self.now = [b.false()] * len(self.nodes)
         self._steps += 1
