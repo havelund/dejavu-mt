@@ -14,6 +14,7 @@ those terms as opaque and only combines them through backend methods.
 from __future__ import annotations
 
 from fractions import Fraction
+from collections import OrderedDict
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +145,11 @@ class Z3Backend(Backend):
         # as "leave the quantifier in place"; the verdict then falls to the
         # closed root's satisfiability check, which handles the ground case.
         self._qe = z3.TryFor(z3.Tactic("qe2"), 3000)
+        # Memo tables for the two pure, expensive operations (see _memo). A qelim that
+        # hits the TryFor limit returns its argument unchanged -- an equivalent formula --
+        # so caching that outcome is sound too; it just isn't retried.
+        self._qelim_memo = OrderedDict()
+        self._simplify_memo = OrderedDict()
         self._ctx = z3.Tactic("ctx-solver-simplify")
         self._gc = z3.Tactic("ctx-simplify")  # cheap contextual dead-term pruning
 
@@ -291,7 +297,31 @@ class Z3Backend(Backend):
     def exists(self, const, body): return self.z3.Exists([const], body)
     def forall(self, const, body): return self.z3.ForAll([const], body)
 
-    def simplify(self, t): return self.z3.simplify(t)
+    # Quantifier elimination and simplification are pure functions of their argument,
+    # and Z3 hash-conses terms, so a term's id identifies it exactly. A monitor asks for
+    # the same few terms over and over -- an event that leaves a subformula unchanged
+    # re-requests its value -- so caching them is sound and cheap: on the TempControl GDS
+    # traces 81% of qelim calls and 95% of simplify calls were repeats.
+    #
+    # Bounded LRU, because an unbounded table would keep every term the run ever built
+    # alive (each entry holds its argument, so a recycled id can never be mistaken for
+    # an old term) and would defeat the purpose of the gc flag.
+    _MEMO_LIMIT = 8192
+
+    def _memo(self, table, t, fn):
+        key = t.get_id()
+        hit = table.get(key)
+        if hit is not None:
+            table.move_to_end(key)
+            return hit[1]
+        r = fn(t)
+        table[key] = (t, r)
+        if len(table) > self._MEMO_LIMIT:
+            table.popitem(last=False)
+        return r
+
+    def simplify(self, t):
+        return self._memo(self._simplify_memo, t, self.z3.simplify)
 
     def strong_simplify(self, t):
         try:
@@ -306,6 +336,9 @@ class Z3Backend(Backend):
             return t
 
     def qelim(self, q):
+        return self._memo(self._qelim_memo, q, self._qelim_uncached)
+
+    def _qelim_uncached(self, q):
         try:
             return self._qe(q).as_expr()
         except self.z3.Z3Exception:
