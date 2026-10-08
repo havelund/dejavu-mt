@@ -30,6 +30,7 @@ from typing import Dict, List, Tuple
 
 from . import ast
 from .backend import Backend, make_backend, BV_SORTS
+from collections import OrderedDict
 
 # Builtin bit-vector operations, usable in term position by name (infix
 # &/| would collide with the Boolean connectives).
@@ -926,6 +927,12 @@ class FormulaMonitor:
         self.qbind: List[dict] = []        # unresolved placeholder bindings
         self._qn = 0                       # fresh placeholder counter
         self._path = self._future_path()   # nodes recomputed when checking
+        # _recompute is a pure function of the values its path READS: the children of
+        # path nodes that are not themselves recomputed (future nodes and frozen values).
+        recomputed = {i for i in self._path if i not in self.ftab}
+        self._recompute_inputs = sorted(
+            {c for i in recomputed for c in self.nodes[i].children} - recomputed)
+        self._recompute_memo = OrderedDict()
         self.timed = (any(nd.kind in ("tsince", "tzince", "tonce", "thist")
                           for nd in self.nodes)
                       or any(self.nodes[j].data["clock"] == "time"
@@ -1845,7 +1852,23 @@ class FormulaMonitor:
     def _recompute(self, vals):
         """Recompute the root from the frozen values, with the future nodes
         replaced as given.  Only stateless nodes lie on the path, so this is an
-        exact re-evaluation of that part of the tree."""
+        exact re-evaluation of that part of the tree.
+
+        Memoised: every obligation is checked twice per event (lower and upper
+        bound), and on an event the property does not mention the inputs are the
+        same terms as for the last obligation, so the rebuild is pure waste. Keyed
+        on the identities of the values the path reads; a hit writes back exactly
+        what the rebuild would have written."""
+        tid = getattr(self.backend, "term_id", None)
+        key = None
+        if tid is not None and not self.weak:
+            key = tuple(tid(vals[c]) for c in self._recompute_inputs)
+            hit = self._recompute_memo.get(key)
+            if hit is not None:
+                self._recompute_memo.move_to_end(key)
+                for i, v in hit[0]:
+                    vals[i] = v
+                return vals[self.root]
         b = self.backend
         for i in self._path:
             if i in self.ftab:
@@ -1870,6 +1893,14 @@ class FormulaMonitor:
             else:
                 raise RuntimeError(f"non-stateless node {k} on future path")
             vals[i] = self._normalize(v)
+        if key is not None:
+            # Each entry holds its terms, so their ids cannot be recycled while cached.
+            self._recompute_memo[key] = (
+                [(i, vals[i]) for i in self._path if i not in self.ftab],
+                [vals[c] for c in self._recompute_inputs])
+            # (The second element only keeps the inputs alive; hits read the first.)
+            if len(self._recompute_memo) > 64:
+                self._recompute_memo.popitem(last=False)
         return vals[self.root]
 
     def _fbrackets(self, j, pos, anchor, clockval, q=None):
