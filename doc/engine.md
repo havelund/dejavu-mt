@@ -71,7 +71,10 @@ the result would be `false`).
             -- satisfiable = holds, unsatisfiable = violated
 
 That is the whole monitor for past-time properties: one bottom-up pass of
-recurrences per event, one satisfiability check of the closed root.
+recurrences per event, one satisfiability check of the closed root. That is
+also exactly what the monitor *computes*; how it avoids repeating work that
+cannot change anything is described at the end, under *Work the engine
+avoids*.
 
 ## Algorithm 2: the future extension
 
@@ -1115,3 +1118,102 @@ and memoization assumes purity. For running summaries, use **state
 variables** and **recursive rules** (above) — the declarative route to
 counting and sums; MonPoly-style aggregation over satisfying assignments
 remains tied to the relational-state work.
+
+
+# Work the engine avoids
+
+Everything above describes what the monitor computes. Done literally, it is
+slow in a way that has little to do with the logic: on a typical log most
+events are irrelevant to most properties, yet each still costs a full
+bottom-up pass, a satisfiability check, and — for a future property — a new
+obligation checked at full cost. The engine therefore skips work whose
+result it already knows. None of this changes a verdict; each step below
+was checked against the engine without it, verdict by verdict.
+
+## Pure solver calls are cached
+
+Quantifier elimination and simplification are pure functions of their
+argument, and Z3 hash-conses terms, so a term's id identifies it exactly.
+A monitor asks for the same few terms again and again — an event that
+leaves a subformula unchanged re-requests its value — so both are cached,
+in a bounded LRU whose entries keep their argument alive (an id cannot be
+recycled while cached). On recorded logs, 81% of eliminations and 95% of
+simplifications were repeats.
+
+For the same reason the obligation check of a future property caches its
+recomputation of the path from the future nodes to the root (`_recompute`):
+it runs twice per obligation per event, and on an irrelevant event it reads
+the same terms as last time.
+
+## Irrelevant events, once the property has settled
+
+An event is *irrelevant* to a property when it holds none of the
+predicates the property mentions. On such an event every atom is false,
+and every past operator's update is either idempotent — `P`, `H`, `S` and
+the interval all have the shape `now := a ∨ (b ∧ pre)` — or reads the
+previous step (`@`, `Z`). So within one or two irrelevant events the whole
+tree stops changing. The engine does not reason about this operator by
+operator; it observes it: if an irrelevant event left every node's state
+and exported value the *same term*, the next irrelevant event will too, and
+from then on irrelevant events are skipped, the verdict carried over.
+
+Two things can still change without a relevant event:
+
+- **Time.** A timed node's value changes when a witness ages into or out of
+  its window. Its state records each witness as `t = c`, so the earliest
+  moment one enters (`c + lo`) or leaves (`c + hi + 1`) the window is read
+  off the state, and the property is evaluated again at that deadline. If
+  `t` occurs in any other form, or a bound is symbolic, the deadline is
+  unknown and the property is evaluated in full.
+- **Future obligations.** A property with future operators settles only
+  from a *quiet* state: the irrelevant event's own obligation was decided on
+  the spot, nothing is pending, no placeholder awaits resolution, and the
+  step changed no future table. An obligation checked at its own position
+  compares its clock with itself plus a fixed bound, so the next irrelevant
+  event reaches the same decision. Anything that differs by position shows
+  up as a changed term and prevents settling: an until run is stamped with
+  its position, and a nested future operator gets a fresh placeholder per
+  position, so `U` and deeply nested `F` never skip.
+
+The skip is deliberately conservative. Only a plain `true` verdict is
+carried over — a violation owes a witness and its `on violation` action at
+every position — and it is off altogether where "this event holds none of
+my predicates" might not mean "this event cannot affect me", or where a
+skipped position would owe more than its verdict: state variables (another
+property's action can change them on any event), Python functions (which
+need not be pure), rule and `on satisfaction` actions, anchored and
+parametric properties, weak mode, and the CVC5 backend.
+
+## Empty future tables
+
+A future node keeps a table of the witnesses it has observed, and the event
+it awaits is usually rare, so the table is almost always empty: on a
+recorded log, 12,369 of 12,377 table queries were on an empty table. A
+query over an empty table is false, and an update that observes nothing
+leaves the table unchanged; both are now recognised without building the
+formula they would have produced.
+
+## Time-limited elimination only where it is needed
+
+`qe2` can diverge on string concatenations and regular expressions, so
+quantifier elimination runs under a three-second limit. The limit costs a
+fixed 65–185 µs per call to arm its timer, which on specs without strings
+was 15–30% of all monitoring time. The backend therefore applies it only
+once the spec has built a string term — all such terms are built while the
+spec is compiled, before any quantifier is eliminated — and uses plain
+`qe2` otherwise.
+
+## The effect
+
+On twelve recorded logs of an F′ temperature-control deployment (329 to
+7,396 events each; seven properties covering past, future, timed and
+untimed operators), all verdicts identical:
+
+| engine | total time |
+|---|---|
+| without these steps | 236.7 s |
+| with them | 11.5 s |
+
+Per event, a *relevant* event costs what it always did; what changed is
+that the other events — 99% of these logs — no longer cost the same.
+

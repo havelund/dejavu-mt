@@ -236,19 +236,29 @@ bounds — verdicts are then backend formulas rather than booleans.
 
 ## Performance
 
-A speed-limit warning: the focus of this project so far has been the
-*expressiveness* of a first-order temporal logic, not efficiency. Every
-operator step runs through an SMT solver rather than a compiled data
-structure, and it shows: on our benchmarks MonPoly and the BDD-based
-DejaVu process an event in a few microseconds, DejaVuMT in tens of
-microseconds to milliseconds depending on the property — roughly a
-hundred to some thousands of events per second, two to four orders of
-magnitude slower. The per-event cost is essentially constant over the
-trace, so long logs are a matter of patience, not blowup — with one
-exception: properties tracking many distinct data values live at once
-grow the monitor's state (`gc` reclaims dead values, not live ones).
-Offline analysis of moderate logs — the tool's natural mode — is
-comfortable; high-throughput online monitoring is not the current target.
+A speed-limit warning: the focus of this project has been the
+*expressiveness* of a first-order temporal logic, not efficiency, and every
+step that does real work runs through an SMT solver rather than a compiled
+data structure. The engine does, however, avoid most of the work a log
+presents. A property is evaluated in full only on events that mention one
+of its predicates, at the moment a timed operator's window boundary passes,
+and while one of its future obligations is outstanding; any other event
+costs almost nothing once the property has settled (see *Work the engine
+avoids* in [doc/engine.md](doc/engine.md)). Throughput therefore depends on
+how many events are relevant to a property, not on how long the log is.
+
+On recorded logs of an F′ temperature-control deployment — seven
+properties, past and future, timed and untimed, over logs in which 99% of
+the events are telemetry no property mentions — DejaVuMT checks 1,700 to
+2,200 events per second, start-up included. A relevant event still costs
+tens of microseconds to milliseconds of solver work. Measured before these
+optimisations, that put DejaVuMT two to four orders of magnitude behind
+MonPoly and the BDD-based DejaVu per event; `experiments/perf_bench.py`
+reproduces the comparison. Long logs are a matter of patience, not blowup —
+with one exception: properties tracking many distinct data values live at
+once grow the monitor's state (`gc` reclaims dead values, not live ones).
+Offline analysis of moderate logs remains the natural mode; high-throughput
+online monitoring of event-dense traces is not the current target.
 
 ## Documentation
 

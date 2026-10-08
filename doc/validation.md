@@ -62,3 +62,13 @@ relations, SINCE/UNTIL containment); DejaVuMT monitors all of them.
 
 Performance comparisons (reference evaluator / MonPoly / DejaVu / DejaVuMT)
 live in the paper; `experiments/perf_bench.py` reproduces them.
+
+The paper's figures predate the optimisations described under *Work the
+engine avoids* in [engine.md](engine.md), which make events a property does
+not mention nearly free; they still describe the cost of a relevant event.
+Each of those optimisations was checked against the engine before it, with
+verdicts compared at every event: on 100 to 300 random traces covering the
+past, future and timed operators (most events irrelevant to most
+properties, to exercise the skipping), and on the test suite; all of them
+together also on twelve recorded logs of an F′ deployment. No verdict
+differed.

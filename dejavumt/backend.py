@@ -153,7 +153,7 @@ class Z3Backend(Backend):
         # as "leave the quantifier in place"; the verdict then falls to the
         # closed root's satisfiability check, which handles the ground case.
         self._qe = z3.TryFor(z3.Tactic("qe2"), 3000)
-        # ... but TryFor costs a fixed ~70-190 us per call (it arms a timer), which
+        # ... but TryFor costs a fixed ~65-185 us per call (it arms a timer), which
         # on a typical spec was 15-30% of all monitoring time -- for a divergence that
         # only string concatenation and regex terms can cause. So the limited tactic
         # is used only once the spec has built such a term (_strings_used, set by the
