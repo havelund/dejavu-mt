@@ -1672,8 +1672,10 @@ class FormulaMonitor:
             # answered by a psi with clock stamp t2.  One witness answers every
             # run reaching here -- phi is required strictly *before* the
             # witness, so it is tested after this, not before.
-            W = self._fnorm(b.or_(W, b.and_(psi, A,
-                                            b.eq(t2, b.lit(clockval, "Int")))))
+            # No witness here (psi false): W is unchanged, so do not rebuild it.
+            if not self._known_false(psi):
+                W = self._fnorm(b.or_(W, b.and_(psi, A,
+                                                b.eq(t2, b.lit(clockval, "Int")))))
             # To reach the next position a run needs phi at this one.
             A = self._fnorm(b.and_(phi, A))
             self.ftab[j] = (A, W)
@@ -1683,9 +1685,19 @@ class FormulaMonitor:
             # its clock stamp AND its position: with duplicate timestamps a
             # row in the time window may still lie before the anchor position.
             obs = b.not_(psi) if self.nodes[j].kind in FUTURE_NEGATED else psi
+            # Nothing observed here: the table is unchanged. On a typical trace this is
+            # nearly every event -- the awaited event is rare -- and rebuilding the table
+            # each time was a large share of a future property's cost.
+            if self._known_false(obs):
+                return
             self.ftab[j] = (self._fnorm(
                 b.or_(S, b.and_(obs, b.eq(t, b.lit(clockval, "Int")),
                                 b.eq(d["p"], b.lit(self.position, "Int"))))),)
+
+    def _known_false(self, v) -> bool:
+        """v is syntactically false after simplification. Only ever used to skip work
+        whose result is then known exactly, so a false negative merely costs time."""
+        return not self.weak and self.backend.is_false(self._normalize(v))
 
     def _fnorm(self, v):
         return v if self.weak else self._normalize(v)
@@ -1701,10 +1713,17 @@ class FormulaMonitor:
         lo, hi, t, t2 = d["low"], d["high"], d["t"], d["t2"]
         if nd.kind == "funtil":
             _, body = self.ftab[j]
+            if self._known_false(body):
+                return b.false()
             body = b.and_(body, b.eq(t, b.lit(pos, "Int")))
             stamp = t2
         else:
             (body,) = self.ftab[j]
+            # No row at all: no witness can lie in any window, so the query is false.
+            # Exact, and it avoids building and quantifier-eliminating a formula that
+            # could only ever come out false (12369 of 12377 queries on a GDS trace).
+            if self._known_false(body):
+                return b.false()
             stamp = t
             # Future means positions >= the anchor's, not merely times in the
             # window (they differ when timestamps repeat).
