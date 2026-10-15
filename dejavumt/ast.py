@@ -33,9 +33,11 @@ class Var:
 class Const:
     # value is a python str or int (or float); kind records the literal sort.
     value: object
-    kind: str  # "String" | "Int" | "Real"
+    kind: str  # "String" | "Int" | "Real" | "Bool"
 
     def __str__(self) -> str:
+        if self.kind == "Bool":
+            return "true" if self.value else "false"
         return repr(self.value) if self.kind == "String" else str(self.value)
 
 

@@ -85,6 +85,15 @@ annotation is omitted; the supported sorts are `String`, `Int`, `Real`,
 
     prop small : Forall f . Forall n . write(f, n) -> n <= 4096
 
+A `Bool` argument is matched with the literals `true` and `false`:
+
+    pred enable_auto(on: Bool)
+    pred heater_on
+
+    prop operator_enabled : heater_on -> P enable_auto(true)
+
+In a CSV log the value may be written `true`/`false` (any case).
+
 An **enumeration** declares a sort with exactly the listed values:
 
     enum Mode = OFF | STANDBY | ACTIVE
@@ -666,7 +675,7 @@ property's `FormulaMonitor` (an entry of `Monitor.formulas`).
     product     ::= product "*" atom | product "/" atom | atom
     atom        ::= name | int | float | string | "-" atom | "(" expr ")"
                   | name "(" [ expr ("," expr)* ] ")"   // python function call
-    term        ::= name | int | float | string        // predicate arguments
+    term        ::= name | int | float | string | "true" | "false"   // predicate arguments
 
     // Comments are // to end of line, or /* ... */. Strings use "double quotes".
 

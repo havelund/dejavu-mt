@@ -230,8 +230,12 @@ _GRAMMAR = r"""
 
     paren_args: "(" [term ("," term)*] ")"
 
-    // Predicate arguments are plain terms (no arithmetic).
-    ?term: NAME             -> var
+    // Predicate arguments are plain terms (no arithmetic). `true`/`false` are Bool
+    // literals here -- `cmd(true)` -- distinct from the formula constants in ?leaf, since a
+    // term only ever occurs inside an argument list.
+    ?term: "true"           -> true_const
+         | "false"          -> false_const
+         | NAME             -> var
          | ESCAPED_STRING   -> str_const
          | INT              -> int_const
          | FLOAT            -> float_const
@@ -306,6 +310,12 @@ class _ToAst(Transformer):
 
     def int_const(self, tok):
         return ast.Const(int(tok), "Int")
+
+    def true_const(self):
+        return ast.Const(True, "Bool")
+
+    def false_const(self):
+        return ast.Const(False, "Bool")
 
     def hex_const(self, tok):
         # Int-kinded; adapted to a bit-vector width by context.
