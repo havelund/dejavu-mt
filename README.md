@@ -269,3 +269,8 @@ online monitoring of event-dense traces is not the current target.
   functions).
 - [doc/validation.md](doc/validation.md) — the comparisons with DejaVu,
   MonPoly, and the reference evaluator.
+
+## Contributors
+
+- [Klaus Havelund](http://www.havelund.com/), Jet Propulsion Laboratory/NASA, USA
+- [Doron Peled](http://u.cs.biu.ac.il/~doronp), Bar Ilan University, Israel
